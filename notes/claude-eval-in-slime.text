@@ -1,0 +1,14 @@
+I am looking for an emacs-lisp function that will evaluate a common-lisp form in the Slime REPL buffer.EditYou'll want to use the slime-eval function or one of its variants. Here are a few options:
+For evaluating a Common Lisp form as a string:
+
+(defun eval-in-slime (form-string)
+  "Evaluate a Common Lisp form string in the Slime REPL."
+  (slime-eval `(swank:eval-and-grab-output ,form-string)))
+
+(defun eval-and-show-in-slime (form-string)
+  "Evaluate a Common Lisp form and show it in the REPL buffer."
+  (slime-repl-send-string form-string))
+
+(defun eval-form-in-slime (form)
+  "Evaluate a Common Lisp form in Slime."
+  (slime-eval form))
