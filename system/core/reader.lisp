@@ -459,6 +459,7 @@
                         (target-concept (or
                                          (when variable
                                            (variable-node variable))
+
                                          (get-concept ctype props :id id)
                                          (let ((individual (get-individual ctype :id id :properties props)))
                                            (unless individual

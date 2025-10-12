@@ -34,10 +34,15 @@
 (defvar nope-string (princ-to-string nope))
 
 ;;; directory containing the concept-types and relation-types directories
-;;; setup in setup-cgraph()
-(defvar *cgraph*)
-(defvar *cgraph-types* ())
-(defvar *cgraph-data*  ())
+;;; values are set in setup-cgraph() in initialize.lisp
+(defvar *cgraph* nil)
+(defvar *cgraph-data-directory* nil)
+(defvar *cgraph-types-directory* nil)
+
+;;; for overriding the directories holding types and data diretories
+(defvar *cgraph-types-directory-dir* nil)
+(defvar *cgraph-data-directory-dir* nil)
+
 (defvar *cgraph-inits*  ())
 
 ;;; holds the current conttext
@@ -76,5 +81,6 @@
 (defvar *always-show-id* nil)
 (defvar *print-without-variables* nil)
 
+(defvar *always-format-nodes* nil)
 
 (defvar *copy-map* (list))

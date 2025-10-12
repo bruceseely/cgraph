@@ -1,5 +1,9 @@
 ;;; Support Functions that don't involve Spike.
 
+
+(in-package #:conceptual-graphs)
+
+
 ;;(format t "~5&Loading support-functions.lisp~%")
 
 
@@ -92,141 +96,138 @@
 
 
 ;;; SBCL uses cl-ppcre for regular expressions
-;;; (defmethod rapropos1 ((regexp string) &optional (package nil)
-;;; 					; added by Franz for ACL
-;;; 					       (external-only nil)
-;;; 					       (case-insensitive t)
-;;; 					; added new for this function
-;;; 					       (strict-package-inclusion nil)
-;;; 					       (functions-only nil))
-;;;   "regular-expression apropos"
-;;;   ;; see: https://franz.com/support/documentation/current/doc/implementation.htm#extensions-to-apropos-3
-;;;   ;; The package argument to apropos returns symbols ACCESSIBLE in the package
-;;;   ;; strict-package-inclusion limits results to symbols owned by the package
-;;;   (let ((re (excl::compile-re regexp :case-fold case-insensitive :return :string))
-;;; 	(collapse-defs-p nil)
-;;; 	text matched lines)
-;;;     ;; collect matching specs
-;;;     (with-input-from-string (stream (with-output-to-string (*standard-output*)
-;;; 				      (apropos "" package external-only)))
-;;;       (do ((line (read-line stream nil nil) (read-line stream nil nil)))
-;;; 	  ((null line))
-;;; 	(when (not (equal line ""))
-;;; 	  (cond ((eq (aref line 0) #\space) ; continuing to read a spec
-;;; 		 (when matched
-;;; 		   ;; add the current line to the current spec
-;;; 		   (setf text (if collapse-defs-p
-;;; 				  (format nil "~a ~a" text (string-trim '(#\space #\tab #\newline #\return #\linefeed) line))
-;;; 				  (format nil "~a~a~a" text #\newline line)))))
-;;; 		(t                      ; start checking a new spec
-;;; 		 (let* ((sindex (position #\space line))
-;;; 			;; name
-;;; 			(full-name (subseq line 0 sindex))
-;;; 			(cindex1 (position #\: full-name))
-;;; 			(cindex2 (position #\: full-name :from-end t))
-;;; 			(pkg (when cindex1 (subseq full-name 0 cindex1)))
-;;; 			(name (if cindex2 (subseq full-name (1+ cindex2)) full-name))
-;;; 			;; type
-;;; 			(lbindex (when sindex (position #\[ line :start sindex)))
-;;; 			(rbindex (when sindex (position #\] line :start sindex)))
-;;; 			(type (when (and lbindex rbindex)
-;;; 				(subseq line (1+ lbindex) rbindex)))
-;;; 			;; match
-;;; 			(re-match-p (excl::match-re re name))
-;;; 			(function-p (if functions-only (or (equal type "generic-function")
-;;; 							   (equal type "function")
-;;; 							   (equal type "macro")) t))
-;;; 			(package-p (or (null package)
-;;; 				       (not strict-package-inclusion)
-;;; 				       (eq (find-package package)
-;;; 					   (find-package pkg))))
-;;; 			(match-p (and re-match-p function-p package-p)))
-;;; 		   ;; save the previously extracted spec
-;;; 		   (when matched
-;;; 		     (push text lines))
-;;; 		   ;; remember whether to save this spec
-;;; 		   (setf matched match-p)
-;;; 		   ;; start a new spec
-;;; 		   (when match-p
-;;; 		     (setf text line))))))))
-;;;     ;; output saved specs
-;;;     (format t "~%")
-;;;     (dolist (l (reverse lines))
-;;;       (format t "~&~a" l)))
-;;;   (values))
+(defmethod rapropos ((regexp string) &optional (package nil)
+					       (external-only nil)
+					       (case-insensitive t)
+					       (strict-package-inclusion nil)
+					       (functions-only nil)
+                                               (collapse-defs-p nil))
+  "regular-expression apropos"
+  ;; The package argument to apropos returns symbols ACCESSIBLE in the package
+  ;; strict-package-inclusion limits results to symbols owned by the package
+  (let ((re (cl-ppcre:create-scanner regexp :case-insensitive-mode case-insensitive))
+	text matched lines)
+    ;; collect matching specs
+    (with-input-from-string (stream (with-output-to-string (*standard-output*)
+				      (apropos "" package external-only)))
+      (do ((line (read-line stream nil nil) (read-line stream nil nil)))
+	  ((null line))
+	(when (not (equal line ""))
+	  (cond ((eq (aref line 0) #\space) ; continuing to read a spec
+		 (when matched
+		   ;; add the current line to the current spec
+		   (setf text (if collapse-defs-p
+				  (format nil "~a ~a" text (string-trim '(#\space #\tab #\newline #\return #\linefeed) line))
+				  (format nil "~a~a~a" text #\newline line)))))
+		(t                      ; start checking a new spec
+		 (let* ((sindex (position #\space line))
+			;; name
+			(full-name (subseq line 0 sindex))
+			(cindex1 (position #\: full-name))
+			(cindex2 (position #\: full-name :from-end t))
+			(pkg (when cindex1 (subseq full-name 0 cindex1)))
+			(name (if cindex2 (subseq full-name (1+ cindex2)) full-name))
+			;; type
+			(lbindex (when sindex (position #\[ line :start sindex)))
+			(rbindex (when sindex (position #\] line :start sindex)))
+			(type (when (and lbindex rbindex)
+				(subseq line (1+ lbindex) rbindex)))
+			;; match
+			(re-match-p (cl-ppcre:scan re name))
+			(function-p (if functions-only (or (equal type "generic-function")
+							   (equal type "function")
+							   (equal type "macro")) t))
+			(package-p (or (null package)
+				       (not strict-package-inclusion)
+				       (eq (find-package package)
+					   (find-package pkg))))
+			(match-p (and re-match-p function-p package-p)))
+		   ;; save the previously extracted spec
+		   (when matched
+		     (push text lines))
+		   ;; remember whether to save this spec
+		   (setf matched match-p)
+		   ;; start a new spec
+		   (when match-p
+		     (setf text line))))))))
+    ;; output saved specs
+    (format t "~%")
+    (dolist (l (reverse lines))
+      (format t "~&~a" l)))
+  (values))
 
-;;; (defmethod rapropos ((regexp string) &optional (package nil)
-;;; 				     &key
-;;; 				       ;; added by Franz for ACL
-;;; 				       (external-only nil)
-;;; 				       (case-insensitive t)
-;;; 		     ;; added new for this function
-;;; 				       (strict-package-inclusion nil)
-;;; 				       (functions-only t))
-;;;   "regular-expression apropos"
-;;;   ;; see: https://franz.com/support/documentation/current/doc/implementation.htm#extensions-to-apropos-3
-;;;   ;; see: https://franz.com/support/documentation/current/doc/regexp.htm
-;;;   ;; The package argument to apropos returns symbols ACCESSIBLE in the package
-;;;   ;; strict-package-inclusion limits results to symbols owned by the package
-;;;   (let* ((text nil)
-;;; 	 (matched nil)
-;;; 	 (re (excl::compile-re regexp :case-fold case-insensitive :return :string))
-;;; 	 (collapse-defs-p nil)
-;;; 	 (reader-function (lambda (stream)
-;;; 			    (do ((line (read-line stream nil nil) (read-line stream nil nil)))
-;;; 				((null line))
-;;; 			      (unless (equal line "")
+;; (defmethod rapropos ((regexp string) &optional (package nil)
+;; 				     &key
+;; 				       ;; added by Franz for ACL
+;; 				       (external-only nil)
+;; 				       (case-insensitive t)
+;; 		     ;; added new for this function
+;; 				       (strict-package-inclusion nil)
+;; 				       (functions-only t))
+;;   "regular-expression apropos"
+;;   ;; see: https://franz.com/support/documentation/current/doc/implementation.htm#extensions-to-apropos-3
+;;   ;; see: https://franz.com/support/documentation/current/doc/regexp.htm
+;;   ;; The package argument to apropos returns symbols ACCESSIBLE in the package
+;;   ;; strict-package-inclusion limits results to symbols owned by the package
+;;   (let* ((text nil)
+;; 	 (matched nil)
+;; 	 (re (excl::compile-re regexp :case-fold case-insensitive :return :string))
+;; 	 (collapse-defs-p nil)
+;; 	 (reader-function (lambda (stream)
+;; 			    (do ((line (read-line stream nil nil) (read-line stream nil nil)))
+;; 				((null line))
+;; 			      (unless (equal line "")
 
-;;; 				(cond ((eq (aref line 0) #\space) ; continue reading a spec
-;;; 				       (when matched
-;;; 					 ;; add the current line to the current spec
-;;; 					 (setf text (if collapse-defs-p
-;;; 							(format nil "~a ~a" text (string-trim '(#\space #\tab #\newline #\return #\linefeed) line))
-;;; 							(format nil "~a~a~a" text #\newline line)))))
-;;; 				      (t ;; start checking a new spec
-;;; 				       ;; output the previously extracted spec
-;;; 				       (when matched
-;;; 					 (format t "~&~a~%" text))
+;; 				(cond ((eq (aref line 0) #\space) ; continue reading a spec
+;; 				       (when matched
+;; 					 ;; add the current line to the current spec
+;; 					 (setf text (if collapse-defs-p
+;; 							(format nil "~a ~a" text (string-trim '(#\space #\tab #\newline #\return #\linefeed) line))
+;; 							(format nil "~a~a~a" text #\newline line)))))
+;; 				      (t ;; start checking a new spec
+;; 				       ;; output the previously extracted spec
+;; 				       (when matched
+;; 					 (format t "~&~a~%" text))
 
-;;; 				       (let* ((sindex (position #\space line))
-;;; 					      ;; name
-;;; 					      (full-name (subseq line 0 sindex))
-;;; 					      (cindex1 (position #\: full-name))
-;;; 					      (cindex2 (position #\: full-name :from-end t))
-;;; 					      (pkg (when cindex1 (subseq full-name 0 cindex1)))
-;;; 					      (name (if cindex2
-;;; 							(subseq full-name (1+ cindex2))
-;;; 							full-name))
-;;; 					      ;; type
-;;; 					      (lbindex (when sindex (position #\[ line :start sindex)))
-;;; 					      (rbindex (when sindex (position #\] line :start sindex)))
-;;; 					      (type (when (and lbindex rbindex)
-;;; 						      (subseq line (1+ lbindex) rbindex)))
-;;; 					      ;; match
-;;; 					      (re-match-p (excl::match-re re name))
-;;; 					      (function-p (if functions-only
-;;; 							      (or (equal type "generic-function")
-;;; 								  (equal type "function")
-;;; 								  (equal type "macro"))
-;;; 							      nil))
-;;; 					      (package-p (or (null package)
-;;; 							     (not strict-package-inclusion)
-;;; 							     (eq (find-package package)
-;;; 								 (find-package pkg))))
-;;; 					      (match-p (and re-match-p function-p package-p)))
-;;; 					 ;; remember whether to save this spec
-;;; 					 (setf matched match-p)
-;;; 					 (when match-p
-;;; 					   ;; start a new spec
-;;; 					   (setf text line))))))))))
+;; 				       (let* ((sindex (position #\space line))
+;; 					      ;; name
+;; 					      (full-name (subseq line 0 sindex))
+;; 					      (cindex1 (position #\: full-name))
+;; 					      (cindex2 (position #\: full-name :from-end t))
+;; 					      (pkg (when cindex1 (subseq full-name 0 cindex1)))
+;; 					      (name (if cindex2
+;; 							(subseq full-name (1+ cindex2))
+;; 							full-name))
+;; 					      ;; type
+;; 					      (lbindex (when sindex (position #\[ line :start sindex)))
+;; 					      (rbindex (when sindex (position #\] line :start sindex)))
+;; 					      (type (when (and lbindex rbindex)
+;; 						      (subseq line (1+ lbindex) rbindex)))
+;; 					      ;; match
+;; 					      (re-match-p (excl::match-re re name))
+;; 					      (function-p (if functions-only
+;; 							      (or (equal type "generic-function")
+;; 								  (equal type "function")
+;; 								  (equal type "macro"))
+;; 							      nil))
+;; 					      (package-p (or (null package)
+;; 							     (not strict-package-inclusion)
+;; 							     (eq (find-package package)
+;; 								 (find-package pkg))))
+;; 					      (match-p (and re-match-p function-p package-p)))
+;; 					 ;; remember whether to save this spec
+;; 					 (setf matched match-p)
+;; 					 (when match-p
+;; 					   ;; start a new spec
+;; 					   (setf text line))))))))))
 
-;;;     ;; bind pretty-print parameters?? - does it help/work on pipe stream??
-;;;     (multiple-value-bind (pipe-in pipe-out) (excl:make-pipe-stream)
-;;;       (mp:process-run-function "reader" reader-function pipe-out)
-;;;       (let ((*standard-output* pipe-in))
-;;; 	(apropos "" package external-only)
-;;; 	(finish-output))))
-;;;   (values))
+;;     ;; bind pretty-print parameters?? - does it help/work on pipe stream??
+;;     (multiple-value-bind (pipe-in pipe-out) (excl:make-pipe-stream)
+;;       (mp:process-run-function "reader" reader-function pipe-out)
+;;       (let ((*standard-output* pipe-in))
+;; 	(apropos "" package external-only)
+;; 	(finish-output))))
+;;   (values))
 
 
 
@@ -286,7 +287,7 @@
 
 
 #-noint
-(load (in-repo "lisp-extensions/path.lisp"))
+;; (load (in-repo "lisp-extensions/path.lisp"))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

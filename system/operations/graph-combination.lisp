@@ -76,7 +76,8 @@
 (defmethod combine-conceptual-graphs ((graph1 graph-node) (graph2 graph-node) &key (alignment-strategy :automatic))
   (let ((graph-list
           (combine-conceptual-graph-lists (collect-nodes graph1) (collect-nodes graph2) :alignment-strategy alignment-strategy)))
-    (car (last (car graph-list)))))
+    ;;(format t "~&graph-list: ~s~%"  graph-list)
+    (car (last graph-list))))
 
 
 
@@ -115,7 +116,7 @@
                     best-score similarity))))
 
         ;; Only consider it a correspondence if similarity is high enough
-        (when (and best-match (> best-score 0.3))
+        (when (and best-match (> best-score 0.4))
           (push (list concept1 best-match best-score) correspondences))))
 
     ;; Remove conflicts (ensure 1-1 mapping)

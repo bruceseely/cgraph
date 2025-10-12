@@ -20,13 +20,14 @@
    (id-concepts :initform (make-concept-cache)   ; cache of concepts by id
                 :initarg :id-concepts
                 )
-
    (contexts  :initform (list)    ; contexts contained by this context
               :initarg :contexts
-              :accessor child-contexts)
+              :accessor child-contexts
+              )
    (parent-context :initform nil
                    :initarg :parent
-                   :accessor parent)))
+                   :accessor parent
+                   )))
 
 
 ;;;; string -> concept

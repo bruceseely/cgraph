@@ -32,6 +32,8 @@
 			                   (:file "types")
                                            (:file "variable")
                                            (:file "individual")
+                                           (:file "set")
+                                           (:file "conformity")
 			                   (:file "referent")
                                            (:file "concept")
                                            (:file "relation")
@@ -54,9 +56,9 @@
                (:module "support"
                 :serial t
 	        :depends-on ("system")
-	        :components ((:file "debug")
+	        :components ((:file "support-functions")
+                             (:file "debug")
                              ;;(:file "path")
-                             ;;(:file "support-functions")
                              ))
 
 	       (:module "test"

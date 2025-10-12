@@ -6,10 +6,30 @@
 ;; ;;  ;;  initialize  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun setup-data-directory (&optional base-directory)
+  ;; (setf *cgraph-data-directory* (ensure-directories-exist
+  ;;                                   (format nil "~adata/" (or base-directory
+  ;;                                                             *cgraph-data-directory-dir*
+  ;;                                                             *cgraph*))))
+
+  (setf *cgraph-data-directory* (ensure-directories-exist
+                                    (or base-directory
+                                        *cgraph-data-directory-dir*
+                                        *cgraph*))))
+
+(defun setup-types-directory (&optional base-directory)
+  (setf *cgraph-types-directory* (ensure-directories-exist
+                                  (or base-directory
+                                      *cgraph-types-directory-dir*
+                                      *cgraph*))))
+
+(defun setup-cgraph-directories (&optional base-directory)
+  (setup-data-directory base-directory)
+  (setup-types-directory base-directory))
 
 
 (defun initialize-concept-types (&optional supress-warnings)
-  (let* ((concept-type-path (format nil "~aconcept-types.lisp" *cgraph-types*))
+  (let* ((concept-type-path (format nil "~a/concept-types.lisp" *cgraph-types-directory*))
          (cgraph-code-path (asdf:system-source-directory "cgraph"))
          (concept-type-source (format nil "~adefault-types/concept-types.text" cgraph-code-path)))
 
@@ -25,9 +45,9 @@
     (load-concept-types concept-type-path supress-warnings)))
 
 
-;;; *cgraph-types* value is set in setup-cgraph
+;;; *cgraph-types-directory* value is set in setup-cgraph
 (defun initialize-relation-types (&optional supress-warnings)
-  (let* ((relation-type-path (format nil "~arelation-types.lisp" *cgraph-types*))
+  (let* ((relation-type-path (format nil "~a/relation-types.lisp" *cgraph-types-directory*))
          (cgraph-code-path (asdf:system-source-directory "cgraph"))
          (relation-type-source (format nil "~adefault-types/relation-types.text" cgraph-code-path)))
 
@@ -40,8 +60,13 @@
     (clear-relation-types)
     (load-relation-types relation-type-path supress-warnings)))
 
-(defun initialize-types (&optional supress-warnings)
-  ;; using type definitions in ~a~%" *cgraph-types*)
+
+(defun initialize-types (&optional types-directory supress-warnings)
+  (when types-directory
+    (setf *cgraph-types-directory* types-directory))
+  (setup-cgraph-directories)
+
+  ;; using type definitions in ~a~%" *cgraph-types-directory*)
   (list
    (initialize-concept-types supress-warnings)
    (initialize-relation-types supress-warnings)))
@@ -56,9 +81,7 @@
           (let ((init (read stream nil nil nil)))
             (if init
                 (eval init)
-                (return-from initialize-parameters))))
-
-        ))))
+                (return-from initialize-parameters))))))))
 
 (defun initialize-cgraph ()
   (initialize-variables)
@@ -101,8 +124,8 @@
   (reset-cgraph)
   (format t "~&______________________________________________________________  ~%")
   (format t "~&CGraph directory: ~a~50t*cgraph*~%"       *cgraph*)
-  (format t "~&type definitions: ~a~50t*cgraph-types*~%" *cgraph-types*)
-  (format t "~&generated plots   ~a~50t*cgraph-data*~%"  *cgraph-data*)
+  (format t "~&type definitions: ~a~50t*cgraph-types-directory*~%" *cgraph-types-directory*)
+  (format t "~&generated plots   ~a~50t*cgraph-data-directory*~%"  *cgraph-data-directory*)
   (format t "~&initializations:  ~ainitializations.lisp~%" *cgraph*)
   (values))
 
@@ -116,8 +139,10 @@
   (setf *cgraph* (ensure-directories-exist
                   (format nil "~a.cgraph/"
                           (namestring (user-homedir-pathname)))))
-  (setf *cgraph-data* (ensure-directories-exist (format nil "~adata/"  *cgraph*)))
-  (setf *cgraph-types* (ensure-directories-exist (format nil "~atypes/" *cgraph*)))
+
+  (setf *cgraph-types-directory-dir* "~/repo/cgraph-types/")
+
+  (setup-cgraph-directories)
 
   ;; cleanup fasls previously created during debugging
   ;;(cleanup-files "~/repo/cgraph")

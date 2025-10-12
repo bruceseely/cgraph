@@ -27,8 +27,13 @@
 ;;   (princ (format-concept node) stream))
 
 (defmethod print-object ((node concept) stream)
-  (print-unreadable-object (node stream :type t)
-    (format stream "~a;~d" (label (concept-type node)) (node-ref node))))
+  (cond (*always-format-nodes*
+         (princ (format-concept node) stream))
+        (t
+         (print-unreadable-object (node stream :type t)
+           (format stream "~a;~d"
+                   (label (concept-type node))
+                   (node-ref node))))))
 
 
 (defmethod concept-type ((arg t))
@@ -344,7 +349,7 @@
 
 
 (defmethod is-type ((concept concept) (concept-type concept-type))
-    (not (null (nodes-eq (concept-type concept) concept-type))))
+    (not (null (nodes-equal (concept-type concept) concept-type))))
 
 
 (defmethod is-type ((concept concept) (type symbol))

@@ -37,19 +37,18 @@
 ;;           (format stream " ~s" prop))))))
 
 
-(defmethod individual ((referent referent))
-  (when (and (content referent)
-             (typep (content referent) 'individual))
-    (content referent)))
-
 (defmethod individual-p ((referent referent))
-  (individual-p (content referent)))
+  (and (content referent)
+       (typep (content referent) 'individual)))
+
+(defmethod individual ((referent referent))
+  (when (individual-p referent)
+    (content referent)))
 
 
 (defmethod concept-type ((referent referent))
   (when (content referent)
     (concept-type (content referent))))
-
 
 (defmethod properties ((referent referent))
   (when (content referent)
@@ -58,10 +57,17 @@
 
 
 (defmethod individuals-equal ((ref1 referent) (ref2 referent) &key (ignore-id t))
-  (individuals-equal (content ref1) (content ref2) :ignore-id  ignore-id))
+  (when (and (typep (content ref1) 'individual)
+             (typep (content ref2) 'individual))
+    (individuals-equal (content ref1) (content ref2) :ignore-id  ignore-id)))
 
-(defmethod individuals-equal ((ref1 referent) (ref2 individual) &key (ignore-id t))
-  (individuals-equal (content ref1) ref2 :ignore-id  ignore-id))
+(defmethod individuals-equal ((ref referent) (ind individual) &key (ignore-id t))
+  (when (typep (content ref) 'individual)
+    (individuals-equal (content ref) ind :ignore-id  ignore-id)))
+
+(defmethod individuals-equal ((ind individual) (ref referent) &key (ignore-id t))
+  (when (typep (content ref) 'individual)
+    (individuals-equal ind (content ref) :ignore-id  ignore-id)))
 
 (defmethod conforms ((referent referent) restriction)
   (conforms (content referent) restriction))
@@ -81,21 +87,19 @@
 (defmethod make-referent ((individual individual) &optional concept)
   (make-instance 'referent :content individual :concept concept))
 
-;; (defmethod make-rererent ((content list) &optional concept)
-;;   (let* ((props (sans-prop content :id :variable))
-;;         ;; (id (cond ((and content (getf content :id)))
-;;         ;;           (t (next-individual-number))))
-;;         (ctype (when concept (concept-type concept)))
-;;         (individual (get-individual ctype :id (and content (getf content :id))
-;;                                           :properties props)))
-;;     (make-referent individual concept)))
-
-
+;;; concept can be either a concept or just a concept-type
 (defmethod make-rererent ((properties list) &optional concept)
   (let* ((props (sans-prop properties :id :variable))
+         (ctype (cond ((typep concept 'concept)
+                       (concept-type concept))
+                      ((typep concept 'concept-type)
+                       concept)))
          (id (getf properties :id))
-         (content (get-individual (concept-type concept) :id id :properties props)))
-    (make-referent content concept)))
+         (individual (when concept
+                       (get-individual ctype :id id
+                                             :properties props)))
+         (content individual))
+    (make-referent content (when (typep concept 'concept) concept))))
 
 
 (defmethod referent-p ((r referent))

@@ -47,7 +47,13 @@
   (copy-relation relation))
 
 (defmethod print-object ((node relation) stream)
-  (princ (format-relation node) stream))
+  (cond (*always-format-nodes*
+         (princ (format-relation node) stream))
+       (t
+         (print-unreadable-object (node stream :type t)
+           (format stream "~(~a~);~d"
+                   (label (relation-type node))
+                   (node-ref node))))))
 
 (defmethod format-relation ((node relation) &key &allow-other-keys)
   (let* ((relation-type (relation-type node))
