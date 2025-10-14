@@ -34,7 +34,7 @@
   (destructuring-bind (graph graph-string)
       (make-test-graph test-number)
     (when verbose
-      (format t "~%Test ~d~&" test-number)
+      (format t "~3%>>> Test ~d~&" test-number)
       (format t "~%~a~2%" graph-string))
     (vartest graph-string verbose)))
 

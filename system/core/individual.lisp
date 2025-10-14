@@ -138,6 +138,10 @@
                        *individuals*)))
     individuals))
 
+(defmethod find-individual-with-id (id)
+  (find id *individuals* :key #'id :test #'eql))
+
+
 ;;; The info being parsed may not contain an id
 (defmethod get-individual (individual-type &key id properties)
   (let* ((ctype (get-concept-type individual-type))
@@ -146,7 +150,7 @@
            nil)
           ((not (or id properties))
            nil)
-          ((null id)
+          (properties
            (find-if (lambda (indiv)
                       (and
                        (types-equal (individual-type indiv) ctype)
@@ -156,7 +160,7 @@
            (find-if (lambda (indiv) (eql (id indiv) 't))
                     *individuals*))
           ((numberp id)
-           (find id *individuals* :key #'id :test #'eql)))))
+           (find-individual-with-id id)))))
 
 
 

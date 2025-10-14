@@ -44,13 +44,12 @@
     `(format t ,control-string ,var)))
 
 
-#-noint
 (defun describe-hashtable (table &optional (stream *standard-output*))
+  (format stream "~&HT: ~a~%" table)
   (maphash #'(lambda (k v)
-	       (format stream "~&~s~10t~s" k v))
+	       (format stream "~&+ ~s~20t~s~%" k v))
 	   table))
 
-#-noint
 (defun describe-to-file (object pathname &optional tag)
   (let ((*print-pretty* nil))
     (with-open-file (stream pathname

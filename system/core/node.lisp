@@ -20,12 +20,6 @@
 
 
 
-;; (defmethod initialize-instance :after ((node basic-node) &key)
-;;   (cache-node node))
-
-;; (defmethod initialize-instance :after ((node basic-node) &key)
-;;   (setf (gethash (node-ref node) *node-cache*) node))
-
 (defmethod marked ((x t))
   nil)
 

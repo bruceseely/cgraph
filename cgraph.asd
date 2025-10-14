@@ -74,6 +74,8 @@
                              (:file "concept-test")
                              (:file "format-test")
                              (:file "parse-test")
+                             (:file "cache-test")
+                             (:file "context-test")
                              (:file "graph-every-test")
 
                              (:file "cg-processing-test")

@@ -365,6 +365,11 @@
 
 (defun test-graph-9 ()
   (init-test-graphs)
+
+  (when *allow-dynamic-individual-creation*
+    (setf spotz-con  (make-concept (get-concept-type 'dog) (list* :id 24 '(:name "Spotz"))))
+    (setf suez-con   (make-concept (get-concept-type 'person)  (list* :id 27 '(:name "Suez")))))
+
   (let ((graph-string "[GIVE]-
               (agnt)->[PERSON: Suez]
               (inst)->[FOOD]<-(obj)<-[EAT: *x]

@@ -16,9 +16,11 @@
 
 
 (defun test-linkup (string)
+  (setq *context* (make-context))
   (format t "~2%>> (test-linkup: ~a" (canonicalize-graph-string string))
   (let* ((source-string (canonicalize-graph-string string))
          (graph (pcg source-string))
+         (str (pcg graph))
          (string-from-graph (canonicalize-graph-string (pcg graph)))
          (pass (graph-strings-equal (canonicalize-graph-string source-string) string-from-graph)))
     (format t "~&source-string:   ~s~%"  (canonicalize-graph-string source-string))

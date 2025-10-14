@@ -28,6 +28,7 @@
                       referent-test
                       concept-test
                       format-test
+                      cache-test
                       linkup-test
                       parse-test
                       formation-rules-test

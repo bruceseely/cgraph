@@ -450,32 +450,40 @@
 
                 ((skip-char stream #\:)
                  (consume-whitespace stream)
+
                  ;; read referent field
-                 (let* ((features (read-features stream))
-                        (id (getf features :id))
-                        (variable (getf features :variable))
-                        (props (sans-prop features :id :variable))
-                        (ctype (get-concept-type type-label))
-                        (target-concept (or
-                                         (when variable
-                                           (variable-node variable))
+                 (cond ((char-equal (peek-char nil stream) #\[)
+                        ;; read a graph from the referent field
 
-                                         (get-concept ctype props :id id)
-                                         (let ((individual (get-individual ctype :id id :properties props)))
-                                           (unless individual
-                                             (when (and *allow-dynamic-individual-creation*
-                                                        (or id
-                                                            (plusp (length props))))
-                                               (unless id (setf id  (next-individual-number)))
-                                               (setf individual (make-individual ctype props :id id))))
-                                           (when individual
-                                             (let ((referent individual))
-                                               (make-concept ctype referent)))))))
-                   ;;(format t "~&target-concept: ~s~%"  target-concept)
-                   (setf concept target-concept)
-                   (when variable
-                     (set-variable concept variable))))
+                        ;; read the text of the graph and parse it
+                        ;; need a context?
+                        )
+                       (t
+                        ;; read features from the referent field
+                        (let* ((features (read-features stream))
+                               (id (getf features :id))
+                               (variable (getf features :variable))
+                               (props (sans-prop features :id :variable))
+                               (ctype (get-concept-type type-label))
+                               (target-concept (or
+                                                (when variable
+                                                  (variable-node variable))
 
+                                                (get-concept ctype props :id id)
+                                                (let ((individual (get-individual ctype :id id :properties props)))
+                                                  (unless individual
+                                                    (when (and *allow-dynamic-individual-creation*
+                                                               (or id
+                                                                   (plusp (length props))))
+                                                      (unless id (setf id  (next-individual-number)))
+                                                      (setf individual (make-individual ctype props :id id))))
+                                                  (when individual
+                                                    (let ((referent individual))
+                                                      (make-concept ctype referent)))))))
+                          ;;(format t "~&target-concept: ~s~%"  target-concept)
+                          (setf concept target-concept)
+                          (when variable
+                            (set-variable concept variable))))))
 
                 ;; skip the node-ref, if present
                 ((skip-char stream #\+)
@@ -537,6 +545,10 @@
   (declare (ignore stream char))
   #\,)
 
+(defun colon-reader (stream char)
+  (declare (ignore stream char))
+  #\space)
+
 (defun period-reader (stream char)
   (declare (ignore stream char))
   nil
@@ -572,7 +584,7 @@
                                         (list #\- #'arc-reader)
                                         (list left-arrow-char  #'left-arc-reader)
                                         (list right-arrow-char #'right-arc-reader)
-
+                                        (list #\: #'colon-reader)
                                         (list #\. #'period-reader)))
 
 (defun cg-readtable ()
@@ -600,6 +612,7 @@
                                  (list #.(code-char #x2192) #'right-arc-reader)
                                  (list left-arrow-char  #'left-arc-reader)
                                  (list right-arrow-char #'right-arc-reader)
+                                 (list #\: #'colon-reader)
                                  (list #\. #'period-reader))))
 
     (with-readtable-mods cg-readtable-mods
@@ -653,7 +666,8 @@
                          (error "PARSE-CGRAPH cannot find concept-type '~a' while parsing '~a'" (text c)  string))
                        (cached-concept-lookup-failed (c)
                          (error "PARSE-CGRAPH cannot lookup concept [~a] while parsing~%\"~a\"~%reason: ~a"
-                                (ctype c) string (msg c))))))
+                                (ctype c) string (msg c)))
+                       )))
 
         ;; (format t "~&string: ~s~%"  (remove #\newline (canonicalize-graph-string  string)))
         ;; (format t "~&tokens: ~s~%"  tokens)
@@ -667,3 +681,15 @@
 
 (defmethod pcg ((graph string))
   (parse-cgraph (expand-arrows graph)))
+
+
+;;; (defgraf foo "[person: Pat]<-(agnt)<-[eat]->(obj)->[food]" )
+;;; (pcg foo)
+(defmacro defgraf (name graph-string)
+  `(progn
+     (defvar ,name)
+     (with-cg-readtable
+         (progn
+           (setf ,name (pcg ,graph-string))
+           (add-graph ,name)))
+     t))

@@ -27,13 +27,18 @@
 ;;   (princ (format-concept node) stream))
 
 (defmethod print-object ((node concept) stream)
+  ;;(format t "~&*include-node-ref*: ~s~%"  *include-node-ref*)
   (cond (*always-format-nodes*
          (princ (format-concept node) stream))
-        (t
+        (*include-node-ref*
          (print-unreadable-object (node stream :type t)
            (format stream "~a;~d"
                    (label (concept-type node))
-                   (node-ref node))))))
+                   (node-ref node))))
+        (t
+         (print-unreadable-object (node stream :type t)
+           (format stream "~a" (label (concept-type node)))))))
+
 
 
 (defmethod concept-type ((arg t))
@@ -104,6 +109,8 @@
 (defmethod format-referent (node &key &allow-other-keys)
   (format-node node))
 
+
+;;; *include-node-ref*
 (defmethod format-referent ((concept concept) &key &allow-other-keys)
   (let* ((separator (if *concise* "" " "))
          (variable-text (variable-text concept))
@@ -231,69 +238,62 @@
   (apply #'format-concept node keys))
 
 
-(defmethod initialize-instance :after ((node concept) &key)
-  ;;(cache-node node)
-  )
 
-
-
-;; (defmethod make-concept-aux ((concept-type concept-type) (referent referent)
-;;                              &key (context *context*))
-;;   (let* ((concept (make-instance 'concept :concept-type concept-type
-;;                                           :referent referent
-;;                                           :context context)))
-;;     (when referent
-;;       ;;(cache-concept concept)
-;;       )
-;;     concept))
+(defmethod initialize-instance :after ((concept concept) &key)
+  (when (referent concept)
+    (setf (concept (referent concept)) concept)
+    (cache-concept concept)))
 
 
 
 (defgeneric make-concept (type referent &key &allow-other-keys))
 
-(defmethod make-concept ((ctype concept-type) (referent referent) &key (context *context*) &allow-other-keys)
-  (make-instance 'concept :concept-type ctype
-                          :referent referent
-                          :context (or context *context*)))
-
 (defmethod make-concept ((ctype concept-type) (referent (eql nil)) &key (context *context*) &allow-other-keys)
-  (make-instance 'concept :concept-type ctype
-                          :referent nil
-                          :context (or context *context*)))
+  (let ((*context* context))
+    (make-instance 'concept :concept-type ctype
+                            :referent nil
+                            :context *context*)))
+
+(defmethod make-concept ((ctype concept-type) (referent referent) &key (context *context*) &allow-other-keys)
+  (let ((*context* context))
+    (make-instance 'concept :concept-type ctype
+                            :referent referent
+                            :context *context*)))
 
 
-(defmethod make-concept ((ctype concept-type) (referent individual) &key (context *context*) &allow-other-keys)
-  (let ((referent (make-referent referent)))
+(defmethod make-concept ((ctype concept-type) (individual individual) &key (context *context*) &allow-other-keys)
+  (let ((referent (make-referent individual)))
     (when referent
-      (make-concept ctype referent :context (or context *context*)))))
+      (make-concept ctype referent :context context))))
 
 
-(defmethod make-concept ((ctype concept-type) (referent list) &key (context *context*)  &allow-other-keys)
-  (let* ((props (sans-prop referent :id :variable))
-         (id (cond ((and referent (getf referent :id)))
-                   (t (next-individual-number))))
-         (cached (retrieve-concept ctype props :id id :context (or context *context*)))
-         (individual (or (get-individual ctype :id id :properties props)
-                         (make-individual ctype (sans-prop referent :variable)))))
-    ;; (format t "~&id: ~s~%"  id)
-    ;; (format t "~&cached: ~s~%"  cached)
-    ;; (format t "~&individual: ~s~%"  individual)
-    (cond (cached)
-          ((null id)
-           (let* ((individual (make-individual ctype props))
+(defmethod make-concept ((ctype concept-type) (property-list list) &key (context *context*)  &allow-other-keys)
+  (let* ((props (sans-prop property-list :id :variable))
+         (supplied-id (when property-list (getf property-list :id)))
+         (individual (or (get-individual ctype :properties props :id supplied-id)
+                         (get-individual ctype :properties props)))
+         (individual-id (id individual)))
+
+
+    (cond (individual
+           ;;(format t "~&supplied-id2: ~s~%"  supplied-id)
+           (make-concept ctype individual :context context))
+          (supplied-id
+           (let* ((individual (make-individual ctype props :id supplied-id))
                   (referent (when individual (make-referent individual))))
-             ;;(format t "~&referent: ~s~%"  referent)
              (cond ((null referent)
-                    (make-concept ctype nil :context (or context *context*))))))
-          (individual
-           ;;(format t "~&id2: ~s~%"  id)
-           (make-concept ctype individual :context (or context *context*))))))
+                    (make-concept ctype nil :context context)))))
+          ((null supplied-id)
+           (let* ((individual (make-individual ctype props :id (next-individual-number)))
+                  (referent (when individual (make-referent individual))))
+             (cond ((null referent)
+                    (make-concept ctype nil :context context))))))))
 
 
 
 (defmethod make-concept ((type symbol) referent &key (context *context*) &allow-other-keys)
   (let ((ctype (get-concept-type type)))
-    (make-concept ctype referent :context (or context *context*))))
+    (make-concept ctype referent :context context)))
 
 ;; (defmethod :around make-concept (type referent &key (context *context*) &allow-other-keys)
 ;;   (let* ((concept (call-next-method)))
@@ -304,13 +304,6 @@
 ;;     ;;     ;;(cache-concept concept :context context)
 ;;     ;;     ))
 ;;     concept))s
-
-(defmethod make-concept :around ((ctype concept-type) (referent individual) &key &allow-other-keys)
-  (let ((concept (call-next-method)))
-    (when referent
-      (pushnew concept (concepts referent)))
-    concept))
-
 
 
 
@@ -335,13 +328,13 @@
 ;;; (defmethod conforms ((concept-type concept-type) (annotations list)))
 
 
-(defmethod copy-concept ((concept concept))
-  (let* ((type (concept-type concept))
-         (referent (referent concept))
-         (context (context concept))
-         (new-concept (make-concept type referent :context context)))
-    (push (list concept new-concept) *copy-map*)
-    new-concept))
+;; (defmethod copy-concept ((concept concept))
+;;   (let* ((type (concept-type concept))
+;;          (referent (referent concept))
+;;          (context (context concept))
+;;          (new-concept (make-concept type referent :context context)))
+;;     (push (list concept new-concept) *copy-map*)
+;;     new-concept))
 
 (defmethod copy-node ((concept concept))
   (copy-concept concept))
@@ -379,11 +372,11 @@
 
 
 ;;; features id the properties list + optionally :id & :variable
-(defgeneric get-concept (concept-type properties &key id))
+(defgeneric get-concept (concept-type properties &key id context))
 
-(defmethod get-concept ((concept-type concept-type) (properties list) &key (id nil id-supplied))
+(defmethod get-concept ((concept-type concept-type) (properties list) &key (id nil id-supplied) (context *context*))
   (let* ((created nil)
-         (concept (cond ((and (null id) (retrieve-concept concept-type properties :context *context*))) ; from context
+         (concept (cond ((and (null id) (retrieve-concept concept-type properties :context context))) ; from context
                         ((and (null id) (find-local concept-type id properties))) ; already used in graph
 
                         (id
@@ -415,40 +408,38 @@
     (values concept (when concept created))))
 
 
-(defmethod get-concept ((type-label symbol) (properties-list list) &key id)
+(defmethod get-concept ((type-label symbol) (properties-list list) &key id (context *context*))
   (let ((ctype (get-concept-type type-label)))
         (if ctype
-          (get-concept ctype properties-list :id id)
+          (get-concept ctype properties-list :id id :context context)
           (warn "Concept-type ~a is not defined" type-label))))
 
-(defmethod get-concept ((type-label symbol) (properties string) &key id)
+(defmethod get-concept ((type-label symbol) (properties string) &key id (context *context*))
   (let ((properties-list (parse-properties properties)))
-    (get-concept type-label properties-list :id id)))
+    (get-concept type-label properties-list :id id :context context)))
 
-(defmethod get-concept (arg1 arg2 &key id)
+(defmethod get-concept (arg1 arg2 &key id (context *context*))
   (declare (ignore arg1 arg2))
   nil)
 
 
 
-(defmethod concept-cache-key (type id (properties list))
+(defmethod concept-cache-key (type (properties list))
   (let ((ctype (get-concept-type type)))
     (when ctype
-      (list ctype id properties))))
+      (list ctype properties))))
 
-(defmethod concept-cache-key (type id (referent-text string))
+(defmethod concept-cache-key ((type concept-type) (referent-text string))
   (let ((properties (parse-properties referent-text)))
     (when properties
-      (make-concept-cache-key type id properties))))
-
+      (concept-cache-key type properties))))
 
 ;;; (concept-cache-key-for-concept (parse-cgraph "[dog:Spot]"))
 (defmethod concept-cache-key-for-concept ((concept concept))
-  (let ((*concise* nil)
+  (let* ((*concise* nil)
          (ctype (concept-type concept))
-         (id (id concept))
          (properties (properties (referent concept))))
-    (concept-cache-key ctype id properties)))
+    (concept-cache-key ctype properties)))
 
 
 ;; (progn

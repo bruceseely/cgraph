@@ -346,6 +346,16 @@
 
 (defun setup9 ()
   (init-format-test-nodes)
+
+  (format t "~&> *allow-dynamic-individual-creation*: ~s~%"  *allow-dynamic-individual-creation*)
+  (when *allow-dynamic-individual-creation*
+    (setf spotz-con  (make-concept (get-concept-type 'dog) (list* :id 24 '(:name "Spotz"))))
+    (setf suez-con   (make-concept (get-concept-type 'person)  (list* :id 27 '(:name "Suez")))))
+
+  (format t "~&suez-con: ~s~%"  suez-con)
+  (format t "~&spotz-con: ~s~%"  spotz-con)
+
+
   (let ((graph-string "[GIVE]-
                           (agnt)->[PERSON: Suez]
                           (inst)->[FOOD]<-(obj)<-[EAT: *x]
@@ -400,7 +410,6 @@
 
 
 (defun ftest (test-number)
-  ;;(clear-concept-cache *context*)
   (reset-cgraph)
   (setf *context* (make-context))
   (let* ((*print-pretty* nil)
