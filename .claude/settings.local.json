@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -O https://beta.quicklisp.org/quicklisp.lisp)",
+      "Bash(sbcl:*)",
+      "Bash(ping:*)",
+      "Read(//Users/bseely/quicklisp/**)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(make graph-referent-test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nRefactor get-concept to not reuse concepts across graphs\n\nConcepts are now graph-specific nodes. Removed retrieve-concept call\nthat was reusing concepts from context cache across different graphs.\n\nWithin a single graph parse, concepts referring to the same individual\nare still correctly identified as coreferent by looking up the\nindividual''s ID and checking find-local.\n\nAlso fixed bug where \\(car individuals\\) was returned directly instead\nof creating a concept from the individual.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(dot:*)",
+      "Bash(wc:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

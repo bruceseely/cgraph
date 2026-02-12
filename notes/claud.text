@@ -1,0 +1,152 @@
+Thank you for asking about this - it's an important distinction that reveals some key aspects of conceptual graph theory. Let me explain how Sowa's original formulation of contexts differs from what I showed in my code examples.
+
+In Sowa's original formulation, contexts are themselves concepts of type PROPOSITION or type SITUATION. This is a profound difference from my implementation, where I treated contexts more like containers or scopes. Let me explain what this means and why it's significant.
+
+In Sowa's framework, when we write:
+"Mary believes that dragons exist"
+
+This would be represented as:
+[PERSON: Mary] <- (EXPR) <- [PROPOSITION: [DRAGON: *] <- (EXIST)]
+
+Here, the entire "dragons exist" statement is a concept of type PROPOSITION. The believe relation (EXPR) connects Mary to this propositional concept. This means that contexts aren't just containers - they're first-class concepts that can participate in relations themselves.
+
+Let me show a more accurate implementation:
+
+
+
+```lisp
+(defstruct concept
+  type             ; The type (e.g., PROPOSITION, SITUATION, PERSON)
+  referent         ; For propositions, this is the nested graph
+  edges)           ; Relations to other concepts
+
+(defstruct context-referent
+  graphs           ; List of conceptual graphs in this context
+  parameters      ; List of concepts that are parameters to this context
+  timestamp)      ; When this context represents a situation in time
+
+(defun make-proposition (graphs &optional parameters)
+  "Creates a propositional concept containing nested graphs"
+  (make-concept
+   :type 'PROPOSITION
+   :referent (make-context-referent
+              :graphs graphs
+              :parameters parameters
+              :timestamp nil)
+   :edges nil))
+
+(defun make-situation (graphs &optional parameters timestamp)
+  "Creates a situation concept containing nested graphs"
+  (make-concept
+   :type 'SITUATION
+   :referent (make-context-referent
+              :graphs graphs
+              :parameters parameters
+              :timestamp timestamp)
+   :edges nil))
+
+(defun make-belief-context (believer proposition)
+  "Creates a graph representing a belief context"
+  (let ((belief-relation (make-relation :label 'EXPR)))
+    ;; The believer is connected to the proposition via EXPR relation
+    (setf (relation-from belief-relation) proposition
+          (relation-to belief-relation) believer)
+    (setf (concept-edges proposition)
+          (cons belief-relation (concept-edges proposition)))
+    proposition))
+
+;; Example usage demonstrating Sowa's context formulation:
+(defun demonstrate-sowa-contexts ()
+  (let* (;; Create the inner graph "dragons exist"
+         (dragon (make-concept :type 'DRAGON
+                             :referent '*    ; Generic referent
+                             :edges nil))
+         (exist-rel (make-relation :label 'EXIST))
+         (_ (setf (relation-to exist-rel) dragon))
+         (dragon-exist-graph (list dragon exist-rel))
+
+         ;; Create the proposition containing this graph
+         (dragons-exist-prop (make-proposition (list dragon-exist-graph)))
+
+         ;; Create Mary
+         (mary (make-concept :type 'PERSON
+                           :referent 'MARY
+                           :edges nil))
+
+         ;; Create the belief context
+         (belief-context (make-belief-context mary dragons-exist-prop)))
+
+    ;; Now we can also create nested levels of context
+    (let* (;; "John knows that Mary believes that dragons exist"
+           (john (make-concept :type 'PERSON
+                             :referent 'JOHN
+                             :edges nil))
+           (knowledge-prop (make-proposition (list belief-context)))
+           (know-context (make-belief-context john knowledge-prop)))
+
+      ;; Return the complete nested context structure
+      know-context)))
+
+(defun query-nested-context (context relation-path)
+  "Follows a path of relations through nested contexts"
+  (labels ((follow-path (concept relations)
+             (if (null relations)
+                 concept
+                 (let* ((relation-label (car relations))
+                        (matching-edge
+                         (find relation-label
+                               (concept-edges concept)
+                               :key #'relation-label)))
+                   (when matching-edge
+                     (follow-path (relation-to matching-edge)
+                                (cdr relations)))))))
+    (follow-path context relation-path)))
+
+(defun get-context-graphs (concept)
+  "Gets the graphs contained in a contextual concept"
+  (when (and (member (concept-type concept) '(PROPOSITION SITUATION))
+             (context-referent-p (concept-referent concept)))
+    (context-referent-graphs (concept-referent concept))))
+
+```
+
+This implementation shows several key differences from my earlier versions:
+
+1. Contexts as Concepts
+   - Instead of treating contexts as container objects, they are concepts of type PROPOSITION or SITUATION
+   - This means they can participate in relations just like any other concept
+   - They can be nested arbitrarily deep through these relations
+
+2. Different Types of Contexts
+   - PROPOSITION contexts represent abstract logical statements
+   - SITUATION contexts represent actual or hypothetical situations in time
+   - Each type has specific properties (like timestamps for situations)
+
+3. Context Parameters
+   - Contexts can have formal parameters, which Sowa used for logical quantification
+   - These parameters allow contexts to function like lambda expressions in logic
+
+4. Relation Structure
+   - Relations to contexts use specific relation types like EXPR (for beliefs) or PAST (for historical situations)
+   - This creates a rich vocabulary for describing how contexts relate to each other
+
+The practical implications of this formulation are significant:
+
+1. Logical Reasoning
+   - Because contexts are concepts, we can reason about them directly
+   - We can create relations between contexts, enabling complex modal logic
+
+2. Knowledge Representation
+   - The nesting of contexts through relations creates a natural way to represent nested beliefs and situations
+   - We can represent statements about statements (meta-knowledge) very naturally
+
+3. Temporal Reasoning
+   - SITUATION contexts with timestamps allow us to reason about how things change over time
+   - We can relate different situations to each other through temporal relations
+
+This is more powerful than my earlier implementation because it allows us to:
+- Treat contexts as first-class objects in our knowledge representation
+- Create complex nested structures of beliefs and situations
+- Reason about contexts themselves using the same mechanisms we use for other concepts
+
+Would you like me to explore any specific aspect of Sowa's context formulation in more detail? For instance, we could look at how this representation handles modal logic or temporal reasoning.
