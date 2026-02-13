@@ -14,7 +14,10 @@
       "Bash(dot:*)",
       "Bash(wc:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(git status:*)",
+      "Bash(git -C /Users/bseely/repo/cgraph add API.md)",
+      "Bash(git -C /Users/bseely/repo/cgraph commit -m \"$\\(cat <<''EOF''\nAdd user-facing API reference document\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
     ],
     "deny": [],
     "ask": []
