@@ -1207,8 +1207,9 @@
 (defun load-cgraph-types (&optional supress-warnings)
   (make-top-concept-type)
   (make-bottom-concept-type)
-  (load-concept-types (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
-  (load-relation-types (format nil "~arelation-types.lisp" *cgraph-types-directory*)))
+  (list
+   (load-concept-types (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
+   (load-relation-types (format nil "~arelation-types.lisp" *cgraph-types-directory*))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  ;; Type Print  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;

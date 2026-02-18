@@ -177,7 +177,11 @@
 ;;; relation-types is the path to the relation-types file
 ;;;
 (defun setup-cgraph (code-base &key external-types-directory)
-  (in-package :conceptual-graphs)
+  ;;(in-package :conceptual-graphs)
+
+  (setf *package* (or (find-package :conceptual-graphs)
+                      (make-package :conceptual-graphs :use '(:common-lisp :common-lisp-user :uiop)
+                                                       :nicknames '(:cg :cgraph))))
 
   (let* ((cgraph-base (format nil "~a.cgraph/" (namestring (user-homedir-pathname))))
          (types-directory (format nil "~atypes/" cgraph-base))
