@@ -7,6 +7,20 @@
 ;;(format t "~5&Loading support-functions.lisp~%")
 
 
+(defun start-class-browser ()
+  ;;(asdf:load-system :web-utilities :force t)
+  (clbr::web-class-browser :port 8040)
+  (princ "http://localhost:8040")
+  t)
+
+(defun start-type-grapher ()
+  (asdf:load-system "cgraph-web")
+  (cg::start-web-server :port 8060)
+  (princ "http://localhost:8060")
+  t)
+
+
+
 ;;;#-noint
 ;;; (defun intersection-with-list (single-interval interval-list &optional accum)
 ;;;   "assumes interval list is sorted"

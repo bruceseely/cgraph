@@ -54,21 +54,37 @@
                                            (parents t)
                                            (children t)
                                            (landscape nil)
-                                           (hide-bottom t))
+                                           (hide-bottom t)
+                                           (expand-sub nil)    ; list of type symbols/objects to expand downward
+                                           (expand-super nil)) ; list of type symbols/objects to expand upward
   (let ((types-visited (make-hash-table))
         (type-id-table (make-hash-table))
         (name (princ-to-string (car type-name-list)))
         (index 1000))
+    ;; Each type's path set is computed with a fresh table to prevent the
+    ;; already-visited gate from suppressing siblings/descendants of earlier types.
     (dolist (type-name type-name-list)
-      (when (gethash type-name types-visited)
-        (setf (gethash type-name types-visited) nil))
-      (setf types-visited (type-traversal type-name
-                                          types-visited
-                                          :parents parents
-                                          :children children)))
+      (let ((ps (make-hash-table)))
+        (type-traversal type-name ps :parents parents :children children)
+        (maphash (lambda (k v) (setf (gethash k types-visited) v)) ps)))
+
+    ;; Expand subtypes: traverse down from each direct child of the expanded node.
+    ;; We iterate children rather than the node itself to bypass the already-visited gate.
+    (dolist (type-name expand-sub)
+      (let ((ctype (get-concept-type type-name)))
+        (when ctype
+          (dolist (child (direct-subtypes ctype))
+            (type-traversal child types-visited :parents nil :children t)))))
+
+    ;; Expand supertypes: traverse up from each direct parent of the expanded node.
+    (dolist (type-name expand-super)
+      (let ((ctype (get-concept-type type-name)))
+        (when ctype
+          (dolist (parent (direct-supertypes ctype))
+            (type-traversal parent types-visited :parents t :children nil)))))
 
     ;; it appears that margin specifies inches
-    (format stream "digraph ~(~a~)_concept_type_hierarchy {~%" name)
+    (format stream "digraph \"~(~a~)_concept_type_hierarchy\" {~%" name)
     (format stream "  graph [rankdir=\"~:[BT~;RL~]\"];~%" landscape)
     (format stream "  node [shape=box,color=snow3,width=0,height=0, margin=.03, fontname=Helvetica];~%")
     (format stream "  edge [arrowhead=none,color=steelblue];~%")
@@ -79,7 +95,8 @@
                  (declare (ignore v))
                  (unless (and hide-bottom (bottom-concept-type-p super-type))
                    (setf (gethash super-type type-id-table) index)
-                   (format stream " type~a [label=\"~a\"]~%" index (label super-type)))
+                   (format stream " type~a [label=\"~a\" id=\"~(~a~)\"]~%"
+                           index (label super-type) (label super-type)))
                  (incf index))
              types-visited)
 

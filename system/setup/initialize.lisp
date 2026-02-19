@@ -193,9 +193,7 @@
     (setf *cgraph-types-directory* (ensure-directories-exist types-directory))
     (setf *cgraph-data-directory*  (ensure-directories-exist data-directory))
     (setf *cgraph-examples-directory* (format nil "~adefault-types/" (asdf::system-source-directory :cgraph)))
-
-    (initialize-types :external-types-directory external-types-directory)
-    )
+    (initialize-types :external-types-directory external-types-directory))
 
   ;; Set default package for SLIME worker threads (when SLIME is loaded)
   (when (find-package :swank)
@@ -204,7 +202,35 @@
         (push (cons '*package* (find-package :conceptual-graphs))
               (symbol-value bindings-var)))))
 
+  ;; start web server
+  (asdf:load-system "cgraph-web")
+
+  ;;(clbr::web-class-browser :port 8040)
+  ;;(funcall (intern "web-class-browser" :clbr) :port 8040)
+  ;; (format t "~&Class Browser: http://localhost:8040")
+  ;; (cg::start-web-server :port 8060)
+  ;; (format t "~&Type Grapher: http://localhost:8060")
+  ;; (push #p"/Users/bseely/repo/utilities/" asdf:*central-registry*)
+  ;; (asdf:load-system :web-utilities)
+  ;;(asdf:load-system :web-utilities :force t)
+
+
+  (asdf:load-system "cgraph-web")
+
   (cleanup-files code-base)
   (cg::report-directories)
   (terpri)
   (cg::test-all t))
+
+(defun start-class-browser ()
+  (asdf:load-system :web-utilities :force t)
+  (funcall (read-from-string "clbr::web-class-browser") :port 8040)
+  (princ "http://localhost:8040/clbr")
+  t)
+
+
+(defun start-type-grapher ()
+  (asdf:load-system "cgraph-web")
+  (cg::start-web-server :port 8060)
+  (princ "http://localhost:8060")
+  t)
