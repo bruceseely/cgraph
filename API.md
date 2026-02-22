@@ -43,7 +43,7 @@ Define a new concept type or modify an existing one.
 ```lisp
 (define-concept-type :label 'ROBOT
                      :supertypes '(animate)
-                     :canonical-graph "[ROBOT]→(agnt)→[ACT]")
+                     :canonical-graph "[ROBOT]←(agnt)←[ACT]")
 ```
 
 #### `make-concept-type (type-label &key supertypes-list canonical-graph-string graph-compatible definition-string)`
@@ -329,7 +329,7 @@ Parse a conceptual graph from linear notation. This is the primary way
 to create graphs.
 
 ```lisp
-(parse-cgraph "[CAT: Whiskers]→(agnt)→[EAT]→(obj)→[FOOD].")
+(parse-cgraph "[CAT: Whiskers]←(agnt)←[EAT]→(obj)→[FOOD].")
 ```
 
 ### Inspecting Graphs
@@ -450,8 +450,8 @@ Format a conceptual graph as a string in linear notation. This is the
 primary formatting function.
 
 ```lisp
-(format-cgraph (parse-cgraph "[DOG: Spot]→(agnt)→[EAT]→(obj)→[BONE]."))
-; → "[DOG: Spot]→(agnt)→[EAT]→(obj)→[BONE]"
+(format-cgraph (parse-cgraph "[DOG: Spot]←(agnt)←[EAT]→(obj)→[BONE]."))
+; → "[DOG: Spot]←(agnt)←[EAT]→(obj)→[BONE]"
 ```
 
 #### `format-concept (concept)` → string
@@ -490,13 +490,13 @@ Parse a conceptual graph from linear notation.
 
 ```lisp
 ;; Simple graph
-(parse-cgraph "[DOG: Spot]→(agnt)→[EAT]→(obj)→[BONE].")
+(parse-cgraph "[DOG: Spot]←(agnt)←[EAT]→(obj)→[BONE].")
 
 ;; Multi-branch graph
 (parse-cgraph "[GIVE]-(agnt)→[PERSON: Sue](obj)→[DOG: Spot](rcpt)→[PERSON: Tom].")
 
 ;; With variables for co-reference
-(parse-cgraph "[PERSON: *x]→(poss)→[DOG]←(agnt)←[WALK]←(agnt)←[PERSON: *x].")
+(parse-cgraph "[PERSON: *x]→(poss)→[DOG]←(obj)←[WALK]→(agnt)→[PERSON: *x].")
 ```
 
 ### String Utilities
@@ -569,13 +569,13 @@ Both arguments accept graph-nodes, graph objects, or strings.
 
 ```lisp
 ;; Does a pattern match?
-(project "[ANIMAL]→(agnt)→[EAT]"
-         "[CAT: Tom]→(agnt)→[EAT]→(obj)→[FOOD].")
+(project "[ANIMAL]←(agnt)←[EAT]"
+         "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
 ; → (([ANIMAL] . [CAT: Tom]) ([EAT] . [EAT]))
 
 ;; Predicate version
-(projection-p "[ANIMAL]→(agnt)→[EAT]"
-              "[CAT: Tom]→(agnt)→[EAT]→(obj)→[FOOD].")
+(projection-p "[ANIMAL]←(agnt)←[EAT]"
+              "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
 ; → T
 ```
 
@@ -603,9 +603,9 @@ of graph1 if there is no overlap.
 Both arguments accept graph-nodes, graph objects, or strings.
 
 ```lisp
-(maximal-join "[CAT: Tom]→(agnt)→[EAT]"
+(maximal-join "[CAT: Tom]←(agnt)←[EAT]"
               "[EAT]→(obj)→[FOOD]")
-; → head of merged graph: [CAT: Tom]→(agnt)→[EAT]→(obj)→[FOOD]
+; → head of merged graph: [CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD]
 ```
 
 #### `maximal-join-mapping (graph1 graph2)` → mapping
@@ -637,11 +637,11 @@ the pattern (`*x`, `*y`) are bound to matching concepts.
 
 ```lisp
 ;; Add graphs to the context
-(parse-cgraph "[CAT: Tom]→(agnt)→[EAT]→(obj)→[FOOD].")
-(parse-cgraph "[DOG: Spike]→(agnt)→[EAT]→(obj)→[BONE].")
+(parse-cgraph "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
+(parse-cgraph "[DOG: Spike]←(agnt)←[EAT]→(obj)→[BONE].")
 
 ;; Query with a variable
-(query "[ANIMAL: *x]→(agnt)→[EAT]" *context*)
+(query "[ANIMAL: *x]←(agnt)←[EAT]" *context*)
 ```
 
 #### `format-query-results (results &optional stream)`

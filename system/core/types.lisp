@@ -682,8 +682,10 @@
 (defun parse-concept-type-def (def)
   (destructuring-bind (&key label supertypes canonical-graph graph-compatible definition) def
     ;;(format t "~&~a ~a ~a" label supertypes cgraph) ; debug
-    (let ((type-label (intern (string-upcase label))))
-      (define-concept-type :label type-label :supertypes supertypes :canonical-graph canonical-graph
+    (let ((type-label (intern (string-upcase (string label)) :cg))
+          (normalized-supertypes (mapcar (lambda (s) (intern (string-upcase (string s)) :cg))
+                                         supertypes)))
+      (define-concept-type :label type-label :supertypes normalized-supertypes :canonical-graph canonical-graph
                            :graph-compatible graph-compatible :definition definition))))
 
 
@@ -1126,8 +1128,11 @@
 
     (unless (listp source-types) (setf source-types (list source-types)))
 
-    (let ((source (mapcar #'lookup-concept-type source-types))
-          (destination (lookup-concept-type dest-type)))
+    (let* ((normalized-sources (mapcar (lambda (s) (intern (string-upcase (string s)) :cg))
+                                       source-types))
+           (normalized-dest    (when dest-type (intern (string-upcase (string dest-type)) :cg)))
+           (source      (mapcar #'lookup-concept-type normalized-sources))
+           (destination (lookup-concept-type normalized-dest)))
 
       (make-relation-type (string-upcase label)
                           :description desc
@@ -1216,7 +1221,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; the indents is the column to start on. The spacing is (1- indent)
-(defmethod print-concept-types (&optional (top-node t) &key (indents '(0)) (newline t))
+(defmethod print-concept-types (&optional (top-node *concept-type-top*) &key (indents '(0)) (newline t))
   (let* ((concept-type (get-concept-type top-node))
 	 (subtypes (direct-subtypes concept-type))
 	 (concept-label (label concept-type))

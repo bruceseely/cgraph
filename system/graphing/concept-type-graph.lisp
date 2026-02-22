@@ -86,7 +86,7 @@
     ;; it appears that margin specifies inches
     (format stream "digraph \"~(~a~)_concept_type_hierarchy\" {~%" name)
     (format stream "  graph [rankdir=\"~:[BT~;RL~]\"];~%" landscape)
-    (format stream "  node [shape=box,color=snow3,width=0,height=0, margin=.03, fontname=Helvetica];~%")
+    (format stream "  node [shape=box,color=snow3,width=0,height=0, margin=.03, fontname=Helvetica, fontsize=10];~%")
     (format stream "  edge [arrowhead=none,color=steelblue];~%")
     ;; arrowhead=  open, vee, normal
 

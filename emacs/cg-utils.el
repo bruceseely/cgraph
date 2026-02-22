@@ -196,6 +196,14 @@ Handles multiple return values, output, and errors."
 (global-set-key (kbd "C-c b") (lambda () (interactive) (insert "⊥")))
 
 
+;; org-mode has C-c b bound to org-iswitchb, which was removed in newer org.
+;; Define it as our ⊥ insertion command so the binding works correctly.
+(unless (fboundp 'org-iswitchb)
+  (defun org-iswitchb ()
+    "Insert CG bottom type symbol ⊥ (replaces removed org-iswitchb)."
+    (interactive)
+    (insert "⊥")))
+
 ;;;;; approach 2
 ;; Define abbrevs that auto-expand
 (define-abbrev global-abbrev-table "<-" "←")
@@ -219,3 +227,4 @@ Handles multiple return values, output, and errors."
 ;;;;;
 ;;;;; ;; Bind to > key
 ;;;;;   (define-key lisp-mode-map (kbd ">") 'maybe-insert-arrow)
+⊤

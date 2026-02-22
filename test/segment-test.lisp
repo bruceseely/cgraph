@@ -99,7 +99,7 @@
     (ensure-relation-types-exist
      '((:label agnt :source-types act :dest-type animate)
        (:label attr :source-types entity :dest-type attribute)
-       (:label betw :source-types (entity entity) :dest-type entity)
+       ;;(:label betw :source-types (entity entity) :dest-type entity)
        (:label dest :source-types act :dest-type place)
        (:label inst :source-types act :dest-type entity)
        (:label manr :source-types act :dest-type manner)

@@ -94,6 +94,36 @@
     (call-next-method arc node :index index)))
 
 
+;;; use arg is : :in or :out
+;; (defmethod compatible-p ((concept concept) (relation relation) use)
+;;   (let ((relation-type (relation-type relation))
+;;         (relation-source-types (source-types relation-type))
+;;         (relation-dest-types (list  (dest-type relation-type)))
+;;         (concept-type (concept-type concept))
+;;         (target-types (case use
+;;                        (:in relation-source-types)
+;;                        (:out relation-dest-types)
+;;                        (nil ))))
+;;     (cond ((and (eq use :in) (every (lambda (x) (subtype-p concept-type x )) relation-source-types) t)
+;;            (and (eq use :in) (every (lambda (x) (subtype-p concept-type x )) relation-dest-types)
+;;                 (error "Concept-type ~a is not consistent with the in-arc of the '~a' relation type (~a).~% ~a has supertypes ~a~%The in-arc should be one of ~a~%
+;; Concept-type ~a is not consistent with the out-arc of the '~a' relation type
+
+;; Maybe the arrows are backward~%"
+;;                     ctype1 rtype relation-source-types ctype1 (supertypes (concept-type ctype1)) supertypes)
+
+;;                 )
+;;            (and (eq use :out) (every (lambda (x) (subtype-p concept-type x )) relation-dest-types) t)
+
+
+
+
+;; (subtype-p
+
+
+
+
+
 
 ;;;; should use a confomity test
 ;;; todo check expliciitly for each arc
@@ -294,7 +324,7 @@
                (connect (car multi-arcs) arc concept)
                (pop sublist)))
 
-            ;; basic link
+            ;; basic link --
             ;; transition FROM relation multiple-source arcs
             ((match '(concept arc relation))
              (when debug (format t  "~&-05 (concept arc relation) :~37t~s~%" (subseq sublist 0 3)))
@@ -768,17 +798,18 @@
 ;;           ((some #'identity nodes-eq) :some)
 ;;           (t nil))))
 
-
-
 (defun graphs-eq (graph1 graph2)
-  (let* ((concepts1 (collect-concepts graph1))
-         (concepts2 (collect-concepts graph2))
-         (nodes-eq (mapcar (lambda (c1 c2)
-                             (nodes-eq c1 c2))
-                           concepts1 concepts2)))
-    (cond ((every #'identity nodes-eq) t)
-          ;;((some #'identity nodes-eq) :some)
-          (t nil))))
+  (eq graph1 graph2))
+
+;; (defun graphs-eq (graph1 graph2)
+;;   (let* ((concepts1 (collect-concepts graph1))
+;;          (concepts2 (collect-concepts graph2))
+;;          (nodes-eq (mapcar (lambda (c1 c2)
+;;                              (nodes-eq c1 c2))
+;;                            concepts1 concepts2)))
+;;     (cond ((every #'identity nodes-eq) t)
+;;           ;;((some #'identity nodes-eq) :some)
+;;           (t nil))))
 
 
 

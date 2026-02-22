@@ -1,5 +1,5 @@
 ;;; cg-indent.el --- code for editing Conceptual Graphs
-
+;;; for use with cg-mode
 
 
 ;;; (back-to-indentation) Move point to the first non-whitespace character on this line

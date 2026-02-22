@@ -1,6 +1,11 @@
 ;;; -*- Mode: LISP; Syntax: Common-lisp; Base: 10; Lowercase: Yes -*-
 
 
+(defpackage :conceptual-graphs
+  (:use #:cl #:cl-user #:uiop)
+  (:nicknames :cg :cgraph))
+
+
 (declaim (sb-ext:disable-package-locks set))
 (in-package :asdf-user)
 

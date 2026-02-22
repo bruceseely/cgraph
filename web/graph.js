@@ -13,6 +13,7 @@ const canonicalValue = document.getElementById('canonical-value');
 
 const selected    = new Set();
 const expandedSub = new Set();   // node ids with subtypes force-shown
+let baselineNodeIds = new Set(); // node ids visible before any subtype expansion
 
 let mode = 'edit';
 
@@ -27,7 +28,7 @@ let vizInstance = null;
 
 async function getViz() {
   if (vizInstance) return vizInstance;
-  const mod = await import('https://esm.sh/@viz-js/viz');
+  const mod = await import('/viz.js');
   vizInstance = await mod.instance();
   return vizInstance;
 }
@@ -93,6 +94,7 @@ function selectType(name) {
   selected.add(name);
   updateSidebarItem(name);
   renderChips();
+  updateSaveBtn();
   redraw();
 }
 
@@ -100,6 +102,7 @@ function deselect(name) {
   selected.delete(name);
   updateSidebarItem(name);
   renderChips();
+  updateSaveBtn();
   redraw();
 }
 
@@ -138,6 +141,10 @@ async function redraw() {
       if (shape && expandedSub.has(node.id))
         shape.setAttribute('fill', '#d6eaf8');
 
+      // Newly revealed nodes: light fill for nodes added by expansion.
+      if (shape && baselineNodeIds.size > 0 && !baselineNodeIds.has(node.id) && !expandedSub.has(node.id))
+        shape.setAttribute('fill', '#fef9e7');
+
       if (mode === 'info') {
         node.addEventListener('click', () => showRelations(node.id));
       } else {
@@ -161,8 +168,16 @@ async function redraw() {
       // Right-click: toggle subtype expansion.
       node.addEventListener('contextmenu', e => {
         e.preventDefault();
-        if (expandedSub.has(node.id)) expandedSub.delete(node.id);
-        else                          expandedSub.add(node.id);
+        if (expandedSub.has(node.id)) {
+          expandedSub.delete(node.id);
+        } else {
+          if (expandedSub.size === 0)
+            baselineNodeIds = new Set(
+              [...container.querySelectorAll('g.node')].map(n => n.id).filter(Boolean)
+            );
+          expandedSub.add(node.id);
+        }
+        if (expandedSub.size === 0) baselineNodeIds.clear();
         redraw();
       });
     });
@@ -175,7 +190,7 @@ async function redraw() {
 
 // ── Detail pane ───────────────────────────────────────────────────────────────
 
-function buildRelList(relations, container) {
+function buildRelList(relations, container, typeName, asInput) {
   if (relations.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'rel-empty';
@@ -183,23 +198,32 @@ function buildRelList(relations, container) {
     container.replaceChildren(empty);
     return;
   }
+  const TYPE = typeName.toUpperCase();
   container.replaceChildren(
     ...relations.map(rel => {
       const el = document.createElement('div');
       el.className = 'rel-item' + (rel.exact ? ' exact' : '');
-      el.title = rel.desc || '';
 
       const nameSpan = document.createElement('span');
       nameSpan.className = 'rel-name';
       nameSpan.textContent = rel.name;
       el.appendChild(nameSpan);
 
-      if (rel.desc) {
-        const descSpan = document.createElement('span');
-        descSpan.className = 'rel-desc';
-        descSpan.textContent = rel.desc;
-        el.appendChild(descSpan);
+      const graphSpan = document.createElement('span');
+      graphSpan.className = 'rel-graph';
+      if (asInput) {
+        graphSpan.textContent = `[${TYPE}]→(${rel.name})→[${rel.dest || '?'}]`;
+      } else {
+        const src = (rel.sources && rel.sources.length > 0) ? rel.sources[0] : '?';
+        graphSpan.textContent = `[${src}]→(${rel.name})→[${TYPE}]`;
       }
+      el.appendChild(graphSpan);
+
+      const descSpan = document.createElement('span');
+      descSpan.className = 'rel-desc';
+      descSpan.textContent = rel.desc || '';
+      el.appendChild(descSpan);
+
       return el;
     })
   );
@@ -222,8 +246,8 @@ async function showRelations(typeName) {
       canonicalRow.hidden = false;
     }
 
-    buildRelList(data.as_input,  colInput);
-    buildRelList(data.as_output, colOutput);
+    buildRelList(data.as_input,  colInput,  typeName, true);
+    buildRelList(data.as_output, colOutput, typeName, false);
   } catch (err) {
     showError(err.message);
   }
@@ -238,6 +262,7 @@ container.addEventListener('click', e => {
   if (e.target.closest('g.node')) return;
   if (expandedSub.size > 0) {
     expandedSub.clear();
+    baselineNodeIds.clear();
     redraw();
   }
 });
@@ -245,6 +270,100 @@ container.addEventListener('click', e => {
 // Right-click on background: suppress the browser context menu.
 container.addEventListener('contextmenu', e => {
   if (!e.target.closest('g.node')) e.preventDefault();
+});
+
+// ── Save-status click: copy to clipboard + Emacs kill-ring ────────────────
+
+document.getElementById('save-status').addEventListener('click', async () => {
+  const el = document.getElementById('save-status');
+  const text = el.textContent;
+  if (!text) return;
+
+  // Mac clipboard
+  navigator.clipboard.writeText(text).catch(() => {});
+
+  // Emacs kill-ring (best-effort, ignore errors)
+  fetch(`/api/kill-ring?text=${encodeURIComponent(text)}`, { method: 'POST' }).catch(() => {});
+
+  // Brief visual feedback
+  el.style.color = '#2ecc71';
+  setTimeout(() => { el.style.color = ''; }, 800);
+});
+
+// ── Save button ───────────────────────────────────────────────────────────
+
+function updateSaveBtn() {
+  document.getElementById('save-btn').disabled = selected.size === 0;
+}
+
+document.getElementById('save-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  clearError();
+  try {
+    let url = `/api/save?types=${encodeURIComponent([...selected].join(','))}`;
+    if (expandedSub.size > 0)
+      url += `&expand_sub=${encodeURIComponent([...expandedSub].join(','))}`;
+    const resp = await fetch(url, { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      showError(data.error || `Save failed: ${resp.status}`);
+      btn.textContent = 'Save';
+      btn.disabled = selected.size === 0;
+    } else {
+      const path = data.png || data.dot;
+      const basename = path.split('/').pop().replace(/\.(png|dot)$/, '');
+      document.getElementById('save-status').textContent = basename;
+      btn.textContent = 'Saved ✓';
+      setTimeout(() => { btn.textContent = 'Save'; btn.disabled = selected.size === 0; }, 2000);
+    }
+  } catch (err) {
+    showError(err.message);
+    btn.textContent = 'Save';
+    btn.disabled = selected.size === 0;
+  }
+});
+
+// ── Initialize button ─────────────────────────────────────────────────────
+
+document.getElementById('init-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('init-btn');
+  btn.disabled = true;
+  btn.textContent = 'Initializing…';
+  clearError();
+  try {
+    const resp = await fetch('/api/initialize', { method: 'POST' });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      showError(data.error || `Initialize failed: ${resp.status}`);
+      return;
+    }
+    // Reload the type list.
+    const typesResp = await fetch('/api/types');
+    if (!typesResp.ok) { showError(`Could not reload types: ${typesResp.status}`); return; }
+    const names = await typesResp.json();
+
+    // Drop any selected types that no longer exist.
+    const nameSet = new Set(names);
+    for (const name of [...selected])
+      if (!nameSet.has(name)) selected.delete(name);
+
+    // Clear expansions and redraw.
+    expandedSub.clear();
+    baselineNodeIds.clear();
+
+    renderSidebar(names);
+    renderChips();
+    updateSaveBtn();
+    document.getElementById('save-status').textContent = '';
+    redraw();
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Initialize';
+  }
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────

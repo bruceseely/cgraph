@@ -24,3 +24,9 @@
     (hunchentoot:stop *web-acceptor*)
     (setf *web-acceptor* nil)
     (format t "~&CGraph web server stopped.~%")))
+
+(defun web-server-started-p ()
+  "Has the Hunchentoot web server started?"
+  (let ((started (hunchentoot:started-p *web-acceptor*)))
+    (format t "~&CGraph web server is running.~%")
+    started))

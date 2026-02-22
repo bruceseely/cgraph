@@ -71,19 +71,22 @@
 
 
 
+;; (defmethod combine-conceptual-graphs ((graph1 graph-node) (graph2 graph-node) &key (alignment-strategy :automatic))
+;;   (let ((graph-list
+;;           (combine-conceptual-graph-lists (collect-nodes graph1) (collect-nodes graph2) :alignment-strategy alignment-strategy)))
+;;     (setq gx1 (make-graph-from-nodes graph1))
+;;     (setq gx2 (make-graph-from-nodes graph-list))
+
+;;     graph1))
+
+
+
 (defmethod combine-conceptual-graphs ((graph1 graph-node) (graph2 graph-node) &key (alignment-strategy :automatic))
-  (let ((graph-list
-          (combine-conceptual-graph-lists (collect-nodes graph1) (collect-nodes graph2) :alignment-strategy alignment-strategy)))
-    graph1))
-
-
-
-(defmethod combine-conceptual-graphs ((graph1 string) (graph2 string) &key (alignment-strategy :automatic))
-  (combine-conceptual-graphs (pcg graph1) (pcg graph2) :alignment-strategy alignment-strategy))
-
+  (combine-conceptual-graph-lists (collect-nodes graph1) (collect-nodes graph2) :alignment-strategy alignment-strategy)
+  graph1)
 
 (defmethod combine-conceptual-graphs ((graph1 graph) (graph2 graph) &key (alignment-strategy :automatic))
-  (combine-conceptual-graph-lists (collect-nodes (head graph1)) (collect-nodes (head graph2)) :alignment-strategy alignment-strategy)
+  (combine-conceptual-graphs (head graph1) (head graph2) :alignment-strategy alignment-strategy)
   graph1)
 
 
@@ -121,7 +124,12 @@
                     best-score similarity))))
 
         ;; Only consider it a correspondence if similarity is high enough
-        (when (and best-match (> best-score 0.4))
+        ;; AND the types are actually joinable (subtype or equal).
+        ;; common-supertype-p alone doesn't imply joinability, and letting
+        ;; non-joinable pairs through causes join-concepts to error.
+        (when (and best-match (> best-score 0.4)
+                   (types-joinable-p (concept-type concept1)
+                                     (concept-type best-match)))
           (push (list concept1 best-match best-score) correspondences))))
 
     ;; Remove conflicts (ensure 1-1 mapping)
@@ -159,6 +167,7 @@
     ((and (individual-p ref1) (individual-p ref2) (individuals-compatible-p ref1 ref2)) 0.8)
     ;; Different individuals
     (t 0.0)))
+
 
 (defun individuals-compatible-p (ind1 ind2)
   "Check if individuals could potentially be joined"

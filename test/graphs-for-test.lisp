@@ -9,7 +9,7 @@
 (defvar agnt1-rel)
 (defvar agnt2-rel)
 (defvar attr-rel)
-(defvar betw-rel)
+;;(defvar betw-rel)
 (defvar dest-rel)
 (defvar inst-rel)
 (defvar manr-rel)
@@ -82,7 +82,7 @@
   (setf agnt1-rel (make-relation 'agnt))
   (setf agnt2-rel (make-relation 'agnt))
   (setf attr-rel  (make-relation 'attr))
-  (setf betw-rel  (make-relation 'betw))
+  ;;(setf betw-rel  (make-relation 'betw))
   (setf dest-rel  (make-relation 'dest))
   (setf inst-rel  (make-relation 'inst))
   (setf manr-rel  (make-relation 'manr))
@@ -163,9 +163,9 @@
 ;;; fork  -- problem
 (defun test-graph-2 ()
   (init-test-graphs)
-  (let ((graph-string "[DOG: Spot]<-(agnt)<-[EAT]-
-                         (manr)->[QUICKLY]
-                         (obj)->[CAKE]."))
+  (let ((graph-string "[DOG: Spot]←(agnt)←[EAT]-
+                         (manr)→[QUICKLY]
+                         (obj)→[CAKE]."))
 
   ;; [eat]->(agnt)->[dog]
   (add-arc-into-relation eat-con agnt-rel)
@@ -408,22 +408,22 @@
     (values give-con graph-string)))
 
 ;;; (trace format-segment-path format-segments-from-node format-segments format-path-tokens format-node)
+;; (defun test-graph-10 ()
+;;   (init-test-graphs)
+;;   (let ((graph-string
+;;           "[PERSON]<-(betw)-
+;;                <-1-[ROCK]
+;;                <-2-[PLACE]->(attr)->[HARD]."))
+
+;;     (set-arc-from-relation person-con  betw-rel)
+;;     (add-arc-into-relation betw-rel rock-con)
+;;     (add-arc-into-relation betw-rel place-con)
+;;     (add-arc-into-relation place-con attr-rel)
+;;     (set-arc-from-relation attr-rel hard-con)
+;;     (values person-con graph-string)))
+
+
 (defun test-graph-10 ()
-  (init-test-graphs)
-  (let ((graph-string
-          "[PERSON]<-(betw)-
-               <-1-[ROCK]
-               <-2-[PLACE]->(attr)->[HARD]."))
-
-    (set-arc-from-relation person-con  betw-rel)
-    (add-arc-into-relation betw-rel rock-con)
-    (add-arc-into-relation betw-rel place-con)
-    (add-arc-into-relation place-con attr-rel)
-    (set-arc-from-relation attr-rel hard-con)
-    (values person-con graph-string)))
-
-
-(defun test-graph-11 ()
   (init-simplify-test-nodes)
   (let ((graph-string "[DOG: Spot]<-(agnt)<-[EAT]-
                          (obj)->[CAKE]
@@ -446,7 +446,7 @@
 
 
 
-(defun test-graph-12 ()
+(defun test-graph-11 ()
   (init-test-graphs)
   (let ((graph-string "[DRIVE]-
      (agnt)→[PERSON: *x]

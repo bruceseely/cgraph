@@ -50,6 +50,11 @@
   (setf (hunchentoot:content-type*) "application/javascript; charset=utf-8")
   (read-static-file "graph.js"))
 
+;;; GET /viz.js — serve vendored @viz-js/viz ES module
+(hunchentoot:define-easy-handler (handle-viz-js :uri "/viz.js") ()
+  (setf (hunchentoot:content-type*) "application/javascript; charset=utf-8")
+  (read-static-file "viz.js"))
+
 ;;; GET /api/dot?types=animal[,dog,...]&expand_sub=animal&expand_super=dog
 (hunchentoot:define-easy-handler (handle-api-dot :uri "/api/dot") (types expand_sub expand_super)
   (setf (hunchentoot:content-type*) "text/plain; charset=utf-8")
@@ -96,6 +101,87 @@
                                            :expand-sub expand-sub-names
                                            :expand-super expand-super-names))))))
 
+;;; POST /api/initialize — reinitialize the concept-type system and reload types.
+(hunchentoot:define-easy-handler (handle-api-initialize :uri "/api/initialize") ()
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (unless (eq (hunchentoot:request-method*) :post)
+    (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
+    (return-from handle-api-initialize "{\"error\":\"POST required\"}"))
+  (handler-case
+      (progn
+        (initialize-cgraph)
+        "{\"ok\":true}")
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-internal-server-error+)
+      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+
+;;; POST /api/save?types=...&expand_sub=...
+;;; Writes <name>.dot and <name>.png to *cgraph-data-directory*.
+(hunchentoot:define-easy-handler (handle-api-save :uri "/api/save") (types expand_sub)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (unless (eq (hunchentoot:request-method*) :post)
+    (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
+    (return-from handle-api-save "{\"error\":\"POST required\"}"))
+  (let* ((raw    (or types ""))
+         (tokens (split-type-string raw))
+         (validated
+          (handler-case
+              (mapcar (lambda (tok)
+                        (let ((ct (get-concept-type tok)))
+                          (unless ct (error "Unknown concept type: ~a" tok))
+                          ct))
+                      tokens)
+            (error (e)
+              (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+              (return-from handle-api-save
+                (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))))
+    (when (null validated)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (return-from handle-api-save "{\"error\":\"no types specified\"}"))
+    (let* ((name-list (mapcar (lambda (tok) (intern (string-upcase tok) :cg)) tokens))
+           (expand-sub-names
+            (loop for tok in (split-type-string (or expand_sub ""))
+                  for sym = (intern (string-upcase tok) :cg)
+                  when (get-concept-type sym) collect sym))
+           ;; Derive filename the same way graph-concept-types does.
+           (graph-name (string-trim "()"
+                         (substitute #\- #\Space
+                           (format nil "~(~a~)" name-list))))
+           (dot-path (format nil "~a~a.dot" *cgraph-data-directory* graph-name))
+           (png-path (format nil "~a~a.png" *cgraph-data-directory* graph-name))
+           (dot-string
+            (with-output-to-string (s)
+              (generate-concept-type-digraph :type-name-list name-list
+                                             :stream s
+                                             :parents t :children t
+                                             :hide-bottom t
+                                             :expand-sub expand-sub-names))))
+      (ensure-directories-exist dot-path)
+      (with-open-file (out dot-path :direction :output
+                           :if-exists :supersede :if-does-not-exist :create)
+        (write-string dot-string out))
+      (let ((png-ok
+             (handler-case
+                 (progn (uiop:run-program (list "dot" "-Tpng" dot-path "-o" png-path)) t)
+               (error () nil))))
+        (format nil "{\"ok\":true,\"dot\":\"~a\",\"png\":~a}"
+                (json-escape dot-path)
+                (if png-ok (format nil "\"~a\"" (json-escape png-path)) "null"))))))
+
+;;; POST /api/kill-ring?text=... — push text onto the Emacs kill-ring via SWANK.
+(hunchentoot:define-easy-handler (handle-api-kill-ring :uri "/api/kill-ring") (text)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (unless (eq (hunchentoot:request-method*) :post)
+    (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
+    (return-from handle-api-kill-ring "{\"error\":\"POST required\"}"))
+  #+swank
+  (handler-case
+      (progn (swank:eval-in-emacs `(kill-new ,text)) "{\"ok\":true}")
+    (error (e)
+      (format nil "{\"ok\":false,\"error\":\"~a\"}" (json-escape (princ-to-string e)))))
+  #-swank
+  "{\"ok\":false,\"error\":\"SWANK not available\"}")
+
 ;;; GET /api/types — list all registered concept types as a JSON array.
 (hunchentoot:define-easy-handler (handle-api-types :uri "/api/types") ()
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
@@ -119,10 +205,16 @@
 
 ;;; Helper: serialize one relation entry as a JSON object.
 (defun json-relation-entry (rel-type exact-p)
-  (format nil "{\"name\":\"~a\",\"exact\":~a,\"desc\":\"~a\"}"
-          (string-downcase (symbol-name (label rel-type)))
-          (if exact-p "true" "false")
-          (json-escape (or (desc rel-type) ""))))
+  (let* ((dest      (dest-type rel-type))
+         (dest-name (if dest (string-upcase (symbol-name (label dest))) ""))
+         (src-names (mapcar (lambda (st) (string-upcase (symbol-name (label st))))
+                            (source-types rel-type))))
+    (format nil "{\"name\":\"~a\",\"exact\":~a,\"desc\":\"~a\",\"dest\":\"~a\",\"sources\":~a}"
+            (string-downcase (symbol-name (label rel-type)))
+            (if exact-p "true" "false")
+            (json-escape (or (desc rel-type) ""))
+            dest-name
+            (json-string-array src-names))))
 
 ;;; Helper: serialize a list of relation entries as a JSON array.
 (defun json-relation-array (entries)

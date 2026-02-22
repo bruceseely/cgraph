@@ -796,7 +796,7 @@
 
 
 
-(defun parse-cgraph (string)
+(defun read-cgraph-tokens (string)
   (initialize-variables)
   (initialize-coreferences)
   (initialize-context *context*)
@@ -807,7 +807,8 @@
     ;; replace arrow-characters with strings
     (setf string (expand-arrows string))
 
-    (with-input-from-string (stream string)
+    ;;(with-input-from-string (stream string)
+    (let ((stream (make-string-input-stream string)))
       (let* ((tokens (handler-case (read-cg-tokens stream)
                        (relation-type-lookup-failed (c)
                          (error "PARSE-CGRAPH cannot find relation-type '~a' while parsing '~a'" (text c)  string))
@@ -820,9 +821,11 @@
              (linked-tokens (linkup tokens))
              ;;(token-path (path linked-tokens))
              )
+        linked-tokens))))
 
-        ;;(car (linkup tokens))
-        (make-graph-from-nodes linked-tokens)))))
+(defun parse-cgraph (string)
+  (let ((tokens (read-cgraph-tokens string)))
+    (make-graph-from-nodes tokens)))
 
 
 (defmethod pcg ((graph string))

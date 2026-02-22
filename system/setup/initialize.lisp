@@ -8,42 +8,14 @@
 
 ;;; NOTE: *cgraph-types-directory* = directory that the code uses for types
 
-;; (delete-type-files)
-;; (copy-example-type-definitions)
-;; (link-cgraph-types-to-external-directory "~/repo/cgraph-types/")
-
-;; (load-cgraph-types "~/.cgraph/types/")
-
-
-
 
 (defun delete-type-files ()
   (let ((concept-path (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
         (relation-path (format nil "~arelation-types.lisp" *cgraph-types-directory*)))
-    ;; (format t "~&concept-path: ~s~%"  concept-path)
-    ;; (format t "~&relation-path: ~s~%"  relation-path)
     (when (probe-file concept-path)
       (delete-file concept-path))
     (when (probe-file relation-path)
-      (delete-file relation-path)))
-  )
-
-   "ln -s /Users/bseely/repo/cgraph-types/concept-types.lispconcept-types.lisp  /Users/bseely/.cgraph/types/concept-types.lisp"
-;;; ln -s /Users/bseely/repo/cgraph-types/concept-types.lisp /Users/bseely/.cgraph/types/concept-types.lisp
-;; "ln -s /Users/bseely/repo/cgraph-types/concept-types.lispconcept-types.lisp  /Users/bseely/.cgraph/types/concept-types.lispconcept-types.lisp"
-
-;;; (uiop:run-program "ln -s /Users/bseely/repo/cgraph-types/concept-types.lisp  /Users/bseely/.cgraph/types/concept-types.lisp")
-;;; (uiop:run-program (format nil "ln -s ~a ~a"   "/Users/bseely/repo/cgraph-types/concept-types.lisp"  "/Users/bseely/.cgraph/types/concept-types.lisp"))
-
-;; (let ((external-concept-type-path "/Users/bseely/repo/cgraph-types/concept-types.lisp")
-;;       (*cgraph-types-directory* "/Users/bseely/.cgraph/types/concept-types.lisp"))
-;;   (uiop:run-program (format nil "ln -s ~a ~a"   external-concept-type-path  *cgraph-types-directory*)))
-
-;; (let ((external-concept-type-path "/Users/bseely/repo/cgraph-types/concept-types.lisp")
-;;       (*cgraph-types-directory* "/Users/bseely/.cgraph/types/concept-types.lisp")
-;;       (concept-link-command  (format nil "ln -s ~a ~a"  external-concept-type-path  *cgraph-types-directory*))
-;;       )
-;;   (uiop:run-program concept-link-command))
+      (delete-file relation-path))))
 
 
 (defun link-cgraph-types-to-external-directory (external-directory-path)
@@ -176,13 +148,8 @@
 ;;; concept-types is the path to the concept-types file
 ;;; relation-types is the path to the relation-types file
 ;;;
+
 (defun setup-cgraph (code-base &key external-types-directory)
-  ;;(in-package :conceptual-graphs)
-
-  (setf *package* (or (find-package :conceptual-graphs)
-                      (make-package :conceptual-graphs :use '(:common-lisp :common-lisp-user :uiop)
-                                                       :nicknames '(:cg :cgraph))))
-
   (let* ((cgraph-base (format nil "~a.cgraph/" (namestring (user-homedir-pathname))))
          (types-directory (format nil "~atypes/" cgraph-base))
          (data-directory (format nil "~adata/" cgraph-base))
@@ -202,35 +169,24 @@
         (push (cons '*package* (find-package :conceptual-graphs))
               (symbol-value bindings-var)))))
 
-  ;; start web server
-  (asdf:load-system "cgraph-web")
-
-  ;;(clbr::web-class-browser :port 8040)
-  ;;(funcall (intern "web-class-browser" :clbr) :port 8040)
-  ;; (format t "~&Class Browser: http://localhost:8040")
-  ;; (cg::start-web-server :port 8060)
-  ;; (format t "~&Type Grapher: http://localhost:8060")
-  ;; (push #p"/Users/bseely/repo/utilities/" asdf:*central-registry*)
-  ;; (asdf:load-system :web-utilities)
-  ;;(asdf:load-system :web-utilities :force t)
-
-
-  (asdf:load-system "cgraph-web")
-
   (cleanup-files code-base)
   (cg::report-directories)
   (terpri)
+
+  ;; start web server
+  (asdf:load-system :cgraph-web)
+  (cg::start-web-server :port 8060)
+  (terpri)
+
   (cg::test-all t))
 
-(defun start-class-browser ()
-  (asdf:load-system :web-utilities :force t)
-  (funcall (read-from-string "clbr::web-class-browser") :port 8040)
-  (princ "http://localhost:8040/clbr")
-  t)
 
+;;; This is the transition from the :cl-user package to the :cg package
+(in-package :cl-user)
+(defun start-cgraph (code-path &key external-types-directory)
+  (setf *package* (or (find-package :conceptual-graphs)
+                      (make-package :conceptual-graphs
+                                    :use '(:common-lisp :common-lisp-user :uiop)
+                                    :nicknames '(:cg :cgraph))))
 
-(defun start-type-grapher ()
-  (asdf:load-system "cgraph-web")
-  (cg::start-web-server :port 8060)
-  (princ "http://localhost:8060")
-  t)
+  (cg::setup-cgraph code-path :external-types-directory external-types-directory))

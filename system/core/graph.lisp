@@ -42,8 +42,12 @@
 
 
 (defmethod print-object ((object graph) stream)
-  (print-unreadable-object (object stream :type t :identity nil)
-    (format stream "~a" (flatten-cgraph (format-cgraph object)))))
+  (cond (*always-format-nodes*
+         (let ((text (format-cgraph object)))
+           (princ text *standard-output*)))
+        (t
+         (print-unreadable-object (object stream :type t :identity nil)
+           (format stream "~a" (flatten-cgraph (format-cgraph object)))))))
 
 
 (defmethod format-graph ((graph graph))

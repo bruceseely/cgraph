@@ -140,6 +140,33 @@
       flex-shrink: 0;
     }
 
+    #save-btn, #init-btn {
+      align-self: center;
+      flex-shrink: 0;
+      font-size: 11px;
+      padding: 0.18rem 0.55rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #f7f7f7;
+      color: #555;
+      cursor: pointer;
+    }
+    #save-btn { margin-left: auto; }
+    #save-btn:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
+    #save-btn:disabled { color: #bbb; cursor: default; }
+    #save-status {
+      font-size: 13px;
+      color: #aaa;
+      white-space: nowrap;
+      align-self: center;
+      margin-left: 0.4rem;
+    }
+    #save-status:not(:empty) { cursor: pointer; }
+    #save-status:not(:empty):hover { color: #555; text-decoration: underline; }
+    #init-btn { margin-left: 0.4rem; }
+    #init-btn:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
+    #init-btn:disabled { color: #bbb; cursor: default; }
+
     #type-list {
       overflow-y: auto;
       flex: 1;
@@ -246,18 +273,16 @@
 
     #detail-cols {
       display: flex;
-      overflow: hidden;
-      height: 160px;
+      flex-direction: column;
+      overflow-y: auto;
     }
 
     .detail-col {
-      flex: 1;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
-      border-right: 1px solid #eee;
+      flex-shrink: 0;
     }
-    .detail-col:last-child { border-right: none; }
+    .detail-col + .detail-col { border-top: 1px solid #eee; }
 
     .detail-col-header {
       padding: 0.3rem 0.75rem;
@@ -268,37 +293,55 @@
       flex-shrink: 0;
     }
 
+    /* Grid layout: name | graph | desc — columns shared across all rows */
     .detail-col-body {
+      display: grid;
+      grid-template-columns: max-content max-content 1fr;
+      align-items: baseline;
+      max-height: 140px;
       overflow-y: auto;
-      flex: 1;
-      padding: 0.25rem 0;
+      padding: 0.2rem 0;
     }
 
-    .rel-item {
-      padding: 0.2rem 0.75rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    /* Each rel-item is invisible as a box; its children become the grid cells */
+    .rel-item { display: contents; }
 
     .rel-item.exact .rel-name { font-weight: bold; }
+
+    .rel-item:hover .rel-name,
+    .rel-item:hover .rel-graph,
+    .rel-item:hover .rel-desc { background: #f0f4ff; }
 
     .rel-name {
       font-family: monospace;
       font-size: 11px;
       background: #ebebeb;
       color: #555;
-      padding: 0.05em 0.35em;
+      padding: 0.18rem 0.4em;
       border-radius: 2px;
-      margin-right: 0.45rem;
+      margin: 0.1rem 0 0.1rem 0.75rem;
+      white-space: nowrap;
+    }
+
+    .rel-graph {
+      font-family: monospace;
+      font-size: 11px;
+      color: #444;
+      padding: 0.18rem 1.25rem 0.18rem 0.6rem;
+      white-space: nowrap;
     }
 
     .rel-desc {
       font-size: 12px;
       color: #777;
+      padding: 0.18rem 0.75rem 0.18rem 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .rel-empty {
+      grid-column: 1 / -1;
       padding: 0.4rem 0.75rem;
       color: #ccc;
       font-style: italic;
@@ -317,6 +360,9 @@
       <button class="mode-btn" data-mode="edit"
               title="Left-click: expand/collapse subtypes · Right-click: expand/collapse supertypes">Edit</button>
     </div>
+    <button id="save-btn" title="Save graph to data directory" disabled>Save</button>
+    <span id="save-status"></span>
+    <button id="init-btn" title="Reinitialize concept types">Initialize</button>
   </div>
 
   <div id="mode-hint" hidden>

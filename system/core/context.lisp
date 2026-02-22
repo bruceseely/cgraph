@@ -52,6 +52,7 @@
   ;; (setf (child-contexts context) (list))
   ;; (when parent-supplied
   ;;   (setf (parent-context context) parent))
+  (setf (graphs context) (list))
   (setf (nodes context) (list)))
 
 (defmethod initialize-context ((context (eql nil)) &optional (parent nil)))
