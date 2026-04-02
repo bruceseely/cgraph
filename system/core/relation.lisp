@@ -32,14 +32,25 @@
 (defmethod types-equal ((relation1 relation) (relation2 relation))
   (types-equal (relation-type relation1) (relation-type relation2)))
 
+;; (defmethod 1relations-equal ((rel1 relation) (rel2 relation))
+;;   "Check if two relations are equivalent (same type, equivalent arcs)"
+;;   (and (types-equal rel1 rel2)
+;;        (= (length (arcs rel1)) (length (arcs rel2)))
+;;        (every (lambda (arc1)
+;;                 (find arc1 (arcs rel2) :test #'objects-equal))
+;;               (arcs rel1))))
+
 (defmethod relations-equal ((rel1 relation) (rel2 relation))
   "Check if two relations are equivalent (same type, equivalent arcs)"
-  (and (types-equal rel1 rel2)
-       (= (length (arcs rel1)) (length (arcs rel2)))
-       (objects-equal (car (arcs rel1)) (car (arcs rel2)))
-       (every (lambda (arc1)
-                (find arc1 (cdr (arcs rel2)) :test #'objects-equal))
-              (cdr (arcs rel1)))))
+  (or (nodes-eq rel1 rel2)
+      (and
+       (types-equal rel1 rel2)
+       (equal (num-arcs rel1) (num-arcs rel1))
+       ;; arcs should be in the same order
+       (every (lambda (con1 con2)
+                (objects-equal con1 con2))
+              (arcs rel1)
+              (arcs rel2)))))
 
 
 
@@ -70,7 +81,9 @@
 
 (defmethod format-relation ((node relation) &key &allow-other-keys)
   (let* ((relation-type (relation-type node))
-         (relation-text (format nil "~((~a)~)" relation-type)))
+         (node-ref (node-ref node))
+         (node-ref-text (format nil "~:[~; +~d~]"  *always-show-node-ref* node-ref))
+         (relation-text (format nil "~((~a~a)~)" relation-type (string-right-trim " " node-ref-text))))
     relation-text))
 
 (defmethod format-relation :around ((node relation) &key &allow-other-keys)

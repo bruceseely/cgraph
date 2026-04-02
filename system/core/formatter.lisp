@@ -285,9 +285,7 @@
     (setf *segment-pool* (copy-list segments))
     (format-segments first-segment initial-indent indent-delta :initial t)))
 
-
-
-(defmethod format-cgraph ((node graph-node) &key (initial-indent 0) (indent-delta 3))
+(defmethod cgraph-text ((node graph-node) &key (initial-indent 0) (indent-delta 3))
   (let* ((segments (make-graph-segments node))
          (start-segments (segments-starting-with node segments))
          (first-segment (car (sort (copy-list start-segments) #'< :key (lambda (seg) (length (path seg))))))
@@ -298,28 +296,32 @@
          (*segment-pool* (sort (copy-list segments) #'segment-lessp))
          (base-text (format-segments first-segment initial-indent indent-delta :initial t))
          (graph-text (string-trim (list #\, #\- #\space #\newline) base-text)))
-
     graph-text))
 
-;; (defmethod format-cgraph ((graph graph) &key (initial-indent 0) (indent-delta 3))
-;;   (format-cgraph (car (nodes graph))))
+(defmethod format-cgraph ((node graph-node) &key (initial-indent 0) (indent-delta 3))
+  (let* ((graph-text (cgraph-text node))
+         (result (strcat graph-text #\.)))
+    (if *always-print-ascii-arrows*
+        (arrows-to-ascii result)
+        result)))
+
+(defmethod format-cgraph ((nodes list) &key (initial-indent 0) (indent-delta 3))
+  (format-cgraph (car nodes) :initial-indent initial-indent :indent-delta indent-delta))
+
 
 (defmethod format-cgraph ((graph graph) &key (initial-indent 0) (indent-delta 3) (start-concept (head graph)))
-  (strcat (format-cgraph start-concept) "."))
+  (format-cgraph start-concept))
 
 
 ;; (let* ((graph (pcg "[DRIVE]-
 ;;                          (agnt)→[PERSON: *x]
-;;                          (dest)→[CITY]
+;;                          (dest)→[CITY: Baltimore]
 ;;                          (inst)→[CHEVY]-
 ;;                                    (attr)→[OLD]
 ;;                                    (poss)←[PERSON: *x]."))
-;;        (start-concept (find-concept 'person graph)))
+;;        (start-concept (find-concept 'city graph)))
 ;; (format-cgraph start-concept))
 
-
-
-;;;(vartest "[PERSON:Sue]←(agnt)←[GIVE]-(rcpt)→[DOG:Spot]←(agnt)←[EAT:*x](inst)→[FOOD]←(obj)←[EAT:*x]→(manr)→[FAST]." t)
 
 
 (defun segment-lessp (seg1 seg2)
@@ -344,17 +346,13 @@
 (defmethod pcg ((graph graph))
   (format-cgraph graph))
 
+(defmethod pcg ((graph list))
+  (pcg (car graph)))
 
-(defmethod pcg ((graph-node (eql nil)))
+(defmethod pcg ((thing (eql nil)))
   nil)
 
 
-(defmethod fcg ((graph graph-node))
-  (format-cgraph graph))
-
-
-;; (defmacro fcg (node &optional (indent 0) (delta 3))
-;;   `(format-cgraph ,node :initial-indent ,indent :indent-delta ,delta))
 
 
 (defmethod flatten-cgraph ((text string))
@@ -378,13 +376,22 @@
                                  (nodes graph))))
     (mapcar #'format-cgraph concepts)))
 
+(defmethod graph-every-concept ((concepts list))
+  (assert (every #'concept-p concepts))
+  (mapcar #'format-cgraph concepts))
 
-(defun expand-arrows (graph-string)
+
+
+
+
+
+
+(defun arrows-to-ascii (graph-string)
   (setf graph-string (frob-substrings graph-string (list right-arrow-string) "->"))
   (setf graph-string (frob-substrings graph-string (list left-arrow-string) "<-"))
   graph-string)
 
-(defun encode-arrows (graph-string)
+(defun arrows-to-unicode (graph-string)
   (setf graph-string (frob-substrings graph-string (list "->") right-arrow-string))
   (setf graph-string (frob-substrings graph-string (list "<-") left-arrow-string))
   (setf graph-string (frob-substrings graph-string (list "](") "] ("))
@@ -464,7 +471,7 @@
              (vector-push-extend ch result)
              (incf i))))))
 
-    (encode-arrows (coerce result 'string))))
+    (arrows-to-unicode (coerce result 'string))))
 
 
 
@@ -478,7 +485,6 @@
 (setq g2 (parse-cgraph s2))
 (format-cgraph g2)
 (find-concept (get-concept-type 'give) (pcg s2) )
-(fcg *)
 |#
 
 

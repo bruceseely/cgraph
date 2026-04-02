@@ -19,9 +19,11 @@
                  (:failure (null result))
                  (otherwise nil))))
     (when verbose
-      (format t "~&~a: ~:[FAIL~;pass~]" name pass)
+      ;;(format t "~2&~a:~28t~:[FAIL~;pass~]" name pass)
+      (format t "~2&~:[** FAIL~;pass   ~]~6t~a" pass name)
+      (format t "~35t~s (~a ~a)" expected-result pattern target)
       (when (and result (not (eq expected-result :failure)))
-        (format t " ~a" (format-projection-mapping result))))
+        (format t "~80t~a" (format-projection-mapping result))))
     pass))
 
 
@@ -46,35 +48,35 @@
 (defun test-identical-generic-concepts (&optional verbose)
   "Test: [Dog] -> [Dog] should succeed"
   (projection-test-case "identical-generic"
-                        "[Dog]." "[Dog]."
+                        "[Dog]" "[Dog]"
                         :success verbose))
 
 
 (defun test-generic-to-individual (&optional verbose)
   "Test: [Dog] -> [Dog: Spot] should succeed (generic matches specific)"
   (projection-test-case "generic-to-individual"
-                        "[Dog]." "[Dog: Spot]."
+                        "[Dog]" "[Dog: Spot]"
                         :success verbose))
 
 
 (defun test-individual-mismatch (&optional verbose)
   "Test: [Dog: Spot] -> [Dog: Rex] should fail (different individuals)"
   (projection-test-case "individual-mismatch"
-                        "[Dog: Spot]." "[Dog: Rex]."
+                        "[Dog: Spot]" "[Dog: Rex]"
                         :failure verbose))
 
 
 (defun test-individual-to-generic (&optional verbose)
   "Test: [Dog: Spot] -> [Dog] should fail (specific cannot match generic)"
   (projection-test-case "individual-to-generic"
-                        "[Dog: Spot]." "[Dog]."
+                        "[Dog: Spot]" "[Dog]"
                         :failure verbose))
 
 
 (defun test-same-individual (&optional verbose)
   "Test: [Dog: Spot] -> [Dog: Spot] should succeed"
   (projection-test-case "same-individual"
-                        "[Dog: Spot]." "[Dog: Spot]."
+                        "[Dog: Spot]" "[Dog: Spot]"
                         :success verbose))
 
 
@@ -239,41 +241,11 @@
   (let ((pass t)
         (*allow-dynamic-individual-creation* t))
 
-    (ensure-concept-types-exist
-     '((:label entity :supertypes (⊤))
-       (:label physobj :supertypes (entity))
-       (:label animate :supertypes (entity))
-       (:label mobile-entity :supertypes (physobj))
-       (:label animal :supertypes (animate mobile-entity))
-       (:label dog :supertypes (animal))
-       (:label person :supertypes (animal))
-       (:label girl :supertypes (person))
-       (:label event :supertypes (⊤))
-       (:label act :supertypes (event))
-       (:label eat :supertypes (act))
-       (:label give :supertypes (act))
-       (:label food :supertypes (entity physobj))
-       (:label pie :supertypes (food))
-       (:label characteristic :supertypes (⊤))
-       (:label age :supertypes (characteristic))
-       (:label old :supertypes (age))
-       (:label attribute :supertypes (characteristic))
-       (:label manner :supertypes (characteristic))
-       (:label fast :supertypes (manner))))
-
-    (ensure-relation-types-exist
-     '((:label agnt :source-types act :dest-type animate)
-       (:label attr :source-types entity :dest-type attribute)
-       (:label chrc :source-types entity :dest-type characteristic)
-       (:label inst :source-types act :dest-type entity)
-       (:label manr :source-types act :dest-type manner)
-       (:label obj  :source-types act :dest-type entity)
-       (:label rcpt :source-types act :dest-type animate)))
     (when verbose
       (format t "~&~%=== Projection Tests ===~%"))
     (dolist (test-fn (projection-test-defs))
       (let ((result (funcall test-fn verbose)))
         (setf pass (and pass result))))
     (when verbose
-      (format t "~&~%Overall: ~:[SOME TESTS FAILED~;ALL TESTS PASSED~]~%" pass))
+      (format t "~&~%Overall: ~:[SOME TESTS FAILED~;ALL TESTS PASSED~]~2%" pass))
     pass))

@@ -31,48 +31,6 @@
       flex-shrink: 0;
     }
 
-    /* ── mode toggle ── */
-    #mode-toggle {
-      display: none;   /* hidden until re-enabled */
-      margin-left: auto;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      overflow: hidden;
-      align-self: center;
-      flex-shrink: 0;
-    }
-
-    #mode-toggle:not([hidden]) { display: flex; }
-
-    .mode-btn {
-      padding: 0.18rem 0.65rem;
-      border: none;
-      background: #f0f0f0;
-      cursor: pointer;
-      font-size: 12px;
-      color: #555;
-      transition: background 0.15s, color 0.15s;
-    }
-
-    .mode-btn + .mode-btn { border-left: 1px solid #ccc; }
-
-    .mode-btn.active {
-      background: #4a90d9;
-      color: #fff;
-    }
-
-    .mode-btn:not(.active):hover { background: #e0e0e0; }
-
-    /* ── mode hint bar ── */
-    #mode-hint {
-      padding: 0.22rem 0.75rem;
-      font-size: 11px;
-      color: #7a6a00;
-      background: #fffbe6;
-      border-bottom: 1px solid #e8d96a;
-      flex-shrink: 0;
-    }
-
     #top-bar-label {
       color: #888;
       white-space: nowrap;
@@ -104,42 +62,6 @@
     .chip:hover { background: #c0392b; }
     .chip-x { font-size: 11px; opacity: 0.8; }
 
-    #error-msg {
-      color: #c00;
-      padding: 0.25rem 0.75rem;
-      font-size: 13px;
-      flex-shrink: 0;
-    }
-
-    /* ── body row ── */
-    #body-row {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    /* ── sidebar ── */
-    #sidebar {
-      width: 190px;
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      background: #fff;
-      border-right: 1px solid #ddd;
-      overflow: hidden;
-    }
-
-    #sidebar-header {
-      padding: 0.5rem 0.75rem 0.3rem;
-      font-size: 11px;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #999;
-      border-bottom: 1px solid #eee;
-      flex-shrink: 0;
-    }
-
     #save-btn, #init-btn {
       align-self: center;
       flex-shrink: 0;
@@ -167,6 +89,91 @@
     #init-btn:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
     #init-btn:disabled { color: #bbb; cursor: default; }
 
+    #options-btn {
+      align-self: center;
+      flex-shrink: 0;
+      font-size: 11px;
+      padding: 0.18rem 0.55rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #f7f7f7;
+      color: #555;
+      cursor: pointer;
+      margin-left: 0.4rem;
+    }
+    #options-btn:hover { background: #e8e8e8; border-color: #aaa; }
+    #options-btn.open { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+
+    /* ── options strip (inside CG pane, below header) ── */
+    #cg-options {
+      padding: 0.45rem 0.75rem;
+      border-bottom: 1px solid #eee;
+      background: #f7f9ff;
+      flex-shrink: 0;
+    }
+
+    .opt-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .opt-label {
+      font-size: 11px;
+      color: #999;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+
+    .opt-btn {
+      font-size: 11px;
+      padding: 0.15rem 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #f7f7f7;
+      color: #555;
+      cursor: pointer;
+    }
+    .opt-btn:hover:not(.active) { background: #eee; border-color: #aaa; }
+    .opt-btn.active { background: #4a90d9; color: #fff; border-color: #4a90d9; }
+
+    #error-msg {
+      color: #c00;
+      padding: 0.25rem 0.75rem;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    /* ── body row ── */
+    #body-row {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── left sidebar (type list) ── */
+    #sidebar {
+      width: 190px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-right: 1px solid #ddd;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      padding: 0.5rem 0.75rem 0.3rem;
+      font-size: 11px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #999;
+      border-bottom: 1px solid #eee;
+      flex-shrink: 0;
+    }
+
     #type-list {
       overflow-y: auto;
       flex: 1;
@@ -186,14 +193,6 @@
     .type-item.selected {
       color: #aaa;
       font-style: italic;
-    }
-
-    /* ── main column (graph + detail) ── */
-    #main-col {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
     }
 
     /* ── graph area ── */
@@ -222,42 +221,31 @@
       text-align: center;
     }
 
-    /* ── detail pane ── */
-    #detail-pane {
+    /* ── resizer between graph area and CG pane ── */
+    #cg-resizer {
+      width: 5px;
       flex-shrink: 0;
-      border-top: 2px solid #ddd;
+      background: #ddd;
+      cursor: col-resize;
+      transition: background 0.15s;
+    }
+    #cg-resizer:hover, #cg-resizer.dragging { background: #aaa; }
+
+    /* ── right pane: canonical graphs ── */
+    #cg-pane {
+      width: 280px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
       background: #fff;
-      display: none;        /* shown when a node is clicked */
+      border-left: none;
+      overflow: hidden;
     }
 
-    #detail-pane.visible { display: flex; flex-direction: column; }
-
-    /* ── canonical graph row ── */
-    #canonical-row {
-      padding: 0.35rem 0.75rem;
-      border-bottom: 1px solid #eee;
-      background: #f9f9f9;
-    }
-
-    #canonical-label {
-      font-size: 10px;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #aaa;
-      margin-bottom: 0.15rem;
-    }
-
-    #canonical-value {
-      font-family: monospace;
-      font-size: 12.5px;
-      color: #333;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-
-    #detail-header {
-      padding: 0.4rem 0.75rem;
+    #cg-pane-header {
+      display: flex;
+      align-items: center;
+      padding: 0.5rem 0.75rem 0.3rem;
       font-size: 11px;
       font-weight: bold;
       text-transform: uppercase;
@@ -267,86 +255,89 @@
       flex-shrink: 0;
     }
 
-    #detail-header span {
+    #cg-clear-btn {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 0.12rem 0.45rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #f7f7f7;
+      color: #777;
+      cursor: pointer;
+    }
+    #cg-clear-btn:hover { background: #eee; border-color: #aaa; }
+
+    #cg-entries {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    #cg-placeholder {
+      padding: 2rem 0.75rem;
+      color: #ccc;
+      font-style: italic;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .cg-entry {
+      border-bottom: 1px solid #eee;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .cg-entry-head {
+      display: flex;
+      align-items: center;
+      margin-bottom: 0.3rem;
+    }
+
+    .cg-entry-name {
+      font-family: monospace;
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
       color: #333;
     }
 
-    #detail-cols {
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
-    }
-
-    .detail-col {
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-    }
-    .detail-col + .detail-col { border-top: 1px solid #eee; }
-
-    .detail-col-header {
-      padding: 0.3rem 0.75rem;
+    .cg-entry-remove {
+      margin-left: auto;
       font-size: 11px;
-      font-weight: bold;
-      color: #aaa;
-      border-bottom: 1px solid #f0f0f0;
-      flex-shrink: 0;
-    }
-
-    /* Grid layout: name | graph | desc — columns shared across all rows */
-    .detail-col-body {
-      display: grid;
-      grid-template-columns: max-content max-content 1fr;
-      align-items: baseline;
-      max-height: 140px;
-      overflow-y: auto;
-      padding: 0.2rem 0;
-    }
-
-    /* Each rel-item is invisible as a box; its children become the grid cells */
-    .rel-item { display: contents; }
-
-    .rel-item.exact .rel-name { font-weight: bold; }
-
-    .rel-item:hover .rel-name,
-    .rel-item:hover .rel-graph,
-    .rel-item:hover .rel-desc { background: #f0f4ff; }
-
-    .rel-name {
-      font-family: monospace;
-      font-size: 11px;
-      background: #ebebeb;
-      color: #555;
-      padding: 0.18rem 0.4em;
-      border-radius: 2px;
-      margin: 0.1rem 0 0.1rem 0.75rem;
-      white-space: nowrap;
-    }
-
-    .rel-graph {
-      font-family: monospace;
-      font-size: 11px;
-      color: #444;
-      padding: 0.18rem 1.25rem 0.18rem 0.6rem;
-      white-space: nowrap;
-    }
-
-    .rel-desc {
-      font-size: 12px;
-      color: #777;
-      padding: 0.18rem 0.75rem 0.18rem 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .rel-empty {
-      grid-column: 1 / -1;
-      padding: 0.4rem 0.75rem;
       color: #ccc;
-      font-style: italic;
-      font-size: 13px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0 0.1rem;
+      line-height: 1;
     }
+    .cg-entry-remove:hover { color: #c0392b; }
+
+    .cg-entry-body {
+      font-family: monospace;
+      font-size: 11.5px;
+      color: #555;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+    }
+
+    .cg-entry-body svg {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .cg-entry-body pre.cg-linear {
+      margin: 0;
+      font-family: monospace;
+      font-size: 11.5px;
+      color: #555;
+      line-height: 1.6;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    .cg-entry-body.empty { color: #bbb; font-style: italic; }
+    .cg-entry-body.loading { color: #bbb; }
   </style>
 </head>
 <body>
@@ -354,20 +345,10 @@
   <div id="top-bar">
     <span id="top-bar-label">Graphing:</span>
     <div id="chips"></div>
-    <div id="mode-toggle" hidden>
-      <button class="mode-btn active" data-mode="info"
-              title="Click a node to see its relations">Info</button>
-      <button class="mode-btn" data-mode="edit"
-              title="Left-click: expand/collapse subtypes · Right-click: expand/collapse supertypes">Edit</button>
-    </div>
     <button id="save-btn" title="Save graph to data directory" disabled>Save</button>
     <span id="save-status"></span>
     <button id="init-btn" title="Reinitialize concept types">Initialize</button>
-  </div>
-
-  <div id="mode-hint" hidden>
-    Edit&nbsp;mode:&ensp;left-click a node to expand/collapse its subtypes
-    &ensp;&middot;&ensp;right-click any node (either mode) to select/deselect it
+    <button id="options-btn" title="Display options">Options</button>
   </div>
 
   <div id="error-msg"></div>
@@ -379,32 +360,29 @@
       <div id="type-list"></div>
     </div>
 
-    <div id="main-col">
+    <div id="graph-area">
+      <div id="graph-container">
+        <div id="placeholder">Select a type from the list on the left.</div>
+      </div>
+    </div>
 
-      <div id="graph-area">
-        <div id="graph-container">
-          <div id="placeholder">Select a type from the list on the left.</div>
+    <div id="cg-resizer"></div>
+
+    <div id="cg-pane">
+      <div id="cg-pane-header">
+        Canonical Graphs
+        <button id="cg-clear-btn">Clear</button>
+      </div>
+      <div id="cg-options" hidden>
+        <div class="opt-row">
+          <span class="opt-label">View</span>
+          <button class="opt-btn active" data-mode="graph">Graph</button>
+          <button class="opt-btn" data-mode="linear">Linear</button>
         </div>
       </div>
-
-      <div id="detail-pane">
-        <div id="canonical-row" hidden>
-          <div id="canonical-label">Canonical graph</div>
-          <div id="canonical-value"></div>
-        </div>
-        <div id="detail-header">Relations for <span id="detail-type-name"></span></div>
-        <div id="detail-cols">
-          <div class="detail-col">
-            <div class="detail-col-header">As Input</div>
-            <div class="detail-col-body" id="col-input"></div>
-          </div>
-          <div class="detail-col">
-            <div class="detail-col-header">As Output</div>
-            <div class="detail-col-body" id="col-output"></div>
-          </div>
-        </div>
+      <div id="cg-entries">
+        <div id="cg-placeholder">Click a node to pin its canonical graph here.</div>
       </div>
-
     </div>
 
   </div>

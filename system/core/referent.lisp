@@ -150,27 +150,6 @@
   (format-referent referent))
 
 
-
-
-
-(defmethod referent-contents-equal (ref1 ref2)
-  "Check if two referents are equal"
-  (cond
-    ((and (null ref1) (null ref2)) t)
-    ((not (eql (type-of (content ref1)) (type-of (content ref2)))) nil)
-    ((objects-equal (content ref1) (content ref2)))
-    ;; ((typep (content ref1) 'individual)
-    ;;   (individuals-equal (content ref1) (content ref2)))
-    ))
-
-(defmethod referents-equal ((ref1 referent) (ref2 referent))
-  (and (referent-contents-equal ref1 ref2)
-       (properties-equal (properties ref1) (properties ref2))))
-
-(defmethod referents-equal ((ref1 (eql nil)) (ref2 (eql nil))) t)
-(defmethod referents-equal ((ref1 t) (ref2 t)) nil)
-
-
 (defmethod objects-equal (object1 object2)
   (and (equal (type-of object1) (type-of object2))
        (typecase object1
@@ -180,6 +159,22 @@
          (concept (concepts-equal object1 object2))
          (relation (relations-equal object1 object2))
          (referent (referents-equal object1 object2)))))
+
+(defmethod referent-contents-equal (ref1 ref2)
+  "Check if two referents are equal"
+  (cond
+    ((and (null ref1) (null ref2)) t)
+    ((not (eql (type-of (content ref1)) (type-of (content ref2)))) nil)
+    ((objects-equal (content ref1) (content ref2)))))
+
+(defmethod referents-equal ((ref1 referent) (ref2 referent))
+  (and (referent-contents-equal ref1 ref2)
+       (properties-equal (properties ref1) (properties ref2))))
+
+(defmethod referents-equal ((ref1 (eql nil)) (ref2 (eql nil))) t)
+(defmethod referents-equal ((ref1 t) (ref2 t)) nil)
+
+
 
 
 
@@ -492,9 +487,9 @@ see page 89, 90, 116-120
 
 
 ;;; (expand-referent (pcg "[person: Judy]"))
-;;; (fcg (expand-referent (pcg "[person: Judy]")))
+;;; (pcg (expand-referent (pcg "[person: Judy]")))
 ;;; (expand-referent (pcg "[length: @ 5 ft.]"))
-;;; (fcg (expand-referent (pcg "[length: @ 5 ft.]")))
+;;; (pcg (expand-referent (pcg "[length: @ 5 ft.]")))
 ;;; (expand-referent (pcg "[length:@25.4 cm]"))
-;;; (fcg (expand-referent (pcg "[length: @ 5 ft.]")))
-;;; (fcg (expand-referent (pcg "[length:@25.4 cm]")))
+;;; (pcg (expand-referent (pcg "[length: @ 5 ft.]")))
+;;; (pcg (expand-referent (pcg "[length:@25.4 cm]")))

@@ -201,14 +201,7 @@
   (when verbose
     (format t "~%INDIVIDUAL-TEST~%"))
 
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label dog :supertypes (animal))
-     (:label person :supertypes (animal))))
+  (load-test-types)
 
   (and (individual-test-1 verbose)
        (individual-test-2 verbose)

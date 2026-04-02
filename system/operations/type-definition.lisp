@@ -177,7 +177,7 @@
 
       ;; Wrap the copied definition in a graph if it isn't already
       (unless (graph copied-head)
-        (make-graph-from-nodes copied-head))
+        (make-cgraph copied-head))
 
       ;; Clear the lambda variable on the copy
       (ignore-errors (unset-variable copied-lambda))

@@ -64,15 +64,20 @@
 
 
 (defmethod print-object ((object individual) stream)
-  (let ((props (properties object)))
-    (print-unreadable-object (object stream :type nil :identity nil)
-      (format stream "INDIV ~a" (label (individual-type object)))
-      (dolist (prop props)
-        (format stream " ~s" prop))
-      (format stream ", ~a" (id object))))
+  (let ((*package* (find-package :conceptual-graphs)))
+    (or
+     (cond (*always-format-nodes*
+            (princ (format-individual object) stream))
+           )
+     (let ((props (properties object)))
+       (print-unreadable-object (object stream :type nil :identity nil)
+         (format stream "INDIV ~a" (label (individual-type object)))
+         (dolist (prop props)
+           (format stream " ~s" prop))
+         (format stream ", ~a" (id object))))
 
-  ;;(princ (format-individual object) stream)
-  )
+     ;;(princ (format-individual object) stream)
+     )))
 
 
 

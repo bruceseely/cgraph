@@ -10,40 +10,26 @@
 ;;; TEST UTILITIES
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun setup-query-test-types ()
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label animal :supertypes (animate))
-     (:label person :supertypes (animal))
-     (:label event :supertypes (situation))
-     (:label act :supertypes (event))
-     (:label eat :supertypes (act))
-     (:label give :supertypes (act))
-     (:label drive :supertypes (act))
-     (:label food :supertypes (entity physobj))
-     (:label pie :supertypes (food))
-     (:label cake :supertypes (food))
-     (:label characteristic :supertypes (⊤))
-     (:label attribute :supertypes (characteristic))
-     (:label manner :supertypes (characteristic))
-     (:label fast :supertypes (manner))))
-
-  (ensure-relation-types-exist
-   '((:label agnt :source-types act :dest-type animate)
-     (:label obj  :source-types act :dest-type entity)
-     (:label manr :source-types act :dest-type manner)
-     (:label rcpt :source-types act :dest-type animate))))
-
 
 (defun make-query-test-context ()
   "Create and populate a context for query testing."
   (let ((kb (make-context)))
-    (add-graph "[Person: Sue]←(agnt)←[Eat]→(obj)→[Pie]" kb)
-    (add-graph "[Person: Tom]←(agnt)←[Eat]→(obj)→[Cake]" kb)
-    (add-graph "[Person: Pat]←(agnt)←[Drive]→(manr)→[Fast]" kb)
+    (make-cgraph "[Person: Sue]←(agnt)←[Eat]→(obj)→[Pie]" kb)
+    (make-cgraph "[Person: Tom]←(agnt)←[Eat]→(obj)→[Cake]" kb)
+    (make-cgraph "[Person: Pat]←(agnt)←[Drive]→(manr)→[Quickly]" kb)
     kb))
+
+(defun make-query-test-context2 ()
+  "Create and populate a context for query testing."
+  (let ((kb (make-context)))
+    (make-cgraph "[PERSON: Dave]←(agnt)←[DRIVE]" kb)
+    (make-cgraph "[PERSON: Dave]→(poss)→[CHEVY]" kb)
+    (make-cgraph "[DRIVE]→(inst)→[CHEVY]" kb)
+    (make-cgraph "[CITY: Baltimore]←(dest)<-[DRIVE]" kb)
+    (make-cgraph "[PERSON: Dave]→(attr)→[YOUNG]" kb)
+    (make-cgraph "[CHEVY]→(attr)→[OLD]" kb)
+    kb))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -97,6 +83,33 @@
         (format-query-results results)))
     pass))
 
+;; (defun test-query-multiple-variables2 (&optional verbose)
+;;   "Query with two variables — bind who eats what."
+;;   (let* (;;(kb (consolidate-cgraphs (make-query-test-context)))
+;;          (kb (make-query-test-context))
+;;          (results (query "[Person: *x]←(agnt)←[Eat]→(obj)→[Food: *y]" kb))
+;;          (pass (and (= (length results) 2)
+;;                     (every (lambda (r) (= (length (getf r :bindings)) 2)) results))))
+;;     (when verbose
+;;       (format t "~&multiple-variables: ~:[FAIL~;pass~]" pass)
+;;       (when results
+;;         (format-query-results results)))
+;;     pass))
+
+
+(defun test-query-combined-graphs (&optional verbose)
+  "Query with two variables — bind who eats what."
+  (let* ((kb (consolidate-cgraphs (make-query-test-context2)))
+         (results (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" kb))
+         (zz (format t "~&results: ~s~%"  results))
+         (pass (and (= (length results) 2)
+                    (every (lambda (r) (= (length (getf r :bindings)) 2)) results))))
+    (when verbose
+      (format t "~&combined-graphs: ~:[FAIL~;pass~]" pass)
+      (when results
+        (format-query-results results)))
+    pass))
+
 
 (defun test-query-type-subsumption (&optional verbose)
   "Query with supertype — [Animate] should match [Person] graphs."
@@ -146,7 +159,7 @@
   (let ((pass t)
         (*allow-dynamic-individual-creation* t))
 
-    (setup-query-test-types)
+    (load-test-types)
 
     (when verbose
       (format t "~&~%=== Query Tests ===~%"))
@@ -154,6 +167,8 @@
                        test-query-no-match
                        test-query-variable-bindings
                        test-query-multiple-variables
+                       ;; test-query-multiple-variables2
+                       ;; test-query-combined-graphs
                        test-query-type-subsumption))
       (let ((result (funcall test-fn verbose)))
         (setf pass (and pass result))))

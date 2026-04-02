@@ -46,7 +46,7 @@
   (individuals-equal individual1 individual2))
 
 (defmethod conforms ((individual-id number) concept-type)
-  (let ((individual (get-individual :id individual-id)))
+  (let ((individual (find-individual-with-id individual-id)))
     (when individual
       (conforms individual concept-type))))
 

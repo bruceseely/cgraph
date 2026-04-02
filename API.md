@@ -3,6 +3,12 @@
 This document covers the user-facing API for CGraph. All symbols are in the
 `:conceptual-graphs` package (nicknames `:cg`, `:cgraph`).
 
+
+
+
+
+
+
 ---
 
 ## Setup and Initialization
@@ -321,12 +327,16 @@ Check if two relations have the same type and equivalent arcs.
 
 ### Creating Graphs
 
-#### `make-graph-from-nodes (node-or-list)` → graph
-Create a graph with the given node(s) as head.
 
-#### `parse-cgraph (string)` → graph
-Parse a conceptual graph from linear notation. This is the primary way
-to create graphs.
+
+#### `make-cgraph (graph &optional context)` → graph
+
+The graph arg is string, graph-node, graph object, or list of nodes
+The resulting graph is added to the context (defaulting to \*context\*)
+This is the primary way to create graphs.
+
+#### `parse-cgraph (string)` → concept-node list
+Parse a conceptual graph from linear notation. 
 
 ```lisp
 (parse-cgraph "[CAT: Whiskers]←(agnt)←[EAT]→(obj)→[FOOD].")
@@ -508,11 +518,11 @@ relations downcase.
 #### `flatten-cgraph (text)` → string
 Remove all whitespace from a CG string.
 
-#### `expand-arrows (graph-string)` → string
+#### `arrows-to-ascii (graph-string)` → string
 Convert Unicode arrows (→, ←) to ASCII (`->`, `<-`).
 
-#### `encode-arrows (graph-string)` → string
-Convert ASCII arrows to Unicode.
+#### `arrows-to-unicode (graph-string)` → string
+Convert ASCII arrows (`->`, `<-`) to Unicode (→, ←).
 
 ---
 

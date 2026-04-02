@@ -52,7 +52,7 @@
   (initialize-coreferences)
   (initialize-context *context*)
 
-  (let* ((graph (pcg "~[Proposition: [Dog: *x]<-(agnt)<-[Bark] ~[Proposition: [Dog: *x]->(attr)->[Noisy]]]"))
+  (let* ((graph (pcg "~[Proposition: [Dog: *x]<-(agnt)<-[Bark] ~[Proposition: [Dog: ?x]->(attr)->[Noisy]]]"))
          (head-concept (head graph)))
 
     (assert (negated head-concept) nil "Outer proposition should be negated")
@@ -196,32 +196,7 @@
   (when verbose
     (format t "~&~%Running negative context tests...~%"))
 
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label stationary-entity :supertypes (entity))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label cat :supertypes (animal))
-     (:label dog :supertypes (animal))
-     (:label place :supertypes (stationary-entity))
-     (:label mat :supertypes (physobj place))
-     (:label event :supertypes (⊤))
-     (:label act :supertypes (event))
-     (:label give :supertypes (act))
-     (:label communicate :supertypes (give))
-     (:label bark :supertypes (communicate))
-     (:label characteristic :supertypes (⊤))
-     (:label attribute :supertypes (characteristic))
-     (:label noisy :supertypes (attribute))
-     (:label information :supertypes (⊤))
-     (:label proposition :supertypes (information) :graph-compatible t)))
-
-  (ensure-relation-types-exist
-   '((:label agnt :source-types act :dest-type animate)
-     (:label attr :source-types entity :dest-type attribute)
-     (:label on   :source-types entity :dest-type entity)))
+  (load-test-types)
 
   (and
    (test-neg-parse-basic verbose)

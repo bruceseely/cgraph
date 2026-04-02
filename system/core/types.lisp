@@ -4,10 +4,10 @@
 
 
 (define-condition concept-type-lookup-failed (error)
-  ((text :initarg :text :reader text)))
+  ((type :initarg :type :reader type)))
 
 (define-condition relation-type-lookup-failed (error)
-  ((text :initarg :text :reader text)))
+  ((type :initarg :type :reader type)))
 
 
 (eval-when (:load-toplevel :execute)
@@ -126,6 +126,9 @@
    (graph-compatible-p :initform nil
                        :initarg :graph-compatible
                        :accessor graph-compatible-p)
+   ;; set to T if define-concept-type encountered this label a second time
+   (redefined-p :initform nil
+                :accessor redefined-p)
    ;; for parsing canonical graphs -- needed?
    (processor :initform nil
 	      :accessor processor)))
@@ -141,6 +144,19 @@
 
 (defmethod concept-type-label-p ((obj t))
   nil)
+
+
+;; for the linear form in browser
+(defmethod formatted-canonical-graph-string ((concept-type string))
+  (let* ((*package* (find-package "CONCEPTUAL-GRAPHS"))
+         (ctype (get-concept-type concept-type))
+         (cg-string (canonical-graph-string ctype)))
+    (format-cgraph (parse-cgraph cg-string))))
+
+#|
+(let ((*package* (find-package "COMMON-LISP-USER")))
+  (cg::formatted-canonical-graph-string "breakfast-event"))
+|#
 
 
 (defmethod bottom-concept-type-p ((type-object concept-type))
@@ -175,8 +191,8 @@
 
 
 (defmethod type-depth ((node concept-type) &optional (depth 0))
-  (format t "~&depth: ~s~%"  depth)
-  (format t "~&node: ~s~%"  node)
+  ;; (format t "~&depth: ~s~%"  depth)
+  ;; (format t "~&node: ~s~%"  node)
   (let ((supertypes (direct-supertypes node))
         ;;(type (concept-type node))
         )
@@ -216,8 +232,7 @@
 				     :canonical-graph-string canonical-graph-string
                                      :definition-string definition-string)))
     (dolist (supertype supertypes-list)
-      (let ((supertype-node (handler-case (get-concept-type supertype)
-                              (concept-type-lookup-failed () nil))))
+      (let ((supertype-node (ignore-errors (get-concept-type supertype))))
         ;; in case supertype is not yet defined
 	(unless supertype-node
 	  (setq supertype-node (make-concept-type supertype))) ; ?????
@@ -238,7 +253,7 @@
 
 (defmethod make-concept-type ((type-label symbol) &rest keys &key supertypes-list canonical-graph-string graph-compatible definition-string)
   (when (eq type-label 't)
-    (print "------------------------------------------------ make-concept-type~%")
+    ;;(print "------------------------------------------------ make-concept-type~%")
     ;;(print-backtrace)
     )
   supertypes-list canonical-graph-string definition-string
@@ -580,10 +595,17 @@
   ;;(print type-name)
   ;;(describe type-name)
   ;;(describe *concept-type-catalog*)
-  (values (gethash type-name *concept-type-catalog*)))
+  (multiple-value-bind (value present-p)
+      (gethash type-name *concept-type-catalog*)
+    (cond (present-p
+           value)
+          (t (error 'concept-type-lookup-failed :type (princ-to-string type-name))))))
 
 (defmethod get-concept-type ((type-name t))
-  (values nil (format nil "~:@(~a~) is not a defined concept-type" type-name)))
+  (error 'concept-type-lookup-failed :type (format nil "~s, of type ~a"  type-name (type-of type-name))))
+
+;; (defmethod get-concept-type ((type-name t))
+;;   (values nil (format nil "~:@(~a~) is not a defined concept-type" type-name)))
 
 (defmethod get-concept-type ((type-name (eql nil)))
   nil)
@@ -610,18 +632,21 @@
 				     canonical-graph-string
 				     graph-compatible)
   (when canonical-graph-string
-    (setf (canonical-graph node) canonical-graph-string))
+    (setf (canonical-graph-string node) canonical-graph-string))
 
   (when graph-compatible
     (setf (graph-compatible-p node) graph-compatible))
 
   (when supertypes
-    (setf (direct-supertypes node) (remove *concept-type-top* (direct-supertypes node)))
+    ;; Remove back-links from all existing supertypes before replacing them.
+    (dolist (old-super (direct-supertypes node))
+      (setf (direct-subtypes old-super)
+            (remove node (direct-subtypes old-super) :test #'nodes-eq)))
+    (setf (direct-supertypes node) nil)
 
     (dolist (supertype supertypes)
       ;; nil on lookup failure
-      (let ((supertype-node (handler-case (get-concept-type supertype)
-                              (concept-type-lookup-failed () nil))))
+      (let ((supertype-node (ignore-errors (get-concept-type supertype))))
 
 	(if supertype-node
 	    (progn
@@ -658,25 +683,29 @@
 
 (defun define-concept-type (&key label supertypes canonical-graph graph-compatible definition)
   ;;(setf label (intern (string-upcase label)))
-  (when (stringp (car supertypes))
-    (setf supertypes (mapcar #'intern (mapcar #'string-upcase supertypes))))
+  (setf supertypes (mapcar (lambda (supertype)
+                             (cond ((typep supertype 'string)
+                                    (intern (string-upcase supertype)))
+                                   ((typep supertype 'symbol)
+                                    supertype)))
+                           supertypes))
 
   ;; nil on lookup failure
-  (let ((node (handler-case (get-concept-type label)
-                (concept-type-lookup-failed () nil))))
-    (let ((result (if node
-                      (modify-concept-type node
-                                           :supertypes supertypes
-                                           :canonical-graph-string canonical-graph
-                                           :graph-compatible graph-compatible)
-                      (make-concept-type label
-                                         :supertypes-list supertypes
-                                         :canonical-graph-string canonical-graph
-                                         :graph-compatible graph-compatible
-                                         :definition-string definition))))
-      (when (and definition result)
-        (setf (definition-string result) definition))
-      result)))
+  (let* ((node (ignore-errors (get-concept-type label)))
+         (result (if node
+                     (progn
+                       (modify-concept-type node
+                                            :supertypes supertypes
+                                            :canonical-graph-string canonical-graph
+                                            :graph-compatible graph-compatible))
+                     (make-concept-type label
+                                        :supertypes-list supertypes
+                                        :canonical-graph-string canonical-graph
+                                        :graph-compatible graph-compatible
+                                        :definition-string definition))))
+    (when (and definition result)
+      (setf (definition-string result) definition))
+    result))
 
 
 (defun parse-concept-type-def (def)
@@ -692,12 +721,20 @@
 ;;; load lisp file
 (defun load-concept-types (filename &optional supress-warnings)
   supress-warnings
-  (let ((count 0))
+  (let ((count 0)
+        (seen (make-hash-table :test 'eq)))
     (with-open-file (stream filename :direction :input)
       (loop
 	(let ((def (read stream nil 'eof)))
 	  (when (eq def 'eof) (return))
-	  (parse-concept-type-def def))
+	  ;;(parse-concept-type-def def))
+          (let* ((raw-label (getf def :label))
+                 (label (when raw-label (intern (string-upcase (string raw-label)) :cg))))
+            (when label
+              (when (gethash label seen)
+                (setf (redefined-p (ignore-errors (get-concept-type label))) t))
+              (setf (gethash label seen) t))
+            (parse-concept-type-def def)))
 	(incf count)))
     count))
 
@@ -857,9 +894,81 @@
 	   *concept-type-catalog*))
 
 
+(defun effective-canonical-graph-string (node)
+  "Return the canonical graph string for NODE, falling back to the
+   canonical-graph slot when canonical-graph-string is empty (handles
+   a known modify-concept-type bug that stores the string there)."
+  (let ((s (canonical-graph-string node)))
+    (if (and s (plusp (length s)))
+        s
+        (let ((cg (ignore-errors (canonical-graph node))))
+          (when (stringp cg) cg)))))
+
+(defun extract-cg-type-names (cg-string)
+  "Return a list of uppercase type-name strings found inside [...] brackets in CG-STRING.
+   Strips any referent after a colon (e.g. [PERSON: John] → \"PERSON\") and
+   skips empty names and the top/bottom Unicode characters."
+  (when (and cg-string (plusp (length cg-string)))
+    (let ((names nil)
+          (len (length cg-string))
+          (i 0))
+      (loop while (< i len) do
+        (cond ((char= (char cg-string i) #\[)
+               (let ((end (position #\] cg-string :start (1+ i))))
+                 (if end
+                     (let* ((inner (string-trim " " (subseq cg-string (1+ i) end)))
+                            ;; Drop referent after colon
+                            (colon (position #\: inner))
+                            (name  (string-trim " " (if colon
+                                                        (subseq inner 0 colon)
+                                                        inner)))
+                            (upper (string-upcase name)))
+                       (when (and (plusp (length upper))
+                                  ;; Skip ⊤ and ⊥ — not in the catalog by their Unicode chars
+                                  (not (string= upper "⊤"))
+                                  (not (string= upper "⊥")))
+                         (push upper names))
+                       (setf i (1+ end)))
+                     (incf i))))
+              (t (incf i))))
+      (remove-duplicates (nreverse names) :test #'string=))))
+
+(defun extract-cg-relations (cg-string)
+  "Return a list of lowercase relation-name strings from CG-STRING.
+   Scans for (name) tokens, which is how relations appear in CG notation."
+  (when (and cg-string (plusp (length cg-string)))
+    (let ((relations nil)
+          (len (length cg-string))
+          (i 0))
+      (loop while (< i len) do
+        (cond ((char= (char cg-string i) #\()
+               (let ((end (position #\) cg-string :start (1+ i))))
+                 (if end
+                     (let ((rel (string-trim " " (subseq cg-string (1+ i) end))))
+                       (when (plusp (length rel))
+                         (push (string-downcase rel) relations))
+                       (setf i (1+ end)))
+                     (incf i))))
+              (t (incf i))))
+      (nreverse relations))))
+
+(defun all-ancestor-types (node)
+  "Return all ancestor concept-types of NODE, not including NODE itself."
+  (let ((visited (list node))
+        (ancestors nil))
+    (labels ((walk (current)
+               (dolist (super (direct-supertypes current))
+                 (unless (member super visited :test #'eq)
+                   (push super visited)
+                   (push super ancestors)
+                   (walk super)))))
+      (walk node))
+    ancestors))
+
 (defun check-type-lattice ()
   "Check the concept type lattice for structural problems.
-   Reports cycles, orphaned types, and symmetry violations."
+   Reports cycles, orphaned types, symmetry violations, duplicate
+   definitions, and canonical graph inheritance gaps."
   (let ((problems nil))
 
     ;; Check each type for cycles via supertypes
@@ -911,6 +1020,58 @@
                            problems)))))
              *concept-type-catalog*)
 
+    ;; Check for types defined more than once (redefined during load)
+    (maphash (lambda (key node)
+               (declare (ignore key))
+               (when (redefined-p node)
+                 (push (format nil "Duplicate definition: ~a was defined more than once (later definition merged)"
+                               (label node))
+                       problems)))
+             *concept-type-catalog*)
+
+
+    ;; Check canonical graph inheritance: if a type has a canonical graph,
+    ;; it should include all relations present in each ancestor's canonical graph
+    (maphash (lambda (key node)
+               (declare (ignore key))
+               (unless (or (eq node *concept-type-top*)
+                           (eq node *concept-type-bottom*))
+                 (let ((node-cg (effective-canonical-graph-string node)))
+                   (when node-cg
+                     (let ((node-relations (extract-cg-relations node-cg)))
+                       (dolist (ancestor (all-ancestor-types node))
+                         (let ((ancestor-cg (effective-canonical-graph-string ancestor)))
+                           (when ancestor-cg
+                             (let ((missing (set-difference (extract-cg-relations ancestor-cg)
+                                                            node-relations
+                                                            :test #'string=)))
+                               (when missing
+                                 (push (format nil "Canonical graph of ~a is missing relation~p inherited from ~a: ~{(~a)~^, ~}"
+                                               (label node) (length missing) (label ancestor) missing)
+                                       problems)))))))))))
+             *concept-type-catalog*)
+
+    ;; Check that all concept types and relations referenced in canonical graph strings are defined
+    (maphash (lambda (key node)
+               (declare (ignore key))
+               (unless (or (eq node *concept-type-top*)
+                           (eq node *concept-type-bottom*))
+                 (let ((cg-str (effective-canonical-graph-string node)))
+                   (when cg-str
+                     (dolist (type-name (extract-cg-type-names cg-str))
+                       (let ((sym (intern type-name :cg)))
+                         (unless (gethash sym *concept-type-catalog*)
+                           (push (format nil "Canonical graph of ~a references undefined concept type: ~a"
+                                         (label node) type-name)
+                                 problems))))
+                     (dolist (rel-name (extract-cg-relations cg-str))
+                       (let ((sym (intern (string-upcase rel-name) :cg)))
+                         (unless (gethash sym *relation-type-catalog*)
+                           (push (format nil "Canonical graph of ~a references undefined relation: (~a)"
+                                         (label node) rel-name)
+                                 problems))))))))
+             *concept-type-catalog*)
+
     ;; Report results
     (if problems
         (progn
@@ -922,6 +1083,8 @@
         (progn
           (format t "~&Type lattice OK.~%")
           t))))
+
+
 
 (defun all-concept-types (&optional sort)
   (let ((nodes (list)))
@@ -1109,8 +1272,7 @@
 (defparameter *undefined-concept-types* (list))
 
 (defun lookup-concept-type (concept-type &optional supress-warnings)
-  (let ((result (handler-case (get-concept-type concept-type)
-                  (concept-type-lookup-failed () nil))))
+  (let ((result (ignore-errors (get-concept-type concept-type))))
     (cond (result result)
           ((string-equal concept-type "nil") nil) ;for monads
           (t
@@ -1216,6 +1378,11 @@
    (load-concept-types (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
    (load-relation-types (format nil "~arelation-types.lisp" *cgraph-types-directory*))))
 
+
+(defun unload-cgraph-types (&optional supress-warnings)
+  (clrhash *concept-type-catalog*)
+  (clrhash *relation-type-catalog*))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  ;; Type Print  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1284,3 +1451,63 @@
     ;;(print cstr)
     (dolist (data (reverse def-data))
       (apply #'format stream cstr data))))
+
+
+;;; Return a one-line description of the concept or relation type named by NAME-STRING.
+;;; Returns NIL when NAME-STRING doesn't match any known type.
+;;; TYPE-HINT, if supplied, should be "concept" or "relation" to restrict the lookup;
+;;; when NIL and both exist, both descriptions are returned separated by a newline.
+(defun cg-type-info-string (name-string &optional type-hint)
+  "Look up NAME-STRING as a concept type or relation type and return a summary string.
+Returns NIL if the name is not found in either catalog."
+  (let* ((sym          (intern (string-upcase name-string) :cg))
+         (want-concept (or (null type-hint) (equal type-hint "concept")))
+         (want-relation (or (null type-hint) (equal type-hint "relation")))
+         (ct  (when want-concept  (ignore-errors (get-concept-type sym))))
+         (rt  (when want-relation (ignore-errors (get-relation-type sym))))
+         (ct-str
+           (when ct
+             (handler-case
+                 (let* ((supers (mapcar (lambda (s) (string-downcase (symbol-name (label s))))
+                                        (direct-supertypes ct)))
+                        (subs   (mapcar (lambda (s) (string-downcase (symbol-name (label s))))
+                                        (remove *concept-type-bottom* (direct-subtypes ct))))
+                        (def    (definition-string ct))
+                        (cg-str (let ((s (canonical-graph-string ct)))
+                                  (if (string/= s "")
+                                      s
+                                      ;; modify-concept-type stores the string in canonical-graph
+                                      ;; rather than canonical-graph-string; check that as a fallback
+                                      (let ((cg (ignore-errors (canonical-graph ct))))
+                                        (when (stringp cg) cg)))))
+                        (parts  (list (format nil "[concept]  supertypes: ~{~a~^, ~}" supers)
+                                      (when subs (format nil "subtypes: ~{~a~^, ~}" subs))
+                                      (when (and (stringp def) (string/= def ""))
+                                        (format nil "def: ~a" def))
+                                      (when cg-str
+                                        (format nil "cg: ~a" cg-str)))))
+                   (format nil "~a  ~{~a~^  |  ~}"
+                           (string-downcase (symbol-name (label ct)))
+                           (remove nil parts)))
+               (error (e) (format nil "~a [concept — error: ~a]"
+                                  (string-downcase name-string) e)))))
+         (rt-str
+           (when rt
+             (handler-case
+                 (let* ((srcs (mapcar (lambda (s) (string-downcase (symbol-name (label s))))
+                                      (source-types rt)))
+                        (dst  (let ((d (dest-type rt)))
+                                (when d (string-downcase (symbol-name (label d))))))
+                        (d    (desc rt)))
+                   (format nil "~a  [relation]  ~{~a~^, ~} → ~a~:[~; | ~:*~a~]"
+                           (string-downcase (symbol-name (label rt)))
+                           srcs
+                           (or dst "?")
+                           (and d (string/= d "") d)))
+               (error (e) (format nil "~a [relation — error: ~a]"
+                                  (string-downcase name-string) e))))))
+    (cond
+      ((and ct-str rt-str) (format nil "~a~%~a" ct-str rt-str))
+      (ct-str  ct-str)
+      (rt-str  rt-str)
+      (t nil))))

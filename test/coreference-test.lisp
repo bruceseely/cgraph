@@ -42,7 +42,7 @@
 
   ;; Parse a graph with nested context and co-reference
   ;; The outer [cat: ?c] and inner [cat: ?c] should be linked
-  (let* ((g1 (pcg "[person: John]-(poss)->[cat: ?c]-(expr)<-[belief: [cat: ?c]->(attr)->[size: large]]")))
+  (let* ((g1 (pcg "[person: John]-(poss)->[cat: ?c] (expr)<-[belief: [cat: ?c]->(attr)->[size: large]].")))
 
     ;; Check that coref label was registered
     (assert (coref-label-node :c) nil "Coref label ?c should be registered")
@@ -114,27 +114,7 @@
   (when verbose
     (format t "~&~%Running coreference tests...~%"))
 
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label cat :supertypes (animal))
-     (:label person :supertypes (animal))
-     (:label state :supertypes (⊤))
-     (:label belief :supertypes (state) :graph-compatible t)
-     (:label characteristic :supertypes (⊤))
-     (:label attribute :supertypes (characteristic))
-     (:label size :supertypes (attribute))
-     (:label information :supertypes (⊤))
-     (:label proposition :supertypes (information) :graph-compatible t)))
-
-  (ensure-relation-types-exist
-   '((:label attr :source-types entity :dest-type attribute)
-     (:label expr :source-types state :dest-type animate)
-     (:label poss :source-types animate :dest-type entity)))
-
+  (load-test-types)
   (and
    (test-coref-link-method verbose)
    (test-coref-basic verbose)

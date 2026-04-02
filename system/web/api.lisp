@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP; Syntax: Common-lisp; Base: 10; Lowercase: Yes -*-
+;;; -*- mode: LISP; Syntax: Common-lisp; Base: 10; Lowercase: Yes -*-
 
 (in-package #:conceptual-graphs)
 
@@ -180,7 +180,8 @@
     (error (e)
       (format nil "{\"ok\":false,\"error\":\"~a\"}" (json-escape (princ-to-string e)))))
   #-swank
-  "{\"ok\":false,\"error\":\"SWANK not available\"}")
+  "{\"ok\":false,\"error\":\"SWANK not available\"}"
+  )
 
 ;;; GET /api/types — list all registered concept types as a JSON array.
 (hunchentoot:define-easy-handler (handle-api-types :uri "/api/types") ()
@@ -264,8 +265,19 @@
                                    (t (string< (entry-name a) (entry-name b))))))))
           (setf input-entries  (sort input-entries  sort-fn))
           (setf output-entries (sort output-entries sort-fn))))
-      (let ((cg-str (canonical-graph-string ct)))
-        (format nil "{\"canonical_graph\":\"~a\",\"as_input\":~a,\"as_output\":~a}"
-                (json-escape (if (and cg-str (string/= cg-str "")) cg-str ""))
+      (let* ((cg-str (effective-canonical-graph-string ct))
+             (type-name (string-downcase (symbol-name (label ct))))
+             (cg-format-error nil)
+             (cg-formatted
+              (when (and cg-str (plusp (length cg-str)))
+                (handler-case
+                    (formatted-canonical-graph-string type-name)
+                  (error (e)
+                    (setf cg-format-error (princ-to-string e))
+                    nil)))))
+        (format nil "{\"canonical_graph\":\"~a\",\"canonical_graph_formatted\":\"~a\",\"canonical_graph_format_error\":\"~a\",\"as_input\":~a,\"as_output\":~a}"
+                (json-escape (or cg-str ""))
+                (json-escape (or cg-formatted ""))
+                (json-escape (or cg-format-error ""))
                 (json-relation-array input-entries)
                 (json-relation-array output-entries))))))

@@ -46,6 +46,7 @@
 
 ;;; for overriding the directories holding types and data diretories
 (defvar *cgraph-types-directory* nil)
+(defvar *cgraph-examples-directory* nil)
 (defvar *cgraph-data-directory* nil)
 
 (defvar *cgraph-inits*  ())
@@ -79,16 +80,23 @@
 ;; (cons type properties) -> indiv; for [DOG: Spot #]
 (defvar *individual-property-table* (make-hash-table :test #'equalp))
 
-
 (defvar *individual-id-assignment* :suitable)
-(defvar *allow-dynamic-individual-creation* nil)
-
-(defvar *always-show-node-ref* nil)
-(defvar *print-without-variables* nil)
-
-(defvar *always-format-nodes* nil)
 
 (defvar *negated-concept* nil)
 (defvar *in-graph-referent* nil)
-
 (defvar *copy-map* (list))
+
+
+(defvar *allow-dynamic-individual-creation* nil
+  "The host system may want to define individuals, itself, and not have new individuals dynamically created. ")
+
+(defvar *always-show-node-ref* nil
+  "This is useful during debugging, so nodes that have the same printed representation can be distinguished.")
+
+(defvar *always-format-nodes* nil
+  "Causes nodes to be formatted as they look in graphs, rather than as Lisp objects.")
+
+(defvar *always-print-ascii-arrows* nil
+  "Use the string (eg. \"->\") instead of the single-character arrow (eg. →)")
+
+(defvar *print-without-variables* nil)

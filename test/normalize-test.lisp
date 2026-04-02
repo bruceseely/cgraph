@@ -8,90 +8,90 @@
 
 (defun test-normalize-basic-concepts ()
   "Test basic concept normalization with default upcase"
-  (let* ((input "[person]-(agnt)->[eat]")
-         (expected "[PERSON]-(agnt)->[EAT]")
+  (let* ((input "[person]←(agnt)←[eat]")
+         (expected "[PERSON]←(agnt)←[EAT]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-basic-relations ()
   "Test basic relation normalization with default downcase"
-  (let* ((input "[PERSON]-(AGNT)->[EAT]")
-         (expected "[PERSON]-(agnt)->[EAT]")
+  (let* ((input "[PERSON]←(AGNT)←[EAT]")
+         (expected "[PERSON]←(agnt)←[EAT]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-concepts-with-referents ()
   "Test concepts with referents - only type label should be normalized"
-  (let* ((input "[person:John]-(agnt)->[eat:quickly]")
-         (expected "[PERSON:John]-(agnt)->[EAT:quickly]")
+  (let* ((input "[person:John]←(agnt)←[eat:quickly]")
+         (expected "[PERSON:John]←(agnt)←[EAT:quickly]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-mixed-case ()
   "Test mixed case normalization"
-  (let* ((input "[PeRsOn:Sue]<-(AgNt)<-[GiVe]->(OBJ)->[DoG:Spot]")
-         (expected "[PERSON:Sue]<-(agnt)<-[GIVE]->(obj)->[DOG:Spot]")
+  (let* ((input "[PeRsOn:Sue]←(AgNt)←[GiVe]→(OBJ)→[DoG:Spot]")
+         (expected "[PERSON:Sue]←(agnt)←[GIVE]→(obj)→[DOG:Spot]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-downcase-concepts ()
   "Test concept normalization with downcase option"
-  (let* ((input "[PERSON:John]-(agnt)->[EAT]")
-         (expected "[person:John]-(agnt)->[eat]")
+  (let* ((input "[PERSON:John]→(agnt)→[EAT]")
+         (expected "[person:John]→(agnt)→[eat]")
          (result (normalize-cgraph-string input :concept-case :downcase)))
     (string= result expected)))
 
 
 (defun test-normalize-upcase-relations ()
   "Test relation normalization with upcase option"
-  (let* ((input "[PERSON]-(agnt)->[EAT]")
-         (expected "[PERSON]-(AGNT)->[EAT]")
+  (let* ((input "[PERSON]←(agnt)←[EAT]")
+         (expected "[PERSON]←(AGNT)←[EAT]")
          (result (normalize-cgraph-string input :relation-case :upcase)))
     (string= result expected)))
 
 
 (defun test-normalize-both-custom-cases ()
   "Test both custom case options together"
-  (let* ((input "[PERSON:John]-(AGNT)->[EAT:Quickly]")
-         (expected "[person:John]-(AGNT)->[eat:Quickly]")
+  (let* ((input "[PERSON:John]←(AGNT)←[EAT:Quickly]")
+         (expected "[person:John]←(AGNT)←[eat:Quickly]")
          (result (normalize-cgraph-string input :concept-case :downcase :relation-case :upcase)))
     (string= result expected)))
 
 
 (defun test-normalize-complex-graph ()
   "Test complex graph with multiple concepts and relations"
-  (let* ((input "[person: Sue]<-(agnt)<-[give]-(rcpt)->[dog: Spot]<-(agnt)<-[eat]-(obj)->[food]")
-         (expected "[PERSON: Sue]<-(agnt)<-[GIVE]-(rcpt)->[DOG: Spot]<-(agnt)<-[EAT]-(obj)->[FOOD]")
+  (let* ((input "[person: Sue]←(agnt)←[give]→(rcpt)→[dog: Spot]←(agnt)←[eat]→(obj)→[food]")
+         (expected "[PERSON: Sue]←(agnt)←[GIVE]→(rcpt)→[DOG: Spot]←(agnt)←[EAT]→(obj)→[FOOD]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-with-arrows ()
   "Test normalization preserves arrow characters"
-  (let* ((input "[person:John]->(agnt)->[eat]<-(obj)<-[cake]")
-         (expected "[PERSON:John]->(agnt)->[EAT]<-(obj)<-[CAKE]")
+  (let* ((input "[person:John]→(agnt)→[eat]←(obj)←[cake]")
+         (expected "[PERSON:John]→(agnt)→[EAT]←(obj)←[CAKE]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-empty-referent ()
   "Test concept with colon but empty referent"
-  (let* ((input "[person:]-(agnt)->[eat]")
-         (expected "[PERSON:]-(agnt)->[EAT]")
+  (let* ((input "[person:]→(agnt)→[eat]")
+         (expected "[PERSON:]→(agnt)→[EAT]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-with-newlines ()
   "Test normalization preserves newlines and whitespace"
-  (let* ((input "[person: Sue]<-(agnt)<-[give]-
-   (rcpt)->[dog: Spot]")
-         (expected "[PERSON: Sue]<-(agnt)<-[GIVE]-
-   (rcpt)->[DOG: Spot]")
+  (let* ((input "[person: Sue]←(agnt)←[give]-
+   (rcpt)→[dog: Spot]")
+         (expected "[PERSON: Sue]←(agnt)←[GIVE]-
+   (rcpt)→[DOG: Spot]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
@@ -114,36 +114,36 @@
 
 (defun test-normalize-nested-brackets ()
   "Test nested graph notation"
-  (let* ((input "[person:John]-(believes)->[proposition:[cat]-(on)->[mat]]")
-         (expected "[PERSON:John]-(believes)->[PROPOSITION:[cat]-(on)->[mat]]")
+  (let* ((input "[person:John]→(believes)→[proposition:[cat]→(on)→[mat]]")
+         (expected "[PERSON:John]→(believes)→[PROPOSITION:[CAT]→(on)→[MAT]]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-multiline-graph ()
   "Test realistic multiline graph"
-  (let* ((input "[PERSON:Sue]<-(agnt)<-[GIVE]-
-                         (obj)->[FOOD]<-(obj)<-[EAT:*x]
-                         (rcpt)->[DOG:Spot]<-(agnt)<-[EAT:*x].")
-         (expected "[PERSON:Sue]<-(agnt)<-[GIVE]-
-                         (obj)->[FOOD]<-(obj)<-[EAT:*x]
-                         (rcpt)->[DOG:Spot]<-(agnt)<-[EAT:*x].")
+  (let* ((input "[PERSON:Sue]←(agnt)←[GIVE]-
+                         (obj)→[FOOD]←(obj)←[EAT:*x]
+                         (rcpt)→[DOG:Spot]←(agnt)←[EAT:*x].")
+         (expected "[PERSON:Sue]←(agnt)←[GIVE]-
+                         (obj)→[FOOD]←(obj)←[EAT:*x]
+                         (rcpt)→[DOG:Spot]←(agnt)←[EAT:*x].")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-with-variables ()
   "Test normalization with variable notation"
-  (let* ((input "[eat:*x]-(obj)->[food:*y]")
-         (expected "[EAT:*x]-(obj)->[FOOD:*y]")
+  (let* ((input "[eat:*x]→(obj)→[food:*y]")
+         (expected "[EAT:*x]→(obj)→[FOOD:*y]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 
 
 (defun test-normalize-with-numbers ()
   "Test normalization with individual IDs"
-  (let* ((input "[person:#123]-(agnt)->[eat:#456]")
-         (expected "[PERSON:#123]-(agnt)->[EAT:#456]")
+  (let* ((input "[person:#123]→(agnt)→[eat:#456]")
+         (expected "[PERSON:#123]→(agnt)→[EAT:#456]")
          (result (normalize-cgraph-string input)))
     (string= result expected)))
 

@@ -20,6 +20,9 @@
    ;; list of other contexts that have thos concept
    (coreference :initform (list)
                 :accessor coreference)
+   ;; coref label when this is a ?x bound reference (not the defining node)
+   (coref-bound-label :initform nil
+                      :accessor coref-bound-label)
    (negated :initform nil
             :initarg :negated
             :accessor negated)))
@@ -96,8 +99,8 @@
 (defgeneric coref-text (concept)
   (:documentation "Return the co-reference label text for a concept"))
 
-(defmethod coref-text ((concept concept))
-  "")
+;; (defmethod coref-text ((concept concept))
+;;   "")
 
 
 (defmethod id-text ((concept concept))
@@ -163,8 +166,8 @@
 (defmethod referent-spec ((annotations list))
   (getf annotations :referent))
 
-(defmethod graph-spec ((annotations list))
-  (getf annotations :graph))
+;; (defmethod graph-spec ((annotations list))
+;;   (getf annotations :graph))
 
 
 
@@ -175,13 +178,13 @@
 (defmethod set-spec ((concept concept))
   (set-spec (properties concept)))
 
-(defmethod graph-spec ((concept concept))
-  (graph-spec (properties concept)))
+;; (defmethod graph-spec ((concept concept))
+;;   (graph-spec (properties concept)))
 
-(defmethod graph ((concept concept))
-  (let ((text (graph-spec concept)))
-    (when text
-      (parse-cgraph text))))
+;; (defmethod graph ((concept concept))
+;;   (let ((text (graph-spec concept)))
+;;     (when text
+;;       (parse-cgraph text))))
 
 (defmethod measure ((concept concept))
   (let ((measure-spec (measure-spec (properties concept))))
@@ -408,7 +411,7 @@
              ;; Explicit ID provided: check for coreference in current graph
              (id
               (or (find-local concept-type id properties)
-                  (let* ((individual (or (get-individual id)
+                  (let* ((individual (or (get-individual concept-type :id id)
                                          (when *allow-dynamic-individual-creation*
                                            (make-individual concept-type properties :id id))))
                          (referent individual))
@@ -568,8 +571,11 @@
 
 (defmethod concepts-equal ((concept1 concept) ( concept2 concept))
   (and
-   (types-equal (concept-type concept1) (concept-type concept2))
+   (types-equal concept1 concept2)
    (referents-equal (referent concept1) (referent concept2))))
 
 (defmethod referents-equal ((concept1 concept) (concept2 concept))
   (referents-equal (referent concept1) (referent concept2)))
+
+
+(defmethod concepts-equal ((concept1 (eql 'nil)) ( concept2 (eql 'nil))) t)

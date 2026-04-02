@@ -273,20 +273,20 @@
 ;;     ;; Otherwise invalid
 ;;     (t nil)))
 
-;; (defun properties-compatible-p (props1 props2)
-;;   "Check if two property lists are compatible (props2 extends props1)"
-;;   (every (lambda (prop)
-;;            (let ((key (first prop))
-;;                  (value (second prop)))
-;;              (let ((other-value (getf props2 key)))
-;;                (or (null other-value)
-;;                    (equal value other-value)))))
-;;          (plist-to-pairs props1)))
+(defun properties-compatible-p (props1 props2)
+  "Check if two property lists are compatible (props2 extends props1)"
+  (every (lambda (prop)
+           (let ((key (first prop))
+                 (value (second prop)))
+             (let ((other-value (getf props2 key)))
+               (or (null other-value)
+                   (equal value other-value)))))
+         (plist-to-pairs props1)))
 
-;; (defun plist-to-pairs (plist)
-;;   "Convert plist to list of (key value) pairs"
-;;   (loop for (key value) on plist by #'cddr
-;;         collect (list key value)))
+(defun plist-to-pairs (plist)
+  "Convert plist to list of (key value) pairs"
+  (loop for (key value) on plist by #'cddr
+        collect (list key value)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

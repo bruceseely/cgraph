@@ -8,15 +8,10 @@
 (defvar *pc)
 (defmethod cache-test (&optional verbose)
 
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label dog :supertypes (animal))))
+  (setf verbose t) ; <==================================================<<<<
 
-  (let* ((*include-node-ref* t)
+  (load-test-types)
+  (let* ((*include-node-ref* nil)
          (parent-context (make-context))
          (con1 (make-concept 'dog '(:name "Spot") :context parent-context))
          (computed-id (when con1
@@ -58,6 +53,7 @@
                 (format t "~&con: ~s~%" (pcg con))
                 (format t "~&con2: ~s~%" (pcg con2))
                 (format t  "~&---------------------------------------------~2%"))
+
 
 
               (and (concepts-equal con1 lookup-con1)

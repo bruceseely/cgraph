@@ -135,15 +135,15 @@
   (maximal-join-test-case
    "mj-partial-overlap"
    "[Person: Sue]<-(agnt)<-[Eat]->(obj)->[Food]."
-   "[Person: Sue]<-(agnt)<-[Eat]->(manr)->[Fast]."
+   "[Person: Sue]<-(agnt)<-[Eat]->(manr)->[Quickly]."
    (lambda (result)
-     ;; Person:Sue and Eat should join; Food and Fast both present
-     ;; Concepts: Person, Eat, Food, Fast = 4
+     ;; Person:Sue and Eat should join; Food and Quickly both present
+     ;; Concepts: Person, Eat, Food, Quickly = 4
      (and (= 4 (count-result-concepts result))
           (result-has-exact-type result 'person)
           (result-has-exact-type result 'eat)
           (result-has-exact-type result 'food)
-          (result-has-exact-type result 'fast)))
+          (result-has-exact-type result 'quickly)))
    verbose))
 
 
@@ -252,33 +252,8 @@
   (let ((pass t)
         (*allow-dynamic-individual-creation* t))
 
-    (ensure-concept-types-exist
-     '((:label entity :supertypes (⊤))
-       (:label physobj :supertypes (entity))
-       (:label animate :supertypes (entity))
-       (:label mobile-entity :supertypes (physobj))
-       (:label animal :supertypes (animate mobile-entity))
-       (:label dog :supertypes (animal))
-       (:label person :supertypes (animal))
-       (:label event :supertypes (⊤))
-       (:label act :supertypes (event))
-       (:label eat :supertypes (act))
-       (:label give :supertypes (act))
-       (:label food :supertypes (entity physobj))
-       (:label characteristic :supertypes (⊤))
-       (:label manner :supertypes (characteristic))
-       (:label fast :supertypes (manner))
-       (:label age :supertypes (characteristic))
-       (:label old :supertypes (age))
-       (:label attribute :supertypes (characteristic))))
+    (load-test-types)
 
-    (ensure-relation-types-exist
-     '((:label agnt :source-types act :dest-type animate)
-       (:label attr :source-types entity :dest-type attribute)
-       (:label chrc :source-types entity :dest-type characteristic)
-       (:label manr :source-types act :dest-type manner)
-       (:label obj  :source-types act :dest-type entity)
-       (:label rcpt :source-types act :dest-type animate)))
     (when verbose
       (format t "~&~%=== Maximal Join Tests ===~%"))
     (dolist (test-fn (maximal-join-test-defs))

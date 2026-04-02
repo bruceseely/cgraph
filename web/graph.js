@@ -3,19 +3,12 @@ const typeListEl     = document.getElementById('type-list');
 const container      = document.getElementById('graph-container');
 const errorMsg       = document.getElementById('error-msg');
 const placeholder    = document.getElementById('placeholder');
-const detailPane     = document.getElementById('detail-pane');
-const detailTypeName = document.getElementById('detail-type-name');
-const colInput       = document.getElementById('col-input');
-const colOutput      = document.getElementById('col-output');
-const modeHint       = document.getElementById('mode-hint');
-const canonicalRow   = document.getElementById('canonical-row');
-const canonicalValue = document.getElementById('canonical-value');
+const cgEntriesEl    = document.getElementById('cg-entries');
+const cgPlaceholder  = document.getElementById('cg-placeholder');
 
 const selected    = new Set();
 const expandedSub = new Set();   // node ids with subtypes force-shown
 let baselineNodeIds = new Set(); // node ids visible before any subtype expansion
-
-let mode = 'edit';
 
 // ── Error display ─────────────────────────────────────────────────────────────
 
@@ -32,19 +25,6 @@ async function getViz() {
   vizInstance = await mod.instance();
   return vizInstance;
 }
-
-// ── Mode toggle ───────────────────────────────────────────────────────────────
-
-document.querySelectorAll('.mode-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    mode = btn.dataset.mode;
-    document.querySelectorAll('.mode-btn').forEach(b =>
-      b.classList.toggle('active', b === btn)
-    );
-    modeHint.hidden = (mode !== 'edit');
-    redraw();
-  });
-});
 
 // ── Chips (top bar) ───────────────────────────────────────────────────────────
 
@@ -71,9 +51,11 @@ function renderSidebar(names) {
       el.className = 'type-item' + (selected.has(name) ? ' selected' : '');
       el.textContent = name;
       el.dataset.name = name;
-      el.addEventListener('click', () =>
-        selected.has(name) ? deselect(name) : selectType(name)
-      );
+      el.addEventListener('click', () => {
+        if (selected.has(name)) deselect(name);
+        else selectType(name);
+        addCgEntry(name);
+      });
       return el;
     })
   );
@@ -145,25 +127,27 @@ async function redraw() {
       if (shape && baselineNodeIds.size > 0 && !baselineNodeIds.has(node.id) && !expandedSub.has(node.id))
         shape.setAttribute('fill', '#fef9e7');
 
-      if (mode === 'info') {
-        node.addEventListener('click', () => showRelations(node.id));
-      } else {
-        // Edit mode — single-click (delayed): select/deselect type.
-        // Double-click (e.detail >= 2): show relations.
-        let singleClickTimer = null;
-        node.addEventListener('click', e => {
-          if (e.detail >= 2) {
-            if (singleClickTimer) { clearTimeout(singleClickTimer); singleClickTimer = null; }
-            showRelations(node.id);
-          } else {
-            singleClickTimer = setTimeout(() => {
-              singleClickTimer = null;
-              if (selected.has(node.id)) deselect(node.id);
-              else                       selectType(node.id);
-            }, 350);
-          }
-        });
-      }
+      // Nodes with a pinned CG entry: subtle green tint.
+      if (shape && cgEntries.has(node.id) && !expandedSub.has(node.id) &&
+          !(baselineNodeIds.size > 0 && !baselineNodeIds.has(node.id)))
+        shape.setAttribute('fill', '#eafaf1');
+
+      // Single click: select/deselect + add CG entry.
+      // Double click: toggle CG entry out.
+      let singleClickTimer = null;
+      node.addEventListener('click', e => {
+        if (e.detail >= 2) {
+          if (singleClickTimer) { clearTimeout(singleClickTimer); singleClickTimer = null; }
+          if (cgEntries.has(node.id)) removeCgEntry(node.id);
+        } else {
+          addCgEntry(node.id);   // immediate — async fetch starts now
+          singleClickTimer = setTimeout(() => {
+            singleClickTimer = null;
+            if (selected.has(node.id)) deselect(node.id);
+            else                       selectType(node.id);
+          }, 350);
+        }
+      });
 
       // Right-click: toggle subtype expansion.
       node.addEventListener('contextmenu', e => {
@@ -188,74 +172,374 @@ async function redraw() {
   }
 }
 
-// ── Detail pane ───────────────────────────────────────────────────────────────
+// ── CG string parser ─────────────────────────────────────────────────────────
+// Parses CG linear notation into a list of {src, rel, dst} arc objects.
+// Handles: [A]→(r)→[B], [A]←(r)←[B], [A]-(r1)→[B1] (r2)→[B2],
+//          nested fanouts via -, commas resetting to root, mixed chains.
 
-function buildRelList(relations, container, typeName, asInput) {
-  if (relations.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'rel-empty';
-    empty.textContent = 'none';
-    container.replaceChildren(empty);
-    return;
+function parseCgString(str) {
+  if (!str) return [];
+
+  // Tokenize
+  const tokens = [];
+  let i = 0;
+  while (i < str.length) {
+    const c = str[i];
+    if (c === '[') {
+      const end = str.indexOf(']', i + 1);
+      if (end === -1) { i++; continue; }
+      const label = str.slice(i + 1, end).trim();
+      if (label) tokens.push({ type: 'concept', label });
+      i = end + 1;
+    } else if (c === '(') {
+      const end = str.indexOf(')', i + 1);
+      if (end === -1) { i++; continue; }
+      const label = str.slice(i + 1, end).trim();
+      if (label) tokens.push({ type: 'rel', label });
+      i = end + 1;
+    } else if (c === '\u2192') {
+      tokens.push({ type: 'rarrow' }); i++;
+    } else if (c === '\u2190') {
+      tokens.push({ type: 'larrow' }); i++;
+    } else if (c === '-' && str[i + 1] === '>') {
+      tokens.push({ type: 'rarrow' }); i += 2;
+    } else if (c === '<' && str[i + 1] === '-') {
+      tokens.push({ type: 'larrow' }); i += 2;
+    } else if (c === '-') {
+      tokens.push({ type: 'dash' }); i++;
+    } else if (c === '.') {
+      tokens.push({ type: 'dot' }); i++;
+    } else if (c === ',') {
+      tokens.push({ type: 'comma' }); i++;
+    } else {
+      i++;
+    }
   }
-  const TYPE = typeName.toUpperCase();
-  container.replaceChildren(
-    ...relations.map(rel => {
-      const el = document.createElement('div');
-      el.className = 'rel-item' + (rel.exact ? ' exact' : '');
 
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'rel-name';
-      nameSpan.textContent = rel.name;
-      el.appendChild(nameSpan);
+  const arcs = [];
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const consume = () => tokens[pos++];
 
-      const graphSpan = document.createElement('span');
-      graphSpan.className = 'rel-graph';
-      if (asInput) {
-        graphSpan.textContent = `[${TYPE}]→(${rel.name})→[${rel.dest || '?'}]`;
-      } else {
-        const src = (rel.sources && rel.sources.length > 0) ? rel.sources[0] : '?';
-        graphSpan.textContent = `[${src}]→(${rel.name})→[${TYPE}]`;
-      }
-      el.appendChild(graphSpan);
+  const tok0 = peek();
+  if (!tok0 || tok0.type !== 'concept') return arcs;
+  consume();
+  const root = tok0.label;
+  let current = root;
+  let fanoutSrc = root;
 
-      const descSpan = document.createElement('span');
-      descSpan.className = 'rel-desc';
-      descSpan.textContent = rel.desc || '';
-      el.appendChild(descSpan);
+  while (pos < tokens.length) {
+    const tok = peek();
+    if (!tok || tok.type === 'dot') { consume(); break; }
 
-      return el;
-    })
-  );
-}
-
-async function showRelations(typeName) {
-  detailTypeName.textContent = '[' + typeName.toUpperCase() + ']';
-  detailPane.classList.add('visible');
-  colInput.replaceChildren();
-  colOutput.replaceChildren();
-  canonicalRow.hidden = true;
-
-  try {
-    const resp = await fetch(`/api/relations?type=${encodeURIComponent(typeName)}`);
-    if (!resp.ok) { showError(`Relations lookup failed: ${resp.status}`); return; }
-    const data = await resp.json();
-
-    if (data.canonical_graph) {
-      canonicalValue.textContent = data.canonical_graph;
-      canonicalRow.hidden = false;
+    if (tok.type === 'comma') {
+      consume();
+      current = root; fanoutSrc = root;
+      continue;
     }
 
-    buildRelList(data.as_input,  colInput,  typeName, true);
-    buildRelList(data.as_output, colOutput, typeName, false);
-  } catch (err) {
-    showError(err.message);
+    if (tok.type === 'dash') {
+      consume();
+      fanoutSrc = current;
+      continue;
+    }
+
+    if (tok.type === 'rarrow' || tok.type === 'larrow') {
+      // Explicit chain: first arrow consumed here, then (r), then second arrow, then [concept].
+      // src is always 'current' (the notation origin); dir encodes the arrow direction.
+      const firstArr = tok.type;
+      consume();
+      const relTok = peek();
+      if (!relTok || relTok.type !== 'rel') continue;
+      consume();
+      const arrTok = peek();
+      if (!arrTok || (arrTok.type !== 'rarrow' && arrTok.type !== 'larrow')) continue;
+      consume();
+      const destTok = peek();
+      if (!destTok || destTok.type !== 'concept') continue;
+      consume();
+      // Forward: first→ second→  or  first← second←(both match, same direction)
+      // Backward: first→ second←  or  first← second←
+      // Rule: if both arrows same direction → forward; if second is ← → back.
+      const dir = arrTok.type === 'larrow' ? 'back' : 'forward';
+      arcs.push({ src: current, rel: relTok.label, dst: destTok.label, dir });
+      current = destTok.label;
+      continue;
+    }
+
+    if (tok.type === 'rel') {
+      // Fanout arc from fanoutSrc: (r)→[other] (forward) or (r)←[other] (back).
+      // fanoutSrc is always the notation origin (selected-type side).
+      consume();
+      const arrTok = peek();
+      if (!arrTok || (arrTok.type !== 'rarrow' && arrTok.type !== 'larrow')) continue;
+      consume();
+      const otherTok = peek();
+      if (!otherTok || otherTok.type !== 'concept') continue;
+      consume();
+      arcs.push({ src: fanoutSrc, rel: tok.label, dst: otherTok.label,
+                  dir: arrTok.type === 'rarrow' ? 'forward' : 'back' });
+      current = otherTok.label;
+      // Immediately following dash: other becomes new fanout source
+      if (peek() && peek().type === 'dash') {
+        consume();
+        fanoutSrc = current;
+      }
+      continue;
+    }
+
+    consume(); // skip unexpected token
+  }
+
+  return arcs;
+}
+
+// ── CG DOT renderer ───────────────────────────────────────────────────────────
+// Converts {src, rel, dst} arcs to a Graphviz DOT string using CG visual form:
+// concept nodes as boxes, relation nodes as ellipses.
+
+function arcsToDot(typeName, arcs) {
+  const conceptToId = new Map();
+  let nodeN = 0;
+  const getConceptId = label => {
+    if (!conceptToId.has(label)) conceptToId.set(label, `c${++nodeN}`);
+    return conceptToId.get(label);
+  };
+  for (const { src, dst } of arcs) { getConceptId(src); getConceptId(dst); }
+
+  const esc = s => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+  const lines = [
+    `digraph "cg_${typeName.replace(/\W/g, '_')}" {`,
+    '  graph [rankdir="LR" margin=0.1 pad=0.1];',
+    '  node [fontname=Helvetica fontsize=10 margin="0.06,0.03"];',
+    '  edge [arrowsize=0.55 color="#888"];',
+  ];
+
+  for (const [label, id] of conceptToId)
+    lines.push(`  ${id} [label="${esc(label)}" shape=box style=filled fillcolor="#fffde7" color="#bbb"];`);
+
+  arcs.forEach(({ src, rel, dst, dir = 'forward' }, i) => {
+    const rid = `r${i + 1}`;
+    lines.push(`  ${rid} [label="${esc(rel)}" shape=ellipse fontsize=8 height=0.2 margin="0.04,0.02" style=filled fillcolor="#e8f4f8" color="#aaa"];`);
+    if (dir === 'back') {
+      // Layout: src (selected type) on the left; arrowheads point leftward back toward src.
+      lines.push(`  ${getConceptId(src)} -> ${rid} [dir=back];`);
+      lines.push(`  ${rid} -> ${getConceptId(dst)} [dir=back];`);
+    } else {
+      lines.push(`  ${getConceptId(src)} -> ${rid};`);
+      lines.push(`  ${rid} -> ${getConceptId(dst)};`);
+    }
+  });
+
+  lines.push('}');
+  return lines.join('\n');
+}
+
+// ── Canonical graph pane ──────────────────────────────────────────────────────
+
+// Map from uppercase label → entry DOM element.
+const cgEntries = new Map();
+// Map from uppercase label → {bodyEl, svg, linear} — both render forms.
+const cgEntryData = new Map();
+
+let cgDisplayMode = 'graph'; // 'graph' | 'linear'
+
+function applyDisplayMode(key) {
+  const data = cgEntryData.get(key);
+  if (!data) return;
+  const { bodyEl, svg, linear } = data;
+  const showLinear = txt => {
+    const pre = document.createElement('pre');
+    pre.className = 'cg-linear';
+    pre.textContent = txt;
+    bodyEl.className = 'cg-entry-body';
+    bodyEl.replaceChildren(pre);
+  };
+
+  if (cgDisplayMode === 'graph') {
+    if (svg) {
+      bodyEl.className = 'cg-entry-body';
+      bodyEl.replaceChildren(svg);
+    } else if (linear) {
+      showLinear(linear);
+    }
+  } else {
+    if (linear) {
+      showLinear(linear);
+    } else if (svg) {
+      bodyEl.className = 'cg-entry-body';
+      bodyEl.replaceChildren(svg);
+    }
   }
 }
 
+function setDisplayMode(mode) {
+  if (mode === cgDisplayMode) return;
+  cgDisplayMode = mode;
+  document.querySelectorAll('.opt-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === mode)
+  );
+  for (const key of cgEntries.keys()) applyDisplayMode(key);
+}
+
+async function addCgEntry(label) {
+  const key = label.toUpperCase();
+
+  if (cgEntries.has(key)) {
+    cgEntries.get(key).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
+
+  const entryEl = document.createElement('div');
+  entryEl.className = 'cg-entry';
+
+  const headEl = document.createElement('div');
+  headEl.className = 'cg-entry-head';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'cg-entry-name';
+  nameEl.textContent = key;
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'cg-entry-remove';
+  removeBtn.title = `Remove ${key}`;
+  removeBtn.textContent = '✕';
+  removeBtn.addEventListener('click', () => removeCgEntry(key));
+
+  headEl.appendChild(nameEl);
+  headEl.appendChild(removeBtn);
+
+  const bodyEl = document.createElement('div');
+  bodyEl.className = 'cg-entry-body loading';
+  bodyEl.textContent = '…';
+
+  entryEl.appendChild(headEl);
+  entryEl.appendChild(bodyEl);
+
+  cgEntries.set(key, entryEl);
+  cgEntryData.set(key, { bodyEl, svg: null, linear: null });
+  cgPlaceholder.hidden = true;
+  cgEntriesEl.prepend(entryEl);
+  cgEntriesEl.scrollTop = 0;
+
+  try {
+    const resp = await fetch(`/api/relations?type=${encodeURIComponent(label)}`);
+    if (!resp.ok) {
+      bodyEl.className = 'cg-entry-body empty';
+      bodyEl.textContent = '(lookup failed)';
+      return;
+    }
+    const data = await resp.json();
+    bodyEl.classList.remove('loading');
+
+    if (data.canonical_graph_format_error) {
+      console.warn('[cgraph] pcg format error for', key, ':', data.canonical_graph_format_error);
+    }
+
+    const entryData = cgEntryData.get(key);
+
+    // Store linear text: prefer formatted (pcg output), fall back to raw string.
+    entryData.linear = data.canonical_graph_formatted || data.canonical_graph || null;
+
+    // Build SVG from raw CG text.
+    const cgText = data.canonical_graph;
+    if (cgText) {
+      const arcs = parseCgString(cgText);
+      if (arcs.length > 0) {
+        try {
+          const dot = arcsToDot(key, arcs);
+          const viz = await getViz();
+          const svg = viz.renderSVGElement(dot);
+          svg.removeAttribute('width');
+          svg.removeAttribute('height');
+          entryData.svg = svg;
+        } catch (_) {}
+      }
+    }
+
+    // Display based on current mode; fall back to empty message if neither available.
+    if (entryData.svg || entryData.linear) {
+      applyDisplayMode(key);
+    } else {
+      bodyEl.className = 'cg-entry-body empty';
+      bodyEl.textContent = 'no canonical graph';
+    }
+  } catch (err) {
+    bodyEl.className = 'cg-entry-body empty';
+    bodyEl.textContent = '(error)';
+  }
+
+  redraw();
+}
+
+function removeCgEntry(key) {
+  key = key.toUpperCase();
+  const el = cgEntries.get(key);
+  if (!el) return;
+  el.remove();
+  cgEntries.delete(key);
+  cgEntryData.delete(key);
+  if (cgEntries.size === 0) cgPlaceholder.hidden = false;
+  redraw();
+}
+
+document.getElementById('cg-clear-btn').addEventListener('click', () => {
+  cgEntries.clear();
+  cgEntryData.clear();
+  for (const el of [...cgEntriesEl.children]) {
+    if (el !== cgPlaceholder) el.remove();
+  }
+  cgPlaceholder.hidden = false;
+  redraw();
+});
+
+// ── Options panel ─────────────────────────────────────────────────────────────
+
+(function () {
+  const btn     = document.getElementById('options-btn');
+  const panel   = document.getElementById('cg-options');
+
+  btn.addEventListener('click', () => {
+    const opening = panel.hidden;
+    panel.hidden = !opening;
+    btn.classList.toggle('open', opening);
+  });
+
+  document.querySelectorAll('.opt-btn').forEach(b =>
+    b.addEventListener('click', () => setDisplayMode(b.dataset.mode))
+  );
+}());
+
+// ── CG pane resizer ───────────────────────────────────────────────────────────
+
+(function () {
+  const resizer = document.getElementById('cg-resizer');
+  const cgPane  = document.getElementById('cg-pane');
+
+  resizer.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX     = e.clientX;
+    const startWidth = cgPane.getBoundingClientRect().width;
+    resizer.classList.add('dragging');
+
+    const onMove = e => {
+      const newWidth = Math.max(150, Math.min(700, startWidth + (startX - e.clientX)));
+      cgPane.style.width = newWidth + 'px';
+    };
+
+    const onUp = () => {
+      resizer.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}());
+
 // ── Container-level mouse handling ────────────────────────────────────────────
-// Attached once to the persistent container div so they work regardless of
-// SVG size or whether the click lands inside the SVG or in the padding area.
 
 // Left-click on background: clear all subtype expansions.
 container.addEventListener('click', e => {

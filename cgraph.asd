@@ -76,7 +76,7 @@
 	       (:module "test"
                 :serial t
 	        :depends-on ("system")
-	        :components ((:file "graphs-for-test")
+	        :components ((:file "graphs-for-testing")
                              (:file "type-test")
                              (:file "linkup-test")
                              (:file "segment-test")
@@ -89,12 +89,11 @@
                              (:file "normalize-test")
                              (:file "parse-test")
                              (:file "cache-test")
-                             (:file "context-test")
                              (:file "coreference-test")
                              (:file "negative-context-test")
                              (:file "graph-every-test")
 
-                             (:file "atomic-formation-rules-test")
+                             (:file "formation-rules-test")
                              ;;(:file "cg-processing-test")
                              ;;(:file "formation-rules-test")
                              (:file "combine-test")
@@ -103,5 +102,5 @@
                              (:file "type-definition-test")
                              (:file "query-test")
 
-                             (:file "test-all")
+                             (:file "cgraph-tests")
                              ))))

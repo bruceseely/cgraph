@@ -99,7 +99,7 @@
   (initialize-cgraph)
   (clear-id-cache))
 
-
+;;; Thhis allows dynamically adding types for testing
 (defun ensure-concept-types-exist (definitions)
   (dolist (def definitions)
     (parse-concept-type-def def)))
@@ -137,10 +137,6 @@
 
 
 (defvar *home* (namestring (user-homedir-pathname)))
-(defvar *cgraph*)
-(defvar *cgraph-types-directory*)
-(defvar *cgraph-examples-directory*)
-(defvar *cgraph-data-directory*)
 
 
 ;;; This is the entry point
@@ -169,16 +165,40 @@
         (push (cons '*package* (find-package :conceptual-graphs))
               (symbol-value bindings-var)))))
 
+  ;; Protect SWANK's readtable-for-package from the CG readtable.
+  ;; The CG readtable makes ':' a terminating macro char, which breaks
+  ;; (read-from-string "swank::guess-buffer-readtable") if an error is
+  ;; signaled inside a with-readtable-mods/with-cg-readtable scope and
+  ;; the user presses 'v' in SLDB (which runs in the suspended thread).
+  (let* ((spp (find-package :swank/source-path-parser))
+         (sym (and spp (find-symbol "READTABLE-FOR-PACKAGE" spp))))
+    (when (and sym (fboundp sym))
+      (let ((orig (symbol-function sym)))
+        (setf (symbol-function sym)
+              (lambda (package)
+                (let ((*readtable* (copy-readtable nil)))
+                  (funcall orig package)))))))
+
   (cleanup-files code-base)
   (cg::report-directories)
   (terpri)
+
+  (when (find-package :swank)
+    (swank::eval-in-emacs
+     '(progn
+       (load "init-cgraph.el")
+       (load (expand-file-name "~/repo/cgraph/cgraph-filesets.el"))
+       (cgraph-read-options-from-cl))))
+
 
   ;; start web server
   (asdf:load-system :cgraph-web)
   (cg::start-web-server :port 8060)
   (terpri)
 
-  (cg::test-all t))
+  (cg::test-cgraph t)
+  ;;(cg::test-all t)
+  )
 
 
 ;;; This is the transition from the :cl-user package to the :cg package

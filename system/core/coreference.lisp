@@ -9,13 +9,16 @@
 ;;; Co-reference links connect concepts in different graphs (possibly in
 ;;; different contexts) that refer to the same real-world entity.
 ;;;
-;;; Syntax: ?label (e.g., ?c, ?cat)
-;;; First occurrence defines the label, subsequent occurrences establish
-;;; co-reference links to the defining concept.
+;;; Standard CGIF notation:
+;;;   *x — defining occurrence: introduces entity x into scope
+;;;   ?x — bound occurrence: references entity already defined by *x
 ;;;
-;;; Unlike variables (*x, *y) which are for serializing a single node that
-;;; appears multiple times in linear notation, co-reference labels connect
-;;; distinct concept objects across context boundaries.
+;;; Legacy notation (also supported):
+;;;   ?x — first occurrence defines the label
+;;;   ?x — subsequent occurrences establish co-reference links
+;;;
+;;; Scope: a ?x bound reference may point to a *x (or ?x) in the same
+;;; context or any enclosing parent context.
 
 ;;; Maps coref-label -> concept that defines it
 (defvar *coref-labels* (make-hash-table :test 'equal))
@@ -69,9 +72,12 @@
   (coref-label-setp concept))
 
 (defmethod coref-text ((concept concept))
-  "Return the co-reference label text for a concept (e.g., '?c')"
-  (let ((label (concept-coref-label concept)))
-    (cond (label (format nil "?~(~a~)" label))
+  "Return the co-reference label text for a concept (e.g., '?c').
+   Returns ?label for both defining (*x-style anchor) and bound (?x-style reference) occurrences."
+  (let ((defining-label (concept-coref-label concept))
+        (bound-label (coref-bound-label concept)))
+    (cond (defining-label (format nil "?~(~a~)" defining-label))
+          (bound-label    (format nil "?~(~a~)" bound-label))
           (t ""))))
 
 

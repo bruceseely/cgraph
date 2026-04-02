@@ -31,40 +31,15 @@
     pass))
 
 (defun linkup-test (&optional verbose)
-
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label dog :supertypes (animal))
-     (:label person :supertypes (animal))
-     (:label event :supertypes (⊤))
-     (:label act :supertypes (event))
-     (:label eat :supertypes (act))
-     (:label give :supertypes (act))
-     (:label food :supertypes (entity physobj))
-     (:label cake :supertypes (food))
-     (:label characteristic :supertypes (⊤))
-     (:label manner :supertypes (characteristic))
-     (:label fast :supertypes (manner))))
-
-  (ensure-relation-types-exist
-   '((:label agnt :source-types act :dest-type animate)
-     (:label inst :source-types act :dest-type entity)
-     (:label manr :source-types act :dest-type manner)
-     (:label obj  :source-types act :dest-type entity)
-     (:label poss :source-types animate :dest-type entity)
-     (:label rcpt :source-types act :dest-type animate)))
+  (load-test-types)
 
   (let ((*include-node-ref* nil)
         (graph-strings (list
                         "[DOG: Spot]<-(agnt)<-[EAT]."
                         "[DOG: Spot]<-(agnt)<-[EAT]->(obj)->[CAKE]."
-                        "[DOG: Spot]<-(agnt)<-[EAT]- (manr)->[FAST] (obj)->[CAKE]."
+                        "[DOG: Spot]<-(agnt)<-[EAT]- (manr)->[QUICKLY] (obj)->[CAKE]."
                         "[PERSON: Sue]<-(agnt)<-[GIVE]- (obj)->[FOOD]<-(obj)<-[EAT:*x] (rcpt)->[DOG: Spot]<-(agnt)<-[EAT:*x]."
-                        "[PERSON: Sue]<-(agnt)<-[GIVE]- (inst)->[FOOD]<-(obj)<-[EAT:*x]->(manr)->[FAST] (rcpt)->[DOG:Spot]<-(agnt)<-[EAT:*x]."
+                        "[PERSON: Sue]<-(agnt)<-[GIVE]- (inst)->[FOOD]<-(obj)<-[EAT:*x]->(manr)->[QUICKLY] (rcpt)->[DOG:Spot]<-(agnt)<-[EAT:*x]."
                         ;;"[DOG: Spot]- (poss)->[CAKE]<-(obj)<-[EAT: *x] (agnt)<-[EAT: *x]."
                         "[DOG: Spot]- (agnt)<-[EAT: *x](poss)->[CAKE]<-(obj)<-[EAT: *x] ."
                         "[PERSON: Sue]<-(agnt)<-[GIVE]- (inst)->[FOOD]<-(obj)<-[EAT: *x] (rcpt)->[DOG: Spot]<-(agnt)<-[EAT: *x]."

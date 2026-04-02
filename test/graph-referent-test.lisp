@@ -8,32 +8,8 @@
 (defvar *test-output* nil)
 
 (defun setup-graph-referent-test-types ()
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label stationary-entity :supertypes (entity))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label cat :supertypes (animal))
-     (:label dog :supertypes (animal))
-     (:label place :supertypes (stationary-entity))
-     (:label mat :supertypes (physobj place))
-     (:label event :supertypes (⊤))
-     (:label act :supertypes (event))
-     (:label sit :supertypes (act))
-     (:label think :supertypes (act))
-     (:label situation :supertypes (⊤) :graph-compatible t)
-     (:label state :supertypes (situation))
-     (:label information :supertypes (⊤))
-     (:label proposition :supertypes (information) :graph-compatible t)
-     (:label food :supertypes (entity))
-     (:label pie :supertypes (food))))
-
-  (ensure-relation-types-exist
-   '((:label agnt :source-types act :dest-type animate)
-     (:label loc  :source-types ⊤ :dest-type place)
-     (:label on   :source-types entity :dest-type entity))))
+  (load-test-types)
+  )
 
 (defun test-graph-referent-creation (&optional verbose)
   "Test creating graph referents from parsed graphs"
@@ -41,7 +17,7 @@
   (initialize-cgraph)
   (setup-graph-referent-test-types)
 
-  (let* ((head-node (graph-head (parse-cgraph "[Cat: Puff]->(On)->[Mat]")))
+  (let* ((head-node (car (parse-cgraph "[Cat: Puff]->(On)->[Mat]")))
          (head-node-ref (make-referent head-node))
          (result (and (not (null head-node-ref))
                       (referent-p head-node-ref)
@@ -56,7 +32,7 @@
   (initialize-cgraph)
   (setup-graph-referent-test-types)
 
-  (let* ((head-node (graph-head (parse-cgraph "[Cat: Fido]->(On)->[Mat]")))
+  (let* ((head-node (car (parse-cgraph "[Cat: Fido]->(On)->[Mat]")))
          (head-node-ref (make-referent head-node))
          (concepts (graph-concepts head-node-ref))
          (relations (graph-relations head-node-ref))
@@ -75,9 +51,9 @@
   (initialize-cgraph)
   (setup-graph-referent-test-types)
 
-  (let* ((graph1 (parse-cgraph "[SIT]- (agnt)->[DOG: Fido] (loc)->[MAT]"))
-         (graph2 (parse-cgraph "[SIT]- (agnt)->[DOG: Fido] (loc)->[MAT]"))
-         (graph3 (parse-cgraph "[SIT]- (agnt)->[DOG: Spot] (loc)->[MAT]"))
+  (let* ((graph1 (make-cgraph "[SIT]- (agnt)->[DOG: Fido] (loc)->[MAT]"))
+         (graph2 (make-cgraph "[SIT]- (agnt)->[DOG: Fido] (loc)->[MAT]"))
+         (graph3 (make-cgraph "[SIT]- (agnt)->[DOG: Spot] (loc)->[MAT]"))
          (result1 (graphs-equal graph1 graph2))
          (result2 (not (graphs-equal graph1 graph3)))
          (result (and result1 result2)))
@@ -91,7 +67,7 @@
   (initialize-cgraph)
   (setup-graph-referent-test-types)
 
-  (let* ((inner-graph (parse-cgraph "[DOG: Fido]->(on)->[MAT]"))
+  (let* ((inner-graph (car (parse-cgraph "[DOG: Fido]->(on)->[MAT]")))
          (graph-referent (make-referent inner-graph))
          (outer-concept (make-instance 'concept
                                        :concept-type (get-concept-type 'Situation)
@@ -114,7 +90,7 @@
   (initialize-cgraph)
   (setup-graph-referent-test-types)
 
-  (let* ((graph-obj (parse-cgraph "[Cat: Fido]->(On)->[Mat]"))
+  (let* ((graph-obj (make-cgraph "[Cat: Fido]->(On)->[Mat]."))
          (head-node (graph-head graph-obj))
          (graph-props (properties graph-obj))
          (head-props (when head-node (properties head-node)))
@@ -131,7 +107,7 @@
   (initialize-cgraph)
   (setup-graph-referent-test-types)
 
-  (let* ((inner-graph (parse-cgraph "[SIT]- (agnt)->[CAT: Fido] (loc)->[MAT]"))
+  (let* ((inner-graph (car (parse-cgraph "[SIT]- (agnt)->[CAT: Fido] (loc)->[MAT]")))
          (inner-graph-ref (make-referent inner-graph))
          (situation-type (get-concept-type 'situation))
          (outer-concept (make-instance 'concept
@@ -158,7 +134,7 @@
   (initialize-cgraph)
   (setup-graph-referent-test-types)
 
-  (let* ((graph-obj (parse-cgraph "[Cat: Fido]->(On)->[Mat]"))
+  (let* ((graph-obj (make-cgraph "[Cat: Fido]->(On)->[Mat]."))
          (graph-obj-ref (make-referent graph-obj))
          (outer-concept (make-instance 'concept
                                        :concept-type (get-concept-type 'Situation)
@@ -182,7 +158,7 @@
   (initialize-cgraph)
   (setup-graph-referent-test-types)
 
-  (let* ((graph-obj (parse-cgraph "[Cat: Fido]->(On)->[Mat]"))
+  (let* ((graph-obj (make-cgraph "[Cat: Fido]->(On)->[Mat]."))
          (graph-obj-ref1 (make-referent graph-obj))
          (graph-obj-ref2 (make-referent graph-obj))
          (concept1 (make-instance 'concept
@@ -209,13 +185,13 @@
          (*context* context))
 
     ;; Create several concepts, some with graph referents
-    (let* ((graph1 (parse-cgraph "[SIT]- (agnt)->[DOG: Fido] (loc)->[MAT]"))
+    (let* ((graph1 (car (parse-cgraph "[SIT]- (agnt)->[DOG: Fido] (loc)->[MAT]")))
            (graph1-ref (make-referent graph1))
            (concept1 (make-instance 'concept
                                     :concept-type (get-concept-type 'Situation)
                                     :referent graph1-ref
                                     :context context))
-           (graph2 (parse-cgraph "[SIT]- (agnt)->[DOG: Spot] (loc)->[MAT]"))
+           (graph2 (car (parse-cgraph "[SIT]- (agnt)->[DOG: Spot] (loc)->[MAT]")))
            (graph2-ref (make-referent graph2))
            (concept2 (make-instance 'concept
                                     :concept-type (get-concept-type 'Event)
@@ -256,14 +232,14 @@
   (let* ((context (make-context))
          (*context* context))
 
-    (let* ((graph-obj (parse-cgraph "[SIT]- (agnt)->[CAT: Fido] (loc)->[MAT]"))
+    (let* ((graph-obj (make-cgraph "[SIT]- (agnt)->[CAT: Fido] (loc)->[MAT]."))
            (graph-obj-ref (make-referent graph-obj))
            (concept1 (make-instance 'concept
                                     :concept-type (get-concept-type 'Situation)
                                     :referent graph-obj-ref
                                     :context context))
            ;; Different graph
-           (other-graph (parse-cgraph "[Cat: Fido]->(On)->[Mat]"))
+           (other-graph (make-cgraph "[Cat: Fido]->(On)->[Mat]."))
            (other-graph-ref (make-referent other-graph))
            (concept2 (make-instance 'concept
                                     :concept-type (get-concept-type 'Event)
@@ -289,7 +265,7 @@
   (initialize-cgraph)
   (setup-graph-referent-test-types)
 
-  (let* ((graph-obj (parse-cgraph "[Cat: Fido]->(On)->[Mat]"))
+  (let* ((graph-obj (make-cgraph "[Cat: Fido]->(On)->[Mat]."))
          (concept (make-instance 'concept
                                  :concept-type (get-concept-type 'Situation))))
 
@@ -314,7 +290,7 @@
   (let* ((context (make-context))
          (*context* context))
 
-    (let* ((graph-obj (parse-cgraph "[Cat: Fido]->(On)->[Mat]"))
+    (let* ((graph-obj (make-cgraph "[Cat: Fido]->(On)->[Mat]."))
            (graph-obj-ref (make-referent graph-obj))
            (concept (make-instance 'concept
                                    :concept-type (get-concept-type 'Situation)
@@ -344,7 +320,7 @@
   (let* ((context (make-context))
          (*context* context))
 
-    (let* ((graph-obj (parse-cgraph "[Cat: Fido]->(On)->[Mat]"))
+    (let* ((graph-obj (make-cgraph "[Cat: Fido]->(On)->[Mat]."))
            (graph-obj-ref (make-referent graph-obj))
            (concept (make-instance 'concept
                                    :concept-type (get-concept-type 'Situation)
@@ -374,13 +350,13 @@
   (let* ((context (make-context))
          (*context* context))
 
-    (let* ((graph1 (parse-cgraph "[SIT]- (agnt)->[DOG: Fido] (loc)->[MAT]"))
+    (let* ((graph1 (make-cgraph "[SIT]- (agnt)->[DOG: Fido] (loc)->[MAT]."))
            (ref1 (make-referent graph1))
            (concept1 (make-instance 'concept
                                     :concept-type (get-concept-type 'Situation)
                                     :referent ref1
                                     :context context))
-           (graph2 (parse-cgraph "[SIT]- (agnt)->[DOG: Spoy] (loc)->[MAT]"))
+           (graph2 (make-cgraph "[SIT]- (agnt)->[DOG: Spoy] (loc)->[MAT]."))
            (ref2 (make-referent graph2))
            (concept2 (make-instance 'concept
                                     :concept-type (get-concept-type 'Event)
@@ -412,7 +388,7 @@
   (let* ((context (make-context))
          (*context* context))
 
-    (let* ((graph-obj (parse-cgraph "[Cat: Fido]->(On)->[Mat]"))
+    (let* ((graph-obj (make-cgraph "[Cat: Fido]->(On)->[Mat].s"))
            (graph-obj-ref (make-referent graph-obj))
            (concept (make-instance 'concept
                                    :concept-type (get-concept-type 'Situation)
@@ -442,8 +418,8 @@
   (let* ((context (make-context))
          (*context* context))
 
-    (let* ((graph (parse-cgraph "[Cat: Fido]->(On)->[Mat]"))
-           (graph-ref (make-referent (graph-head graph)))
+    (let* ((graph (make-cgraph "[Cat: Fido]->(On)->[Mat]"))
+           (graph-ref (make-referent graph))
            (concept (make-instance 'concept
                                    :concept-type (get-concept-type 'Situation)
                                    :referent graph-ref
@@ -466,6 +442,7 @@
   (setf *test-output* (when verbose *standard-output*))
 
   (setup-graph-referent-test-types)
+
 
   (when verbose
     (format *test-output* "~%~%========================================"))

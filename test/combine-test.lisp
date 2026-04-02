@@ -30,36 +30,16 @@
 (defun combine-test-defs ()
   ;; Thr CAR of each list is the expected result
   (list
-   (list "[person: Sue]<-(agnt)<-[eat]->(manr)->[fast]"
-         "[person: Sue]<-(agnt)<-[eat]->(manr)->[fast]")
-   (list "[PERSON: Sue]←(agnt)←[EAT]- (manr)→[FAST] (obj)→[FOOD]."
-         "[person: Sue]<-(agnt)<-[eat]->(manr)->[fast]"
+   (list "[person: Sue]<-(agnt)<-[eat]->(manr)->[quickly]"
+         "[person: Sue]<-(agnt)<-[eat]->(manr)->[quickly]")
+   (list "[PERSON: Sue]←(agnt)←[EAT]- (manr)→[QUICKLY] (obj)→[FOOD]."
+         "[person: Sue]<-(agnt)<-[eat]->(manr)->[quickly]"
          "[animate]<-(agnt)<-[eat]->(obj)->[food]")))
 
 
 (defun combine-test (&optional verbose)
 
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label person :supertypes (animal))
-     (:label event :supertypes (situation))
-     (:label act :supertypes (event))
-     (:label eat :supertypes (act))
-     (:label food :supertypes (entity physobj))
-     (:label characteristic :supertypes (⊤))
-     (:label manner :supertypes (characteristic))
-     (:label fast :supertypes (manner))))
-
-  (ensure-relation-types-exist
-   '((:label agnt :source-types act :dest-type animate)
-     (:label manr :source-types act :dest-type manner)
-     (:label obj  :source-types act :dest-type entity)))
-
-
+  (load-test-types)
   (check-type-lattice)
 
   (let ((pass t))
@@ -69,7 +49,7 @@
 
 
 ;; (progn
-;;     (setq g1 (pcg "[PERSON: Sue]←(agnt)←[EAT]->(manr)→[FAST]"))
+;;     (setq g1 (pcg "[PERSON: Sue]←(agnt)←[EAT]->(manr)→[QUICKLY]"))
 ;;     (setq g2 (pcg "[ANIMATE]←(agnt)←[EAT]→(obj)→[FOOD]"))
 ;;     (setq result (combine-conceptual-graphs g1 g2))
 ;;     (print-cgraph result))

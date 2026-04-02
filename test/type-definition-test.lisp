@@ -29,7 +29,7 @@
                       (format t "~&>> ERROR in ~A:~%~A~%" test-name e))
                     nil))))
     (when verbose
-      (format t "~&~A: ~:[FAILED ****~;PASSED~]~%" test-name result))
+      (format t "~&~A: ~:[FAILED ****~;PASSED~]~2%" test-name result))
     result))
 
 
@@ -187,26 +187,20 @@
     (format t "~&=== TYPE DEFINITION TEST SUITE ===~%")
     (format t "~&==========================================~%"))
 
+  (load-test-types)
+  (let ((results
+          (mapcar (lambda (def)
+                    (test-td (car def) (cadr def) verbose))
+                  (list (list "Definition String Stored" #'test-definition-string-stored)
+                        (list "No Definition String" #'test-no-definition-string)
+                        (list "Definition Parsing" #'test-definition-parsing)
+                        (list "Definition Caching" #'test-definition-caching)
+                        (list "Expand Generic Concept" #'test-expand-generic-concept)
+                        (list "Expand With Referent" #'test-expand-with-referent)
+                        (list "Expand Preserves Arcs" #'test-expand-preserves-arcs)
+                        (list "No Definition Returns Original" #'test-no-definition-returns-original)))))
+    (every #'identity results)))
 
-  (ensure-concept-types-exist
-   '((:label mobile-entity :supertypes (physobj))
-     (:label animate :supertypes (entity))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label pet :supertypes (animal))
-     (:label person :supertypes (animal))
-     (:label pet-owner :supertypes (person) :definition "[PERSON: *lambda]->(poss)->[PET]")
-     (:label give :supertypes (act) :canonical-graph "[GIVE]- (agnt)→[ANIMATE] (rcpt)→[ANIMATE] (obj)→[ENTITY].")
-     (:label dog :supertypes (animal))))
 
-  (ensure-relation-types-exist
-   '((:label agnt  :source-types act :dest-type animate :desc "agent - links [ACT] to [ANIMATE], where [ANIMATE] is the actor of the [ACT]")
-     (:label obj :source-types act :dest-type entity :desc "object - links an [ACT] to an [ENTITY], which is acted upon")))
-
- (and (test-td "Definition String Stored" #'test-definition-string-stored verbose)
-      (test-td "No Definition String" #'test-no-definition-string verbose)
-      (test-td "Definition Parsing" #'test-definition-parsing verbose)
-      (test-td "Definition Caching" #'test-definition-caching verbose)
-      (test-td "Expand Generic Concept" #'test-expand-generic-concept verbose)
-      (test-td "Expand With Referent" #'test-expand-with-referent verbose)
-      (test-td "Expand Preserves Arcs" #'test-expand-preserves-arcs verbose)
-      (test-td "No Definition Returns Original" #'test-no-definition-returns-original verbose)))
+(defun qq (def)
+  (test-td (car def) (cadr def) t))

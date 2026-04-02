@@ -401,23 +401,7 @@
 (defun formation-rules-test (&optional verbose)
   "Run all atomic formation rule tests"
 
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label dog :supertypes (animal))
-     (:label person :supertypes (animal))
-     (:label event :supertypes (⊤))
-     (:label act :supertypes (event))
-     (:label eat :supertypes (act))
-     (:label food :supertypes (entity physobj))))
-
-  (ensure-relation-types-exist
-   '((:label agnt :source-types act :dest-type animate)
-     (:label init :source-types act :dest-type animate)
-     (:label obj  :source-types act :dest-type entity)))
+  (load-test-types)
 
   (when verbose
     (format t "~&~%==========================================~%")

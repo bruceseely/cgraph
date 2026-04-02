@@ -423,50 +423,14 @@
             (funcall setup-fn)
 
           (print "hi")
-          (let* ((linear2 (without-node-ref (expand-arrows (format-cgraph graph))))
+          (let* ((linear2 (without-node-ref (arrows-to-ascii (format-cgraph graph))))
                  (pass (graph-strings-equal graph-string linear2)))
 
             (values pass graph-string linear2)))))))
 
 
 (defun format-test (&optional verbose)
-
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (top-concept-type))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label stationary-entity :supertypes (entity))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label dog :supertypes (animal))
-     (:label person :supertypes (animal))
-     (:label event :supertypes (⊤))
-     (:label act :supertypes (event))
-     (:label eat :supertypes (act))
-     (:label give :supertypes (act))
-     (:label food :supertypes (entity physobj))
-     (:label cake :supertypes (food))
-     (:label characteristic :supertypes (⊤))
-     (:label manner :supertypes (characteristic))
-     (:label quickly :supertypes (manner))
-     (:label hardness :supertypes (characteristic))
-     (:label hard :supertypes (hardness))
-     (:label place :supertypes (stationary-entity))
-     (:label substance :supertypes (entity))
-     (:label rock :supertypes (substance))
-     (:label attribute :supertypes (characteristic))))
-
-  (ensure-relation-types-exist
-   '((:label agnt :source-types act :dest-type animate)
-     (:label attr :source-types entity :dest-type attribute)
-     ;;(:label betw :source-types (entity entity) :dest-type entity)
-     (:label attr :source-types entity :dest-type attribute)
-     (:label inst :source-types act :dest-type entity)
-     (:label manr :source-types act :dest-type manner)
-     (:label obj  :source-types act :dest-type entity)
-     (:label poss :source-types animate :dest-type entity)
-     (:label rcpt :source-types act :dest-type animate)))
-
+  (load-test-types)
   (when verbose (format t "~%FORMAT-TEST~%"))
   (let ((collect (list))
         (failed (list))

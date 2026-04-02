@@ -38,8 +38,8 @@
 
 (defmethod maximal-join ((graph1 string) (graph2 string))
   "Parse strings and compute maximal join."
-  (let ((g1 (parse-cgraph graph1))
-        (g2 (parse-cgraph graph2)))
+  (let ((g1 (car (parse-cgraph graph1)))
+        (g2 (car (parse-cgraph graph2))))
     (maximal-join g1 g2)))
 
 
@@ -55,12 +55,12 @@
 
 (defmethod maximal-join ((graph1 string) (graph2 graph-node))
   "Parse first string, join with second."
-  (maximal-join (parse-cgraph graph1) graph2))
+  (maximal-join (car (parse-cgraph graph1)) graph2))
 
 
 (defmethod maximal-join ((graph1 graph-node) (graph2 string))
   "Join first with parsed second string."
-  (maximal-join graph1 (parse-cgraph graph2)))
+  (maximal-join graph1 (car (parse-cgraph graph2))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

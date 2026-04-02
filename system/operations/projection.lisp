@@ -37,8 +37,8 @@
 
 (defmethod project ((pattern string) (target string) &key all-solutions)
   "Parse strings and project pattern onto target."
-  (let ((pattern-graph (parse-cgraph pattern))
-        (target-graph (parse-cgraph target)))
+  (let ((pattern-graph (make-cgraph pattern))
+        (target-graph (make-cgraph target)))
     (project pattern-graph target-graph :all-solutions all-solutions)))
 
 
@@ -94,8 +94,12 @@
 
 (defmethod referent-projects-p ((pattern-ref referent) (target-ref referent))
   "Check if pattern referent can project onto target referent.
-   Pattern individual must match target individual exactly."
-  (referents-equal pattern-ref target-ref))
+   Graph referents are matched via projection; others require equality."
+  (let ((pattern-content (content pattern-ref))
+        (target-content (content target-ref)))
+    (if (and (graph-p pattern-content) (graph-p target-content))
+        (not (null (project (head pattern-content) (head target-content))))
+        (referents-equal pattern-ref target-ref))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

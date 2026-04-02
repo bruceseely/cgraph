@@ -34,7 +34,8 @@ Types can be extended. You can define new types with supertype relationships, ca
 Graphs are built from **concepts** (typed nodes with optional referents) and **relations** (typed binary links between concepts). You can create graphs by:
 
 - Parsing CG linear notation: `[CAT: Whiskers]→(agnt)→[EAT]→(obj)→[FOOD]`
-- Constructing programmatically with `make-concept`, `make-relation`, and `linkup`
+- Constructing programmatically with `make-cgraph` to create a GRAPH object
+- Constructing graph nodes with `make-concept`, `make-relation`, and `linkup`
 
 Concepts support named individuals, generic referents, co-reference variables, and nested graph referents. Contexts provide hierarchical grouping for knowledge organization, including negated contexts.
 
@@ -52,6 +53,7 @@ CGraph implements Sowa's core operations:
 ### Visualization
 
 Export concept type hierarchies to Graphviz DOT format for rendering as diagrams.
+View concept-type hierarchy and canonical graphs in a web browser
 
 ## Requirements
 
@@ -79,7 +81,7 @@ Basic usage:
 
 ```lisp
 ;; Parse a conceptual graph from linear notation
-(cg:parse-cgraph "[DOG: Spike]→(agnt)→[EAT]→(obj)→[BONE].")
+(cg:make-cgraph "[DOG: Spike]→(agnt)→[EAT]→(obj)→[BONE].")
 
 ;; Look up a type in the hierarchy
 (cg:get-concept-type 'cat)
@@ -96,7 +98,9 @@ Basic usage:
 CGraph includes Emacs support in the `emacs/` directory:
 
 - **cg-mode** — Major mode with syntax highlighting, indentation, and bracket matching for CG notation
-- **Keybindings** — `C-c t` inserts ⊤, `C-c b` inserts ⊥, arrow abbreviations for CG notation
+- **Keybindings** — `C-c t` inserts ⊤, `C-c b` inserts ⊥, top and bottom type abbreviations for CG notation
+  "->" followed by "[", "(", or space is replaced by "→"
+  "<-" followed by "[", "(", or space is replaced by "←"
 - **SLIME bridge** — Evaluate CG expressions directly from Emacs buffers
 
 ## Project Structure
@@ -121,4 +125,4 @@ test/           Test suite (run with test-all)
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT License. See [LICENSE](LICENSE) file for details.

@@ -23,15 +23,9 @@
 (defmethod nodes-equal ((anything t) (rel relation)) nil)
 
 (defmethod nodes-equal ((rel1 relation) (rel2 relation))
-  (or (nodes-eq rel1 rel2)
-      (and
-       (equal (relation-type rel1) (relation-type rel2))
-       (equal (num-arcs rel1) (num-arcs rel1))
-       (every #'identity
-              (mapcar #'(lambda (con1 con2)
-                          (equal (concept-type con1) (concept-type con2)))
-                      (arcs rel1)
-                      (arcs rel2))))))
+  (relatins-equal rel1 rel2))
+
+
 
 
 ;; (defmethod other-relation-concepts ((rel relation) (con concept))
@@ -288,14 +282,13 @@
                  (let* ((match-list (mapcar (lambda (type-term token)
                                               (typep token type-term))
                                             types sublist))
-                        (match (every #'identity match-list)))
+                        (match-p (every #'identity match-list)))
 
-                   (setf length (when match (length match-list)))
-                   #+nil(when match
+                   ;; (setf length (when match-p (length match-list)))
+                   #+nil(when match-p
                      (format t "~&match-list: ~s~%"  match-list)
                      (format t "~&>> ~a matched ~a~%"  (subseq sublist 0 length) types))
-                   match)))
-
+                   match-p)))
 
           (cond
             ((match '(concept arc relation m-arc arc number))
@@ -409,11 +402,11 @@
                                     (manr)->[fast],
                        (attr)<-[old].")
 
-(read-cgraph-tokens "[dog]<-(agnt)<-[eat]->(obj)->[cake].")
-(read-cgraph-tokens "[dog]<-(agnt)<-[eat]- (obj)->[cake] (manr)->[fast].")
-(read-cgraph-tokens "[dog]<-(agnt)<-[eat]- (obj)->[cake]->(attr)->[color], (manr)->[fast].")
-(read-cgraph-tokens "[dog]<-(agnt)<-[eat]- (obj)->[cake]- (attr)->[color:red] (attr)->[old], (manr)->[fast].")
-(read-cgraph-tokens "[dog]- (agnt)<-[eat]- (obj)->[cake]- (attr)<-[color:white] (attr)<-[old],(manr)->[fast],(attr)<-[old].")
+(cgraph-tokens "[dog]<-(agnt)<-[eat]->(obj)->[cake].")
+(cgraph-tokens "[dog]<-(agnt)<-[eat]- (obj)->[cake] (manr)->[fast].")
+(cgraph-tokens "[dog]<-(agnt)<-[eat]- (obj)->[cake]->(attr)->[color], (manr)->[fast].")
+(cgraph-tokens "[dog]<-(agnt)<-[eat]- (obj)->[cake]- (attr)->[color:red] (attr)->[old], (manr)->[fast].")
+(cgraph-tokens "[dog]- (agnt)<-[eat]- (obj)->[cake]- (attr)<-[color:white] (attr)<-[old],(manr)->[fast],(attr)<-[old].")
 |#
 
 
@@ -679,6 +672,9 @@
                    (push node nodes)))
     (reverse nodes)))
 
+(defmethod collect-nodes ((graph cons))
+  (collect-nodes (car graph)))
+
 (defmethod collect-relations ((start-node graph-node))
   (remove-if-not (lambda (node)
                    (typep node 'relation))
@@ -872,6 +868,7 @@
          (times (count #\[ text))
          (open-marker -1)
          (close-marker -1)
+         (period (char-equal (last-char text) #\.))
          (result ""))
     (dotimes (i times)
       (setf open-marker (1+ (position #\[ text :start (1+ open-marker))))
@@ -910,7 +907,10 @@
 
 
             (setf result (strcat result concept-token))
-            (setq start concept-end)))))
+            (setq start concept-end))))
+      (when (and (not (char-equal (last-char result) #\.)) period)
+        (setq result (strcat result #\.)))
+      )
     result))
 
 
@@ -941,10 +941,14 @@
     result))
 
 (defun canonicalize-graph-string (string)
-  (fix-relation-strings
-   (fix-concept-strings
-    (compress-whitespace
-     (encode-arrows string)))))
+  (let ((text
+          (fix-relation-strings
+           (fix-concept-strings
+            (compress-whitespace
+             (arrows-to-unicode string))))))
+    (cond ((char-equal (last-char text) #\.)
+           text)
+          (t (strcat text #\.)))))
 
 
 (defmethod graph-strings-equal ((g1 string) (g2 string))

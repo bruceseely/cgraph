@@ -8,6 +8,10 @@
   (find char '(#\space #\tab #\return #\newline) :test #'char=))
 
 
+(define-condition token-parse-error (error)
+  ((context :initarg :context :reader context)))
+
+
 ;; (defmethod compress-whitespace ((text string))
 ;;   (let ((output (list))
 ;;         (in-whitespace nil))
@@ -211,8 +215,6 @@
           (return))))
 
     (let ((graph (coerce (reverse chars-read) 'string)))
-      ;;(format t "~&graph: ~s" graph)
-
       (values
        graph
        peek-char))))
@@ -414,11 +416,7 @@
            (let ((value (read stream nil nil t)))
              (list :id (or value 't))))
           ((char-equal char #\])
-           (list :id 't))
-          )))
-
-
-
+           (list :id 't)))))
 
 
 (defun measure-reader (stream initial-char)
@@ -484,7 +482,7 @@
 
 
 (defun referent-reader (stream &optional initial-char)
-  (format t "~% ===> (referent-reader ~a ~s)~%" stream initial-char)
+  ;;(format t "~% ===> (referent-reader ~a ~s)~%" stream initial-char)
   initial-char
   (let* ((terms (read-features stream))
          (variable (getf terms :variable)))
@@ -495,7 +493,6 @@
 (defmethod parse-referent ((referent string))
   (with-input-from-string (stream referent)
     (referent-reader stream)))
-
 
 
 ;;; initial-char is what was read that caused concept-reader to be called
@@ -515,15 +512,16 @@
       ;; Check for anonymous context: [[graph]] is shorthand for [PROPOSITION: [graph]]
       ;; This also handles ~[[graph]] when *negated-concept* is set by negation-reader
       (let ((peek-next (peek-char nil stream nil nil)))
+
         (cond ((and peek-next (char-equal peek-next #\[))
                ;; Anonymous context — implicit PROPOSITION with graph referent
                (let* ((*in-graph-referent* t)
                       (*concepts-in-graph* (list))
                       (*context* (make-context *context* :negated *negated-concept*))
                       (*negated-concept* nil) ; reset so inner concepts aren't marked negated
-                      (graph-tokens (read-cg-tokens stream))
+                      (graph-tokens (read-cgraph-tokens stream))
                       (linked-tokens (linkup graph-tokens))
-                      (graph (make-graph-from-nodes linked-tokens))
+                      (graph (make-cgraph linked-tokens))
                       (ctype (get-concept-type 'proposition))
                       (referent (make-referent graph concept)))
                  (setf concept (make-concept ctype referent))))
@@ -560,11 +558,12 @@
                                         (*concepts-in-graph* (list))
                                         (*context* (make-context *context* :negated *negated-concept*))
                                         (*negated-concept* nil) ; reset so inner concepts aren't marked negated
-                                        (graph-tokens (read-cg-tokens stream))
+                                        (graph-tokens (read-cgraph-tokens stream))
                                         (linked-tokens (linkup graph-tokens))
-                                        (graph (make-graph-from-nodes linked-tokens))
+                                        (graph (make-cgraph linked-tokens))
                                         (ctype (get-concept-type type-label))
-                                        (referent (make-referent graph concept)))
+                                        (referent (make-referent graph concept))
+                                        )
                                    (setf concept (make-concept ctype referent))))
                                 (t
                                  ;; read features from the referent field
@@ -588,7 +587,15 @@
                                             ;; Use or to allow fallthrough: if variable exists, look it up;
                                             ;; if not found (first occurrence), fall through to create new concept
                                             (t
-                                             (or (when variable (variable-node variable))
+                                             (or (when variable
+                                                   (let ((existing (variable-node variable)))
+                                                     (when existing
+                                                       (when (and (context existing)
+                                                                  (not (eq (context existing) *context*)))
+                                                         (error "Variable *~a is defined in a different context. ~
+Use ?~a for cross-context co-reference instead."
+                                                                variable variable))
+                                                       existing)))
                                                  (get-concept ctype props :id id)
                                                  (let ((individual (get-individual ctype :id id :properties props)))
                                                    (unless individual
@@ -600,20 +607,29 @@
                                                    (when individual
                                                      (let ((referent (make-referent individual)))
                                                        (make-concept ctype referent)))))))))
-                                   ;;(format t "~&target-concept: ~s~%"  target-concept)
+
+
                                    (setf concept target-concept)
                                    (when variable
                                      (set-variable concept variable))
                                    ;; Handle co-reference labels
+                                   ;; ?x is a bound reference if *x or a prior ?x already defines
+                                   ;; the label. Check coref-labels first (covers legacy ?x/?x style
+                                   ;; and *x when registered there), then fall back to variable-node
+                                   ;; (covers standard *x outer / ?x inner usage).
                                    (when coref
-                                     (let ((defining-concept (coref-label-node coref)))
+                                     (let ((defining-concept (or (coref-label-node coref)
+                                                                 (variable-node coref))))
                                        (if defining-concept
                                            ;; Bound occurrence - link to defining concept
-                                           (link-coreference concept defining-concept)
+                                           (progn
+                                             (link-coreference concept defining-concept)
+                                             (setf (coref-bound-label concept) coref))
                                            ;; Defining occurrence - register this concept
-                                           (set-coref-label concept coref)))
-                                     ;; Also register as variable for query binding extraction
-                                     (set-variable concept coref))))))
+                                           (progn
+                                             (set-coref-label concept coref)
+                                             ;; register as variable for query binding extraction
+                                             (set-variable concept coref)))))))))
 
                          ;; skip the node-ref, if present
                          ((skip-char stream #\+)
@@ -626,7 +642,6 @@
       (when (and concept *negated-concept*)
         (setf (negated concept) t))
 
-      ;;(format t "~&  === leaving concept-reader, returning concept >~s< ~%" concept)
       (when concept
         (values concept 'concept)))))
 
@@ -683,7 +698,7 @@
   (declare (ignore stream char))
   #\space)
 
-(defun period-reader (stream char)
+(defun dot-reader (stream char)
   (declare (ignore stream char))
   nil
   #\.)
@@ -704,9 +719,7 @@
 
 (defun concept-ender (stream char)
   (declare (ignore stream char))
-  ;;(format t "~& --- concept-ender" )
-  ;;(throw 'done nil)
-  )
+  char)
 
 (defun cleanup-reader (stream char)
   (declare (ignore stream char))
@@ -714,14 +727,14 @@
   )
 
 
-
 (defparameter *cg-readtable-mods* (list (list #\( #'relation-reader)
                                         (list #\[ #'concept-reader)
+                                        (list #\] #'concept-ender)
                                         (list #\~ #'negation-reader)
                                         ;;(list #\{ #'set-reader)
                                         ;;(list #\@ #'quantity-reader)
-                                        (list #\) #'cleanup-reader)
-                                        (list #\] #'cleanup-reader)
+                                        ;;(list #\) #'cleanup-reader)
+                                        ;;(list #\] #'cleanup-reader)
                                         ;;(list #\} #'cleanup-reader)
 
                                         (list #\, #'arc-ender)
@@ -730,7 +743,7 @@
                                         (list left-arrow-char  #'left-arc-reader)
                                         (list right-arrow-char #'right-arc-reader)
                                         (list #\: #'colon-reader)
-                                        (list #\. #'period-reader)))
+                                        (list #\. #'dot-reader)))
 
 (defun cg-readtable ()
   (adjust-readtable *cg-readtable-mods* (copy-readtable)))
@@ -744,13 +757,13 @@
 ;;       (read stream nil nil nil)))
 
 
-(defmethod read-cg-tokens (stream)
+(defmethod read-cgraph-tokens (stream)
   (let ((tokens (list))
         (cg-readtable-mods (list (list #\( #'relation-reader)
                                  (list #\[ #'concept-reader)
                                  (list #\~ #'negation-reader)
                                  (list #\) #'cleanup-reader)
-                                 (list #\] #'cleanup-reader)
+                                 (list #\] #'concept-ender)
                                  (list #\< #'left-arc-reader)
                                  (list #\- #'arc-reader)
                                  (list #\, #'arc-ender)
@@ -759,27 +772,34 @@
                                  (list left-arrow-char  #'left-arc-reader)
                                  (list right-arrow-char #'right-arc-reader)
                                  (list #\: #'colon-reader)
-                                 (list #\. #'period-reader))))
+                                 (list #\. #'dot-reader))))
 
     (with-readtable-mods cg-readtable-mods
       (block nil
-
         (loop
-          ;; gets an eof read error
-          ;;(format t "~&(peek-char stream): ~s" (peek-char nil stream nil nil))
-          (let ((token (read stream nil nil nil)))
+          ;;(format t "~&--- peeking: ~s" (peek-char nil stream nil nil))
+          (let ((token (read stream nil :eol)))
             ;;(format t "~&token: ~s~%"  token)
-            ;;(setq *token token)
-            (cond (token
-                   (when (or (not (characterp token)) (not (char-equal token #\.)))
-                     (push token tokens))
-                   (when (concept-p token)
-                     ;;(describe token)
-                     (pushnew token *concepts-in-graph* :test #'nodes-eq)))
-                  (t (return)))))
-        ))
-    (reverse tokens)))
+            (cond ((null token)
+                   (let ((*always-format-nodes* t))
+                     (error 'token-parse-error :context (format nil "~{~a~}" (reverse tokens)))))
 
+                  ((eq token :eol)
+                   (return))
+
+                  ((and (typep token 'character) (char-equal token #\.))
+                   (return))
+
+                  ;; for referent containing a graph
+                  ((and (typep token 'character) (char-equal token #\]))
+                   (return))
+
+                  (token
+                   (push token tokens)
+                   (when (concept-p token)
+                     (pushnew token *concepts-in-graph* :test #'nodes-eq))))))))
+
+    (reverse tokens)))
 
 
 ;;; (frob-substrings s (list right-arrow-string) "->")
@@ -794,51 +814,43 @@
       string)))
 
 
-
-
-(defun read-cgraph-tokens (string)
+(defun cgraph-tokens (string)
   (initialize-variables)
   (initialize-coreferences)
-  (initialize-context *context*)
+  ;;(initialize-context *context*)
   ;; remove the reference number shown in debug mode
-  (setf string (remove-ref-number string))
-  (let ((*concepts-in-graph* (list)))
+  (setf string (arrows-to-ascii (remove-ref-number string)))
+  (let* ((*concepts-in-graph* (list))
+         (stream (make-string-input-stream string))
+         (tokens (read-cgraph-tokens stream))
+         (linked-tokens (linkup tokens)))
+    linked-tokens))
 
-    ;; replace arrow-characters with strings
-    (setf string (expand-arrows string))
-
-    ;;(with-input-from-string (stream string)
-    (let ((stream (make-string-input-stream string)))
-      (let* ((tokens (handler-case (read-cg-tokens stream)
-                       (relation-type-lookup-failed (c)
-                         (error "PARSE-CGRAPH cannot find relation-type '~a' while parsing '~a'" (text c)  string))
-                       (concept-type-lookup-failed (c)
-                         (error "PARSE-CGRAPH cannot find concept-type '~a' while parsing '~a'" (text c)  string))
-                       (cached-concept-lookup-failed (c)
-                         (error "PARSE-CGRAPH cannot lookup concept [~a] while parsing~%\"~a\"~%reason: ~a"
-                                (ctype c) string (msg c)))
-                       ))
-             (linked-tokens (linkup tokens))
-             ;;(token-path (path linked-tokens))
-             )
-        linked-tokens))))
 
 (defun parse-cgraph (string)
-  (let ((tokens (read-cgraph-tokens string)))
-    (make-graph-from-nodes tokens)))
+  (let (tokens )
+    (handler-case (setq tokens (cgraph-tokens string))
+      (concept-type-lookup-failed (condition-object)
+        (let ((type (type condition-object)))
+          (error "Unknown concept-type '~a' encountered while while parsing: ~a" type string )))
+      (token-parse-error (condition-object)
+        (let ((context (context condition-object)))
+          (error "Unable to parse token after: ~a~% while parsing: ~a" context string ))))
+    (remove-if #'arc-p tokens)))
 
 
 (defmethod pcg ((graph string))
-  (parse-cgraph (expand-arrows graph)))
+  (parse-cgraph (arrows-to-ascii graph)))
 
 
 ;;; (defgraf foo "[person: Pat]<-(agnt)<-[eat]->(obj)->[food]" )
 ;;; (pcg foo)
+
 (defmacro defgraf (name graph-string)
   `(progn
      (defvar ,name)
      (with-cg-readtable
          (progn
            (setf ,name (pcg ,graph-string))
-           (add-graph ,name)))
+           (add-cgraph ,name)))
      t))

@@ -106,27 +106,15 @@
 
 
 (defun type-test (&optional verbose)
+  (when verbose (format t "~&TYPE-TEST~%"))
   (initialize-cgraph)
 
-  (ensure-concept-types-exist
-   '((:label entity :supertypes (⊤))
-     (:label physobj :supertypes (entity))
-     (:label animate :supertypes (entity))
-     (:label mobile-entity :supertypes (physobj))
-     (:label animal :supertypes (animate mobile-entity))
-     (:label dog :supertypes (animal))
-     (:label cat :supertypes (animal))
-     (:label monkey :supertypes (animal))
-     (:label person :supertypes (animal))
-     (:label girl :supertypes (person))
-     (:label tool :supertypes (entity))
-     (:label machine :supertypes (tool))
-     (:label robot :supertypes (animate machine mobile-entity))
-     (:label angel :supertypes (animate mobile-entity))))
+  (load-test-types)
+  (let ((result (not (null
+                     (and
+                      (type-test1)
+                      (type-test2)
+                      (type-test3))))))
 
-  (when verbose
-    (format t "~&TYPE-TEST~%"))
-  (and
-   (type-test1)
-   (type-test2)
-   (type-test3)))
+    (when verbose (format t "~&TYPE-TEST ~:[failed~;passed~]~%" result))
+    result))

@@ -808,7 +808,7 @@
 (setq g2 (parse-cgraph s2))
 (format-cgraph g2)
 (find-concept (get-concept-type 'give) (pcg s2) )
-(fcg *)
+(pcg *)
 |#
 
 

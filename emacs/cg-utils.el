@@ -22,7 +22,8 @@ This function requires SLIME to be running and connected to a Lisp process."
         ;; You might want to parse the value string depending on your needs
         (if (string-empty-p output)
             value
-            (list :output output :value value))))))
+            (list :output output :value value)))))
+  )
 
 ;;; Alternative version that handles structured data better
 (defun eval-in-cl-sexp (form)
@@ -60,7 +61,9 @@ Returns the result or signals an error if timeout occurs."
   (let ((timeout (or timeout 10)))  ; Default 10 second timeout
     (slime-eval-with-transcript
      `(swank:eval-and-grab-output ,form-string)
-     timeout)))
+     timeout))
+
+  )
 
 
 ;;;  Here's also a more robust version that handles complex data exchange:
@@ -191,6 +194,38 @@ Handles multiple return values, output, and errors."
 
 
 
+;;; Detect whether point is inside [...] (concept) or (...) (relation).
+(defun cg--bracket-context-at-point ()
+  "Return \"concept\" if point is inside [...], \"relation\" if inside (...), else nil."
+  (save-excursion
+    (skip-syntax-backward "w_")   ; move to start of word (skip-chars \"\\w\" is literal, not regex)
+    (skip-chars-backward " \t")
+    (let ((ch (char-before)))
+      (cond ((eq ch ?\[) "concept")
+            ((eq ch ?\() "relation")
+            (t nil)))))
+
+;;; Look up the symbol at point in the CG type catalogs and show info in minibuffer.
+(defun cg-describe-type-at-point ()
+  "Display concept-type or relation-type information for the symbol at point.
+Uses bracket context ([...] vs (...)) to disambiguate when both a concept type
+and a relation type share the same name."
+  (interactive)
+  (unless (and (fboundp 'slime-connected-p) (slime-connected-p))
+    (user-error "SLIME is not connected"))
+  (let* ((name (thing-at-point 'word t))
+         (hint (cg--bracket-context-at-point)))
+    (unless name
+      (user-error "No symbol at point"))
+    (let ((info (condition-case err
+                    (slime-eval `(cg::cg-type-info-string ,name ,hint))
+                  (error (message "CG lookup error: %s" err) nil))))
+      (if info
+          (message "%s" info)
+        (message "No CG type found: %s" name)))))
+
+(global-set-key (kbd "C-c ?") 'cg-describe-type-at-point)
+
 ;;; Unicode symbol insertion for CG type hierarchy
 (global-set-key (kbd "C-c t") (lambda () (interactive) (insert "⊤")))
 (global-set-key (kbd "C-c b") (lambda () (interactive) (insert "⊥")))
@@ -227,4 +262,111 @@ Handles multiple return values, output, and errors."
 ;;;;;
 ;;;;; ;; Bind to > key
 ;;;;;   (define-key lisp-mode-map (kbd ">") 'maybe-insert-arrow)
-⊤
+
+
+
+
+;;; CGraph customization options
+;;; To add a new option: add a defcustom below and a corresponding entry in cgraph--options.
+
+(defgroup cgraph nil
+  "Options for the CGraph conceptual graphs system."
+  :group 'tools)
+
+
+(defun cgraph--push-to-cl (cl-var value)
+  "Set CL-VAR to VALUE in the running Common Lisp image, if connected."
+  (when (and (fboundp 'slime-connected-p) (slime-connected-p))
+    (slime-eval `(cl:setf ,cl-var ,value))))
+
+(defun cgraph--sync-docstring (emacs-sym cl-sym)
+  "Fetch the CL docstring for CL-SYM and prepend it to EMACS-SYM's documentation."
+  (let* ((cl-doc (slime-eval `(cl:documentation ',cl-sym 'cl:variable)))
+         (mirrors (format "Mirrors %s in Common Lisp." cl-sym))
+         (full-doc (if (and cl-doc (not (string-empty-p cl-doc)))
+                       (concat cl-doc "\n\n" mirrors)
+                     mirrors)))
+    (put emacs-sym 'variable-documentation full-doc)))
+
+(defun cgraph-read-options-from-cl ()
+  "Read current CL option values into Emacs defcustom vars and sync docstrings.
+CL (initializations.lisp) is the source of truth; this reflects its state in Emacs."
+  (interactive)
+  (dolist (entry cgraph--options)
+    (let ((cl-val (slime-eval `(cl:if ,(cdr entry) t nil))))
+      ;; Use set-default to update without triggering :set (which would push back to CL)
+      (set-default (car entry) cl-val))
+    (cgraph--sync-docstring (car entry) (cdr entry))))
+
+(defun cgraph-sync-options-to-cl ()
+  "Push all Emacs cgraph option values to CL, overriding initializations.lisp."
+  (interactive)
+  (dolist (entry cgraph--options)
+    (cgraph--push-to-cl (cdr entry) (symbol-value (car entry)))))
+
+
+;;; Alist of (emacs-sym . cl-sym) — drives sync and docstring updates.
+(defconst cgraph--options
+  '((cgraph-always-format-nodes             . conceptual-graphs::*always-format-nodes*)
+    (cgraph-always-show-node-ref            . conceptual-graphs::*always-show-node-ref*)
+    (cgraph-allow-dynamic-individual-creation . conceptual-graphs::*allow-dynamic-individual-creation*)
+    (cgraph-always-print-ascii-arrows . conceptual-graphs::*always-print-ascii-arrows*)
+    )
+  "Mapping from cgraph Emacs option symbols to their Common Lisp counterparts.")
+
+(defcustom cgraph-always-format-nodes nil
+  "Mirrors conceptual-graphs::*always-format-nodes* in Common Lisp."
+  :type 'boolean
+  :group 'cgraph
+  :initialize 'custom-initialize-default
+  :set (lambda (sym val)
+         (set-default sym val)
+         (cgraph--push-to-cl 'conceptual-graphs::*always-format-nodes* val)))
+
+(defcustom cgraph-always-show-node-ref nil
+  "Mirrors conceptual-graphs::*always-show-node-ref* in Common Lisp."
+  :type 'boolean
+  :group 'cgraph
+  :initialize 'custom-initialize-default
+  :set (lambda (sym val)
+         (set-default sym val)
+         (cgraph--push-to-cl 'conceptual-graphs::*always-show-node-ref* val)))
+
+(defcustom cgraph-allow-dynamic-individual-creation nil
+  "Mirrors conceptual-graphs::*allow-dynamic-individual-creation* in Common Lisp."
+  :type 'boolean
+  :group 'cgraph
+  :initialize 'custom-initialize-default
+  :set (lambda (sym val)
+         (set-default sym val)
+         (cgraph--push-to-cl 'conceptual-graphs::*allow-dynamic-individual-creation* val)))
+
+(defcustom cgraph-always-print-ascii-arrows nil
+  "Mirrors conceptual-graphs::*always-print-ascii-arrows* in Common Lisp."
+  :type 'boolean
+  :group 'cgraph
+  :initialize 'custom-initialize-default
+  :set (lambda (sym val)
+         (set-default sym val)
+         (cgraph--push-to-cl 'conceptual-graphs::*always-print-ascii-arrows* val)))
+
+
+
+(add-hook 'slime-connected-hook #'cgraph-read-options-from-cl)
+
+;;(filesets-init)
+;;(filesets-reset-fileset)
+;; (setq filesets-data '(("CGraph Definition"
+;;                        (:file "~/repo/cgraph/cgraph.asd" ))
+;;                       ("CGraph Types"
+;;                        (:pattern "~/.cgraph/types/"     "^.+\\.lisp$"))
+;;                       ("CGraph Code"
+;;                        (:tree "~/repo/cgraph/system/" "^.+\\.lisp$"))))
+;; (setq filesets-cache-save-often-flag t)
+;; (setq filesets-sort-case-sensitive-flag nil)
+;; (setq filesets-sort-menu-flag nil)
+;; (setq filesets-menu-path nil)
+;; (setq filesets-menu-before "Edit")
+;; (setq filesets-menu-name "Filesets")
+;; ;;(setq filesets-menu-cache-file "~/.emacs.d/filesets-cache.el")
+;; (setq filesets-menu-cache-file "~/.cgraph/filesets-cache.el")

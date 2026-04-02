@@ -68,6 +68,8 @@
 (setf left-arrow-arc (left-arrow-arc))
 (setf right-arrow-arc (right-arrow-arc))
 
+(defmethod arc-p ((thing arc)) t)
+(defmethod arc-p ((thing t)) nil)
 
 
 (defmethod concept-inarc-p ((con concept) (rel relation))

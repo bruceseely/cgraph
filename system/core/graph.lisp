@@ -15,8 +15,8 @@
          :accessor head
          :documentation "An arbitrary node in the graph for traversal entry")
    ;; concepts referencing this graph as a referent
-   (concepts :initform (list)
-             :accessor concepts)))
+   (holders :initform (list)
+            :accessor holders)))
 
 
 (defmethod nodes ((graph graph))
@@ -24,12 +24,26 @@
   (when (head graph)
     (collect-nodes (head graph))))
 
+(defmethod nodes ((graph list))
+  graph)
+
+(defmethod nodes ((thing (eql nil))) nil)
+
+
+(defmethod head ((node-list list))
+  (assert (every #'graph-node-p node-list))
+  (cond ((concept-p (car node-list))
+         (car node-list))
+        ((concept-p (cadr node-list))
+         (cadr node-list))))
 
 (defmethod initialize-instance :after ((graph graph) &key head &allow-other-keys)
-  "Set back-pointer when graph is created with a head, and add graph to context"
-  (when head
+  "Set back-pointer when graph is created with a head"
+  (when (and head (find head (collect-nodes head)))
     (setf (graph head) graph))
-  (add-graph graph *context*))
+  ;; don't know which context to add to here
+  ;;(add-cgraph graph *context*)
+  )
 
 
 (defmethod (setf head) :after (new-head (graph graph))
@@ -38,13 +52,10 @@
     (setf (graph new-head) graph)))
 
 
-(defmethod nodes ((thing (eql nil))) nil)
-
-
 (defmethod print-object ((object graph) stream)
   (cond (*always-format-nodes*
          (let ((text (format-cgraph object)))
-           (princ text *standard-output*)))
+           (princ text stream)))
         (t
          (print-unreadable-object (object stream :type t :identity nil)
            (format stream "~a" (flatten-cgraph (format-cgraph object)))))))
@@ -52,6 +63,11 @@
 
 (defmethod format-graph ((graph graph))
   (format-cgraph (head graph)))
+
+
+
+
+
 
 (defmethod graph-head ((graph graph))
   "Return the most connected concept in the graph, preferring the stored head if tied"
@@ -68,6 +84,13 @@
            entry-node)
           (t (car sorted)))))
 
+(defmethod graph-head ((graph list))
+  (assert (every (lambda (x) (typep x 'graph-node)) graph))
+  (car graph))
+
+
+(defmethod graph-head ((node graph-node))
+  (graph-head (make-cgraph node)))
 
 ;; (defmethod head-node ((node graph-node))
 ;;   (let ((head-len 0)
@@ -82,8 +105,8 @@
 
 
 (defmethod format-object ((object graph) &rest keys &key &allow-other-keys)
-  (format-graph object))
-
+  ;; Use cgraph-text (no trailing period) — the period belongs only at the outermost level
+  (cgraph-text (head object)))
 
 (defmethod graphs-equal ((graph1 graph) (graph2 graph) &optional debug)
   "Compare two graphs for equality by comparing their sorted node representations"
@@ -95,13 +118,29 @@
     (equalp keys1 keys2)))
 
 
+(defgeneric make-cgraph (graph &optional context))
+
 ;; Utility method to create a graph from a node or list of nodes
-(defun make-graph-from-nodes (node-or-list)
+
+(defmethod make-cgraph ((node-list list) &optional (context *context*))
   "Create a graph with the given node as head (or first node if a list)"
-  (let ((head-node (if (listp node-or-list)
-                       (car node-or-list)
-                       node-or-list)))
-    (make-instance 'graph :head head-node)))
+  (let* ((head-node (car node-list))
+         (graph (make-instance 'graph :head head-node)))
+    (add-cgraph graph context)
+    graph))
+
+(defmethod make-cgraph ((node graph-node) &optional (context *context*))
+  "Create a graph with the given node as head (or first node if a list)"
+  (make-cgraph (list node) context))
+
+(defmethod make-cgraph ((text string) &optional (context *context*))
+  (make-cgraph (car (parse-cgraph text)) context))
+
+(defmethod make-cgraph ((graph graph) &optional (context *context*))
+  (add-cgraph graph context)
+  graph)
+
+
 
 
 ;; Type predicate for graphs
@@ -124,7 +163,7 @@
   (let ((referent (make-instance 'referent :content graph)))
     ;; Establish bidirectional link: concept uses this graph as referent
     (when concept
-      (pushnew concept (concepts graph) :test #'eq))
+      (pushnew concept (holders graph) :test #'eq))
     referent))
 
 
@@ -134,14 +173,16 @@
   "Create a graph referent from a list of graph nodes"
   (when (and node-list
              (every (lambda (node) (typep node 'graph-node)) node-list))
-    (let ((graph (make-graph-from-nodes node-list)))
+    (let ((graph (make-cgraph node-list)))
       (make-referent graph concept))))
 
 ;; Handle case where parse-cgraph returns a single node (the head)
 (defmethod make-referent ((node graph-node) &optional concept)
   "Create a graph referent from a graph node"
-  (let ((graph (make-graph-from-nodes node)))
+  (let ((graph (make-cgraph node)))
     (make-referent graph concept)))
+
+
 
 
 
@@ -154,6 +195,12 @@
   "Return a list of all concepts in the graph"
   (remove-if-not (lambda (node) (typep node 'concept))
                  (nodes graph)))
+
+
+(defmethod graph-concepts ((graph list))
+  "Return a list of all concepts in the graph"
+  (remove-if-not #'concept-p graph))
+
 
 ;; Extract relations from the graph
 (defmethod graph-relations ((graph graph))
@@ -187,6 +234,14 @@
   (let ((head (graph-head graph)))
     (when head
       (properties head))))
+
+(defmethod properties ((graph list))
+  "Extract properties from the graph structure"
+  (let ((head (graph-head graph)))
+    (when head
+      (properties head))))
+
+
 
 ;; Concept type delegation - if there's a single head concept, delegate to its type
 (defmethod concept-type ((graph graph))
@@ -337,24 +392,27 @@
 ;; Register a concept as using this graph
 (defmethod register-concept ((graph graph) (concept concept))
   "Register that a concept uses this graph as its referent"
-  (pushnew concept (concepts graph) :test #'eq))
+  (pushnew concept (holders graph) :test #'eq))
 
 ;; Unregister a concept from using this graph
 (defmethod unregister-concept ((graph graph) (concept concept))
   "Unregister a concept from using this graph as its referent"
-  (setf (concepts graph) (remove concept (concepts graph) :test #'eq)))
+  (setf (holders graph) (remove concept (holders graph) :test #'eq)))
+
+
+
 
 ;; Check if a concept is registered with this graph
 (defmethod concept-registered-p ((graph graph) (concept concept))
   "Check if a concept is registered as using this graph"
-  (member concept (concepts graph) :test #'eq))
+  (member concept (holders graph) :test #'eq))
 
 ;; Get all concepts using this graph as a referent
 (defmethod referencing-concepts ((graph graph))
   "Return a list of all concepts that use this graph as their referent"
-  (concepts graph))
+  (holders graph))
 
 ;; Count how many concepts use this graph
 (defmethod reference-count ((graph graph))
   "Return the number of concepts using this graph as a referent"
-  (length (concepts graph)))
+  (length (holders graph)))

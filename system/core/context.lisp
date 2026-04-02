@@ -11,6 +11,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+
 ;;; NOTE *context* is declared in definitions.lisp
 
 (defclass context ()
@@ -38,7 +39,6 @@
    (negated :initform nil
             :initarg :negated
             :accessor negated)))
-
 
 
 (defmethod make-context (&optional (parent nil) &key negated)
@@ -154,20 +154,6 @@
 
 
 
-
-;; (defmethod retrieve-concept (concept-type (individual individual) &key (context *context*) &allow-other-keys)
-;;   (let ((concept-cache (all-concepts context)))
-;;     (describe concept-cache)
-;;     (cond ((null context)
-;;            (error 'cached-concept-lookup-failed :ctype concept-type :msg "cannot find context"))
-;;           ((null concept-cache)
-;;            (error 'cached-concept-lookup-failed :ctype concept-type :msg "cannot find concept-cache")))
-;;     (let* ((ctype (get-concept-type concept-type))
-;;            (id (id individual)))
-;;       (retrieve-concept-by-id id context))))
-
-
-
 (defmethod remove-concept ((concept concept) &optional (context *context*))
   (decache-concept concept))
 
@@ -179,12 +165,6 @@
       (remove-concept concept context))))
 
 
-
-
-
-
-
-
 (defun graph-node-key (node)
   (string-trim " "
                (cond ((eq (type-of node) 'concept)
@@ -192,36 +172,57 @@
                      ((eq (type-of node) 'relation)
                       (format nil "relation-~a" (node-type node))))))
 
-
-(defmethod graph-present-p ((graph-list list) &optional (context *context*))
-  (let* ((sorted-graph (sort (copy-list graph-list) #'alpha-lessp :key #'graph-node-key))
-         (found (find (mapcar #'graph-node-key sorted-graph) (graphs context)
+(defmethod graph-present-p ((graph graph) &optional (context *context*))
+  (let* ((graph-nodes (sort (nodes graph) #'alpha-lessp :key #'graph-node-key))
+         (graph-node-keys (mapcar #'graph-node-key graph-nodes))
+         (sorted-context-graphs
+           (mapcar (lambda (graph)
+                     (sort (nodes graph) #'alpha-lessp :key #'graph-node-key))
+                   (graphs context)))
+         (found (find graph-node-keys sorted-context-graphs
                       :key (lambda (list) (mapcar #'graph-node-key list))
                       :test #'equalp)))
     (not (null found))))
 
 (defmethod graph-present-p ((concept concept) &optional (context *context*))
-  (graph-present-p (collect-nodes concept) context))
+  (let ((graph (make-graph concept)))
+    (when graph
+      (graph-present-p graph context))))
 
-(defmethod graph-present-p ((graph string) &optional (context *context*))
-  (graph-present-p (pcg graph) context))
+(defmethod graph-present-p ((graph-string string) &optional (context *context*))
+  (let ((graph (make-graph graph-string)))
+    (when graph
+      (graph-present-p graph context))))
 
 
-(defmethod add-graph ((graph-list list) &optional (context *context*))
-  (let* ((sorted-graph-list (sort (copy-list graph-list) #'alpha-lessp :key #'graph-node-key))
-         (present (graph-present-p sorted-graph-list context)))
-    (unless present (push sorted-graph-list (graphs context)))
-    ;;(format t "~&(graphs context): ~s~%"  (graphs context))
-    (not present)))
 
-(defmethod add-graph ((concept concept) &optional (context *context*))
-  (add-graph (collect-nodes concept) context))
+(defmethod remove-cgraph ((graph graph) &optional (context *context*))
+  (when (graphs context)
+    (setf (graphs context) (remove graph (graphs context) :test #'graphs-equal))))
 
-(defmethod add-graph ((graph string) &optional (context *context*))
-  (add-graph (pcg graph) context))
 
-(defmethod add-graph ((graph graph) &optional (context *context*))
-  (add-graph (nodes graph) context))
+(defmethod remove-cgraph ((graph string ) &optional (context *context*))
+  (remove-cgraph (make-cgraph graph context)))
+
+
+
+;;; intentionally defined for only graph objects
+(defmethod add-cgraph ((graph graph) &optional (context *context*))
+  (assert (graph-p graph))
+  (unless (graph-present-p graph context)
+    (cond ((null (graphs context))
+           (setf (graphs context) (list graph)))
+          (t
+           (setf (cdr (last (graphs context))) (list graph))))))
+
+(defmethod add-cgraph ((thing t) &optional context)
+  nil)
+
+
+(defmethod add-cgraphs ((graphs list) &optional (context *context*))
+  (assert (every #'graph-p graphs))
+  (mapcar (lambda (g) (add-cgraph g context)) graphs)
+  t)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

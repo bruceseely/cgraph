@@ -11,50 +11,70 @@
 ;;; QUERY - Main Entry Point
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defgeneric query (pattern context &key all-solutions)
+(defgeneric query (pattern context &key first-only)
   (:documentation
    "Query a context for graphs matching a pattern.
     Returns a list of results, each containing:
       (:graph <head-concept> :bindings ((var . concept) ...))
     Pattern may contain variables (*x, *y) which will be bound
-    to the matching concepts in each result."))
+    to the matching concepts in each result.
+    With :first-only t, stops after finding the first matching graph."))
 
 
-(defmethod query ((pattern string) (context context) &key all-solutions)
+(defmethod query ((pattern string) (context context) &key first-only)
   "Parse pattern and query context for matching graphs."
-  (let* ((pattern-graph (parse-cgraph pattern))
-         (pattern-head (head pattern-graph))
+  (let* ((pattern-head (car (parse-cgraph pattern)))
          (saved-variables *variables*)
          (results (list)))
-    (dolist (node-list (graphs context))
-      (let* ((target-head (find-if (lambda (node) (typep node 'concept)) node-list))
+    (dolist (graph (graphs context))
+      (let* ((graph-nodes (nodes graph))
+             (target-head (find-if (lambda (node) (typep node 'concept)) graph-nodes))
              (mappings (when target-head
                          (let ((*variables* saved-variables))
-                           (if all-solutions
-                               (project pattern-head target-head :all-solutions t)
-                               (let ((m (project pattern-head target-head)))
-                                 (when m (list m))))))))
+                           (project pattern-head target-head :all-solutions t)))))
         (dolist (mapping mappings)
           (push (list :graph target-head
                       :bindings (extract-bindings mapping saved-variables))
-                results))))
+                results))
+        (when (and first-only mappings)
+          (return))))
     (nreverse results)))
 
 
-(defmethod query ((pattern graph-node) (context context) &key all-solutions)
+
+
+
+
+    ;; (let ((result (list)))
+    ;;   (dolist (rec results)
+    ;;     ;;(format t "~&rec: ~s~%"  rec)
+    ;;     (dolist (binding (getf rec :bindings))
+    ;;       (push binding result)))
+    ;;   result)))
+
+
+        ;;(format t "~&save: ~s~%"  save)
+        ;;(format t "~&res: ~s~%"  res)
+        ;;(format t "~&graph:  ~s  bindings: ~s~%" (getf res :graph) (getf res :bindings))
+        ;;(print (mapcar (lambda (x) (getf x :bindings)) results))
+
+
+
+
+
+(defmethod query ((pattern graph-node) (context context) &key first-only)
   "Query context using an already-parsed pattern graph node."
   (let ((results (list)))
     (dolist (node-list (graphs context))
       (let* ((target-head (find-if (lambda (node) (typep node 'concept)) node-list))
              (mappings (when target-head
-                         (if all-solutions
-                             (project pattern target-head :all-solutions t)
-                             (let ((m (project pattern target-head)))
-                               (when m (list m)))))))
+                         (project pattern target-head :all-solutions t))))
         (dolist (mapping mappings)
           (push (list :graph target-head
                       :bindings (extract-bindings mapping *variables*))
-                results))))
+                results))
+        (when (and first-only mappings)
+          (return))))
     (nreverse results)))
 
 
@@ -65,14 +85,22 @@
 (defun extract-bindings (mapping variable-cache)
   "Extract variable bindings from a projection mapping.
    For each (pattern-concept . target-concept) pair where the pattern
-   concept has a variable, return (variable-symbol . target-concept)."
+   concept has a variable, return (variable-symbol . target-concept).
+   Recursively extracts bindings from nested graph referent projections."
   (let ((bindings (list)))
     (dolist (pair mapping)
       (let* ((pattern-concept (car pair))
              (target-concept (cdr pair))
              (var-name (gethash pattern-concept (variables variable-cache))))
         (when var-name
-          (push (cons var-name target-concept) bindings))))
+          (push (cons var-name target-concept) bindings))
+        (let ((pattern-graph (graph-referent pattern-concept))
+              (target-graph (graph-referent target-concept)))
+          (when (and pattern-graph target-graph)
+            (let ((inner-mapping (project (head pattern-graph) (head target-graph))))
+              (when inner-mapping
+                (dolist (binding (extract-bindings inner-mapping variable-cache))
+                  (push binding bindings))))))))
     (nreverse bindings)))
 
 

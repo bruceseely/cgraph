@@ -19,16 +19,15 @@
 (defmethod combine-conceptual-graph-lists ((graph1 list) (graph2 list) &key (alignment-strategy :automatic))
   "Combine two conceptual graphs by finding correspondences and applying formation rules."
 
+  ;; (format t "~2&___________________________________________________________~%")
+  ;; (format t "~&Step 0. Setup")
   (let* ((correspondences (find-graph-correspondences graph1 graph2 alignment-strategy))
          (*concept-map* (list))
          (*relation-map* (list))
          (graph-list (list (list))))
 
-    ;; (format t "~2&___________________________________________________________~%")
-    ;; (format t "~&Step 0. Setup")
 
-
-    ;;; Step 1: Process corresponding concept pairs
+    ;; Step 1: Process corresponding concept pairs
     ;; (format t "~2&___________________________________________________________~%")
     ;; (format t "~&Step 1. Process corresponding concept pairs")
     (dolist (correspondence correspondences)
@@ -38,27 +37,39 @@
           (setf *concept-map* (list* (cons concept1 concept1) (cons concept2 concept1) *concept-map*))
           (push concept1 (car graph-list)))))
 
+    ;; (format t "~&*concept-map*: ~s~%"  *concept-map*)
+    ;; (format t "~&*relation-map*: ~s~%" *relation-map*)
+    ;; (format t "~&graph-list: ~s~%"  graph-list)
 
-    ;;; Step 2: Copy non-corresponding concepts
+    ;; Step 2: Copy non-corresponding concepts
     ;; (format t "~2&___________________________________________________________~%")
     ;; (format t "~&Step 2. Copy non-corresponding concepts~%")
     (copy-non-joined-concepts graph1 graph-list (mapcar #'first correspondences))
     (copy-non-joined-concepts graph2 graph-list (mapcar #'second correspondences))
 
+    ;; (format t "~&*concept-map*: ~s~%"  *concept-map*)
+    ;; (format t "~&*relation-map*: ~s~%" *relation-map*)
+    ;; (format t "~&graph-list: ~s~%"  graph-list)
 
-
-    ;;; Step 3: Handle relations
+    ;; Step 3: Handle relations
     ;; (format t "~2&___________________________________________________________~%")
     ;; (format t "~&Step 3. Handle relations~%")
     (combine-graph-relations graph1 graph2 graph-list correspondences)
 
+    ;; (format t "~&*concept-map*: ~s~%"  *concept-map*)
+    ;; (format t "~&*relation-map*: ~s~%" *relation-map*)
+    ;; (format t "~&graph-list: ~s~%"  graph-list)
 
-    ;;; Step 4: Simplify result
+    ;; Step 4: Simplify result
     ;; (format t "~2&___________________________________________________________~%")
     ;; (format t "~&Step 4. Simplify result~%")
     (simplify-graph graph-list)
 
-    ;;; Step 5: Prune relations
+    ;; (format t "~&*concept-map*: ~s~%"  *concept-map*)
+    ;; (format t "~&*relation-map*: ~s~%" *relation-map*)
+    ;; (format t "~&graph-list: ~s~%"  graph-list)
+
+    ;; Step 5: Prune relations
     ;; (format t "~2&___________________________________________________________~%")
     ;; (format t "~&Step 5. Prune relations~%")
     (let ((referenced-relations (list)))
@@ -67,15 +78,24 @@
           (dolist (arc arcs)
             (pushnew arc referenced-relations))))
       (setf graph-list (set-difference graph-list referenced-relations)))
-    (reverse (car graph-list))))
+
+    ;; (format t "~&*concept-map*: ~s~%"  *concept-map*)
+    ;; (format t "~&*relation-map*: ~s~%" *relation-map*)
+    ;; (format t "~&graph-list: ~s~%"  graph-list)
+    ;; (format t "~&Returning: ~a~% ~a" (reverse (car graph-list))   (pcg (reverse (car graph-list))))
+
+    (reverse (car graph-list))
+
+    ;; (format t "~2&============================================================================~2%")
+    ))
 
 
 
 ;; (defmethod combine-conceptual-graphs ((graph1 graph-node) (graph2 graph-node) &key (alignment-strategy :automatic))
 ;;   (let ((graph-list
 ;;           (combine-conceptual-graph-lists (collect-nodes graph1) (collect-nodes graph2) :alignment-strategy alignment-strategy)))
-;;     (setq gx1 (make-graph-from-nodes graph1))
-;;     (setq gx2 (make-graph-from-nodes graph-list))
+;;     (setq gx1 (make-cgraph graph1))
+;;     (setq gx2 (make-cgraph graph-list))
 
 ;;     graph1))
 
@@ -89,9 +109,160 @@
   (combine-conceptual-graphs (head graph1) (head graph2) :alignment-strategy alignment-strategy)
   graph1)
 
+(defmethod combine-conceptual-graphs ((graph-string1 string) (graph-string2 string) &key (alignment-strategy :automatic))
+  (combine-conceptual-graphs (car (parse-cgraph graph-string1)) (car (parse-cgraph graph-string2)) :alignment-strategy alignment-strategy))
 
 
 
+(defun graphs-share-concepts-p (graph1 graph2)
+  "Return T if the two graphs have any joinable concept pairs."
+  (not (null (find-automatic-correspondences
+              (collect-nodes (head graph1))
+              (collect-nodes (head graph2))))))
+
+(defmethod combine-cgraphs ((graphs list))
+  "Partition graphs into connected components and combine within each.
+   Returns a list of graphs — one per connected component.
+   Two graphs belong to the same component if they share joinable concepts,
+   directly or transitively.  Order of the input list does not matter."
+  (assert (every #'graph-p graphs))
+  (let ((components nil)
+        (remaining (copy-list graphs)))
+    ;; Grow one component at a time until all graphs are assigned
+    (loop while remaining do
+      (let ((component (list (pop remaining)))
+            (progress t))
+        ;; Keep pulling in any graph that connects to the current component
+        (loop while progress do
+          (setf progress nil)
+          (let ((deferred nil))
+            (dolist (g remaining)
+              (if (some (lambda (c) (graphs-share-concepts-p c g)) component)
+                  (progn (push g component) (setf progress t))
+                  (push g deferred)))
+            (setf remaining (nreverse deferred))))
+        (push component components)))
+    ;; Combine within each component using deferred/retry so that ordering
+    ;; within the component doesn't matter.  Isolated graphs stay as-is.
+    (mapcar (lambda (component)
+              (let ((accumulator (car component))
+                    (remaining (copy-list (cdr component))))
+                (loop
+                  (let ((deferred nil)
+                        (progress nil))
+                    (dolist (g remaining)
+                      (cond ((graphs-share-concepts-p accumulator g)
+                             (handler-case
+                                 (progn
+                                   (combine-conceptual-graphs accumulator g)
+                                   (setf progress t))
+                               (error (e)
+                                 (warn "Skipping graph combination: ~A" e)
+                                 (push g deferred))))
+                            (t
+                             (push g deferred))))
+                    (setf remaining (nreverse deferred))
+                    (unless progress (return))))
+                accumulator))
+            (nreverse components))))
+
+(defmethod combine-cgraphs :around ((graphs list))
+  (let* ((combined (list))
+         (temp-context (make-context))
+         (local-graphs (mapcar (lambda (g) (make-cgraph g temp-context)) graphs)))
+    (setf combined (call-next-method local-graphs))
+    (dolist (graph graphs)
+      (remove-cgraph graph temp-context))
+    ;; (mapc #'add-cgraph combined)
+    ;; (graphs *context*)
+    combined))
+
+
+
+(defun include-cgraph (graph &optional (context *context*))
+  (setf (graphs context)
+        (combine-cgraphs (list* graph (graphs context)))))
+
+
+(defun consolidate-cgraphs (&optional (kb *context*))
+  (setf (graphs kb) (combine-cgraphs (graphs kb)))
+  kb)
+
+
+
+;; (defmethod combine-cgraphs :around ((graphs list))
+;;   (let* ((current-context *context*)
+;;          (*context* (make-context current-context))
+;;          (local-graphs (mapcar (lambda (g) (make-cgraph g *context*)) graphs))
+;;          (combined (call-next-method local-graphs)))
+;;     (setf (graphs current-context) (append combined (graphs current-context)))
+;;     combined))
+
+
+;; (defmethod combine-cgraphs :around ((graphs list))
+;;   (let* ((current-context *context*)
+;;          (*context* (make-context ))
+;;          (local-graphs (mapcar (lambda (g) (make-cgraph g *context*)) graphs))
+;;          (combined (call-next-method local-graphs)))
+;;     (format t "~&combined: ~s~3%"  combined)
+;;     (print "-----------------------------------------------")
+;;     (format t "~&(graphs current-context): ~s~3%"(graphs current-context))
+;;     (print "-----------------------------------------------")
+;;     (format t "~&(graphs *context*): ~s~3%"(graphs *context*))
+;;     (print "-----------------------------------------------")
+;;     (dolist (graph combined)
+;;       (add-cgraph graph current-context)
+;;       ;;(pushnew graph (graphs current-context) :test #'graphs-equal)
+;;       )
+;;     )
+;;   ;;(graphs *context*)
+;;   nil)
+
+
+
+
+
+;; (defun consolidate-cgraphs (&optional (kb *context*))
+;;   (let ((graphs (graphs kb)))
+;;     (setf (graphs kb) (list))
+;;     (let ((combined (combine-cgraphs graphs)))
+;;       (setf (graphs kb) combined)))
+;;   kb)
+
+
+
+;; (defun include-cgraph (graph &optional (context *context*))
+;;   (format t "~&(graphs context): ~s~%"  (graphs context))
+;;   (setf (graphs context)
+;;         (list (combine-cgraphs (list* graph (graphs context))))))
+
+
+
+
+;; (defmethod combine-cgraphs ((graphs list))
+;;   (assert (every #'graph-p graphs))
+;;   (let ((graph (car graphs)))
+;;     (dolist (next-graph (cdr graphs))
+;;       (combine-conceptual-graphs graph next-graph))
+;;     graph))
+
+;;; good - sorta
+;; (defmethod combine-cgraphs ((graphs list))
+;;   (assert (every #'graph-p graphs))
+;;   (let ((graph (make-cgraph (car graphs))))
+;;     (dolist (next-graph (cdr graphs))
+;;       (let ((next (make-cgraph next-graph)))
+;;         (combine-conceptual-graphs graph next)))
+;;     graph))
+
+#|
+(let ((graphs (list (car (parse-cgraph "[PERSON: Dave]←(agnt)←[DRIVE]"))
+                    (make-cgraph "[PERSON: Dave]→(poss)→[CHEVY]")
+                    (car (parse-cgraph "[DRIVE]→(inst)→[CHEVY]"))
+                    (parse-cgraph "[CITY: Baltimore]←(dest)<-[DRIVE]")
+                    "[CHEVY]→(attr)→[OLD]")))
+   (combine-cgraphs graphs))
+|#
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; CORRESPONDENCE DETECTION
@@ -108,6 +279,7 @@
 
 (defun find-automatic-correspondences (graph1 graph2)
   "Automatically find correspondences based on concept similarity"
+  ;;(setq g1 graph1 g2 graph2)
   (let ((correspondences '())
         (concepts1 (get-graph-concepts graph1))
         (concepts2 (get-graph-concepts graph2)))
@@ -123,17 +295,27 @@
               (setf best-match concept2
                     best-score similarity))))
 
-        ;; Only consider it a correspondence if similarity is high enough
-        ;; AND the types are actually joinable (subtype or equal).
-        ;; common-supertype-p alone doesn't imply joinability, and letting
-        ;; non-joinable pairs through causes join-concepts to error.
+        ;; Only record a correspondence if:
+        ;;  1. Score is above threshold
+        ;;  2. The concepts are joinable (types subtype/equal, referents compatible)
+        ;;  3. When one concept has a specific individual and the other is generic,
+        ;;     the types must be EXACTLY equal — not merely related by subtype.
+        ;;     This prevents [GIRL] from auto-matching [PERSON: Dave] purely
+        ;;     because GIRL⊂PERSON and structural arcs look similar.
+        ;;     Explicit individual declarations or manual correspondence are needed
+        ;;     to cross type boundaries with specific referents.
         (when (and best-match (> best-score 0.4)
-                   (types-joinable-p (concept-type concept1)
-                                     (concept-type best-match)))
+                   (concepts-joinable-p concept1 best-match)
+                   (auto-correspondable-p concept1 best-match))
           (push (list concept1 best-match best-score) correspondences))))
 
     ;; Remove conflicts (ensure 1-1 mapping)
     (resolve-correspondence-conflicts correspondences)))
+
+
+
+
+
 
 (defun concept-similarity (concept1 concept2)
   "Calculate similarity score between two concepts (0.0 to 1.0)"
@@ -162,11 +344,13 @@
     ;; One generic, one specific - could be joined
     ((or (null ref1) (null ref2)) 0.7)
     ;; Same individual
-    ((and (individual-p ref1) (individual-p ref2) (individuals-equal ref1 ref2)) 1.0)
+    ((and (individual-p ref1) (individual-p ref2) (individuals-equal (individual ref1) (individual ref2))) 1.0)
     ;; Compatible individuals
-    ((and (individual-p ref1) (individual-p ref2) (individuals-compatible-p ref1 ref2)) 0.8)
+    ((and (individual-p ref1) (individual-p ref2) (individuals-compatible-p (individual ref1) (individual ref2))) 0.8)
     ;; Different individuals
     (t 0.0)))
+
+
 
 
 (defun individuals-compatible-p (ind1 ind2)
@@ -177,11 +361,41 @@
            (properties-compatible-p (properties ind1) (properties ind2)))))
 
 (defun structural-similarity (concept1 concept2)
-  "Calculate structural similarity based on relation patterns"
-  (let ((rels1 (mapcar #'relation-type (outarcs concept1)))
-        (rels2 (mapcar #'relation-type (outarcs concept2))))
-    (/ (length (intersection rels1 rels2 :test #'types-equal))
-       (max 1 (length (union rels1 rels2 :test #'types-equal))))))
+  "Structural similarity based on matching (relation-type, neighbor-type) pairs.
+   Uses bidirectional arcs so both incoming and outgoing relations count.
+   Requires both the relation type AND the neighbor concept's type to match,
+   so (agnt)←[EAT] and (agnt)←[DRIVE] are NOT treated as a structural match.
+   This is what distinguishes [GIRL] (agent of eating) from [PERSON: Dave]
+   (agent of driving) even though both have an inward agnt arc."
+  (labels ((neighbor-type (concept rel)
+           ;; Return the type of the other concept(s) connected through rel.
+           ;; For binary relations this is one concept; we take the first.
+           (let ((others (remove concept (arcs rel) :test #'nodes-eq)))
+             (when (and others (concept-p (car others)))
+               (concept-type (car others)))))
+         (arcs-match-p (rel1 c1 rel2 c2)
+           ;; Two arcs match when they have the same relation type AND
+           ;; the neighbor concepts have the same type (or either side has
+           ;; no neighbor, e.g. a dangling relation).
+           (and (types-equal (relation-type rel1) (relation-type rel2))
+                (let ((nt1 (neighbor-type c1 rel1))
+                      (nt2 (neighbor-type c2 rel2)))
+                  (or (null nt1) (null nt2)
+                      (types-equal nt1 nt2))))))
+    (let ((arcs1 (arcs concept1))
+          (arcs2 (arcs concept2)))
+      (if (and (null arcs1) (null arcs2))
+          0.0
+          (let ((matched (count-if (lambda (rel1)
+                                     (some (lambda (rel2)
+                                             (arcs-match-p rel1 concept1 rel2 concept2))
+                                           arcs2))
+                                   arcs1))
+                ;; Use max rather than union-size: arcs from different graph objects
+                ;; are never eq even when semantically identical, so union always
+                ;; over-counts and deflates the score.
+                (total (max 1 (max (length arcs1) (length arcs2)))))
+            (/ matched total))))))
 
 (defun resolve-correspondence-conflicts (correspondences)
   "Ensure 1-1 mapping by resolving conflicts"
@@ -389,6 +603,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; UTILITY PREDICATES
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun auto-correspondable-p (concept1 concept2)
+  "Additional guard for automatic correspondence beyond concepts-joinable-p.
+   When one concept has a specific individual and the other is generic, require
+   EITHER equal types OR high structural similarity (> 0.5), meaning the two
+   concepts occupy the same relational position in their respective graphs.
+   This allows [GIRL] to auto-match [PERSON: Sue] when both are agents of
+   the same verb type (EAT), while blocking [GIRL] from matching [PERSON: Dave]
+   when their verbs differ (EAT vs DRIVE) — without needing individual declarations."
+  (let ((ref1 (referent concept1))
+        (ref2 (referent concept2)))
+    (if (or (and (null ref1) ref2)      ; concept1 generic, concept2 specific
+            (and ref1 (null ref2)))     ; concept1 specific, concept2 generic
+        (or (types-equal (concept-type concept1) (concept-type concept2))
+            (> (structural-similarity concept1 concept2) 0.5))
+        t)))  ; both generic or both specific: subtype relationship already checked
 
 (defun common-supertype-p (type1 type2)
   "Check if two types have a meaningful common supertype"
