@@ -34,7 +34,11 @@ function renderChips() {
       const chip = document.createElement('span');
       chip.className = 'chip';
       chip.title = `Remove ${name}`;
-      chip.innerHTML = `${name} <span class="chip-x">✕</span>`;
+      chip.textContent = `${name} `;
+      const xSpan = document.createElement('span');
+      xSpan.className = 'chip-x';
+      xSpan.textContent = '✕';
+      chip.appendChild(xSpan);
       chip.addEventListener('click', () => deselect(name));
       return chip;
     })

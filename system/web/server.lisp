@@ -13,7 +13,7 @@
   (when *web-acceptor*
     (stop-web-server))
   (setf *web-acceptor*
-        (make-instance 'hunchentoot:easy-acceptor :port port))
+        (make-instance 'hunchentoot:easy-acceptor :port port :address "127.0.0.1"))
   (hunchentoot:start *web-acceptor*)
   (format t "~&CGraph web server started on http://localhost:~a~%" port)
   *web-acceptor*)
