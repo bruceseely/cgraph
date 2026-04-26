@@ -48,9 +48,14 @@
                (let ((mod (other-end rel concept)))
                  (when (and mod (not (eq mod concept)))
                    (push (base-lemma mod) mods-pre))))
-              ((and (eq role :poss) (not (traversed-p state rel)))
+              ((and (eq role :poss) (not (traversed-p state rel))
+                    ;; POSS links animate (possessor, source) -> entity
+                    ;; (possessed, dest=outarc). Only fold the other end in
+                    ;; as a possessive modifier when WE are the possessed.
+                    (eq (outarc rel) concept))
                (let ((owner (other-end rel concept)))
                  (when owner
+                   (mark-traversed state rel)
                    (push (format nil "~a's"
                                  (if (eq (concept-definiteness owner) :proper)
                                      (cap (base-lemma owner))
@@ -204,6 +209,56 @@
              (dolist (r rels)
                (mark-traversed state r)))
            buckets))
+
+(defun unexpressed-poss-relations (nodes state)
+  "POSS relations that weren't folded into an NP as a possessive modifier
+   (typically because the parser didn't coref the possessed concept across
+   commas). Returned in graph order."
+  (remove-if (lambda (r)
+               (or (not (eq (relation-role r) :poss))
+                   (traversed-p state r)))
+             (graph-relations-of nodes)))
+
+(defun realize-leftover-poss (rels state)
+  "Append leftover POSS relations as coordinated 'and X has Y' clauses
+   so the possession isn't silently dropped."
+  (cond ((null rels) "")
+        (t (format
+            nil ", and ~{~a~^, and ~}"
+            (mapcar
+             (lambda (r)
+               (mark-traversed state r)
+               (let* ((possessed (outarc r))
+                      (possessor (first (other-arcs r possessed)))
+                      (have-form (if (eq (verb-agreement-number possessor state)
+                                         :plural)
+                                     "have" "has"))
+                      (p-np (realize-np possessor state :case :nominative))
+                      (q-np (realize-np possessed state :case :accusative)))
+                 (format nil "~a ~a ~a" p-np have-form q-np)))
+             rels)))))
+
+(defun realize-have-clause (possessor state)
+  "Render 'POSSESSOR has/have X (and Y ...)' for a POSS-only graph."
+  (let* ((number    (concept-number possessor))
+         (have-form (if (eq number :plural) "have" "has"))
+         (parts     '())
+         (objects   '()))
+    (mark-uttered state possessor)
+    ;; Mark the POSS relations traversed BEFORE rendering the topic NP
+    ;; so they aren't folded back in as possessive prefixes.
+    (dolist (rel (concept-relations possessor))
+      (when (eq (relation-role rel) :poss)
+        (mark-traversed state rel)))
+    (push (realize-full-np possessor state) parts)
+    (push have-form parts)
+    (dolist (rel (concept-relations possessor))
+      (when (and (traversed-p state rel) (eq (relation-role rel) :poss))
+        (let ((possessed (other-end rel possessor)))
+          (when possessed
+            (push (realize-np possessed state :case :accusative) objects)))))
+    (push (format nil "~{~a~^ and ~}" (nreverse objects)) parts)
+    (format nil "~{~a~^ ~}" (nreverse parts))))
 
 (defun realize-passive-clause (predicate buckets state)
   "Render PREDICATE in passive voice: OBJ + 'is/are' + past-participle +

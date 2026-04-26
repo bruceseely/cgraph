@@ -88,6 +88,23 @@
    should produce a copular clause (X is Y) instead of a verbal one."
   (not (find-subject-relation (graph-relations-of nodes))))
 
+(defun have-clause-p (nodes)
+  "True when the graph has a POSS relation but no subject relation and no
+   act/event concept — should render as 'X has Y' (Phase 6 polish)."
+  (let ((relations (graph-relations-of nodes))
+        (concepts  (graph-concepts-of nodes)))
+    (and (some (lambda (r) (eq (relation-role r) :poss)) relations)
+         (not (find-subject-relation relations))
+         (not (find-if #'act-or-event-concept-p concepts)))))
+
+(defun find-poss-source (nodes)
+  "Return the (animate) source side of the first POSS relation."
+  (let ((poss-rel (find-if (lambda (r) (eq (relation-role r) :poss))
+                           (graph-relations-of nodes))))
+    (when poss-rel
+      ;; outarc = possessed (entity); the (single) inarc = possessor (animate).
+      (first (other-arcs poss-rel (outarc poss-rel))))))
+
 (defun find-copula-topic (nodes)
   "For a verbless graph, pick the topic — the entity side of an ATTR/CHRC/LOC
    relation. ATTR has the attribute as outarc and the entity as the inarc,

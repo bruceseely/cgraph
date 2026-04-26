@@ -37,7 +37,16 @@
     ;; Phase 6: passive voice when there's an act with OBJ but no AGNT.
     ("[PIE]<-(obj)<-[EAT]."             . "A pie is eaten.")
     ("[FOOD]<-(obj)<-[EAT]."            . "Food is eaten.")
-    ("[PIE]<-(obj)<-[GIVE]->(rcpt)->[GIRL]." . "A pie is given to a girl.")))
+    ("[PIE]<-(obj)<-[GIVE]->(rcpt)->[GIRL]." . "A pie is given to a girl.")
+    ;; POSS direction + HAVE construction.
+    ("[PERSON: dave]->(poss)->[CHEVY-VEHICLE]." . "Dave has a chevy-vehicle.")
+    ("[BOY]->(poss)->[DOG]."                    . "A boy has a dog.")
+    ;; Leftover POSS: a verbal clause plus a possession assertion that the
+    ;; parser didn't fold into the main NP (typically because coref across
+    ;; commas didn't merge the two [DOG: Spot] tokens). Should be appended
+    ;; as an 'and X has Y' coordination rather than silently dropped.
+    ("[PERSON: sue]-(agnt)<-[GIVE]-(obj)->[FOOD] (rcpt)->[DOG: spot], (poss)->[DOG: spot]."
+     . "Sue gives food to Spot, and she has Spot.")))
 
 (defun generation-test (&optional verbose)
   (when verbose (format t "~%generation-test~%"))

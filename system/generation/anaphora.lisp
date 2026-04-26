@@ -20,10 +20,42 @@
     (or (lexicon-prop (concept-type concept) :animate-p)
         (safe-subtype-p label 'animate))))
 
+(defparameter *given-name-genders* (make-hash-table :test 'equalp)
+  "Common given names -> :masc / :fem. Keys are downcased strings.
+   Extend at runtime with REGISTER-NAME-GENDER.")
+
+(defun register-name-gender (name gender)
+  (setf (gethash (string-downcase (string name)) *given-name-genders*) gender))
+
+(dolist (n '(sue susan mary alice jane jean joan kate katherine julia
+             anna anne emily emma jennifer jessica lisa linda karen
+             sandra donna betty helen deborah margaret ruth sarah sara
+             rachel michelle laura amy angela melissa christine christina
+             marie janet catherine frances diane victoria evelyn lauren
+             megan andrea hannah jacqueline martha gloria teresa joyce))
+  (register-name-gender n :fem))
+
+(dolist (n '(john tom bob ivan james robert michael william david
+             richard charles joseph thomas christopher daniel paul mark
+             donald george kenneth steven edward brian ronald anthony
+             kevin jason matthew gary timothy frank scott eric stephen
+             andrew raymond gregory joshua dennis patrick peter samuel
+             benjamin bruce harry fred jonathan justin philip nicholas
+             dave dan mike steve carl ralph albert))
+  (register-name-gender n :masc))
+
+(defun name-gender-of (concept)
+  (let* ((ref  (referent concept))
+         (name (and ref (referent-name concept))))
+    (and name (stringp name) (plusp (length name))
+         (gethash (string-downcase name) *given-name-genders*))))
+
 (defun gender-of (concept)
   "Return :masc / :fem / :neuter / :unknown for CONCEPT.
-   Uses lexicon overrides; falls back to :neuter (non-human) or :unknown (human)."
+   Lookup order: lexicon override on the type, then known given-name registry,
+   then :neuter for non-humans / :unknown for humans."
   (or (lexicon-prop (concept-type concept) :gender)
+      (name-gender-of concept)
       (cond ((human-p concept) :unknown)
             (t :neuter))))
 
@@ -60,3 +92,20 @@
   (lookup-pronoun (gender-of concept)
                   (concept-number concept)
                   case))
+
+(defun singular-they-p (concept)
+  "True for a singular human of unknown gender — the surface pronoun is
+   'they' (singular-they), which takes plural verb agreement in standard
+   English: 'they have', not 'they has'."
+  (and (eq (concept-number concept) :singular)
+       (human-p concept)
+       (eq (gender-of concept) :unknown)))
+
+(defun verb-agreement-number (concept state)
+  "Number to use for verb agreement after CONCEPT. When CONCEPT has already
+   been uttered and would surface as singular-they, the verb takes plural
+   agreement."
+  (cond ((eq (concept-number concept) :plural) :plural)
+        ((and (uttered-p state concept) (singular-they-p concept))
+         :plural)
+        (t :singular)))
