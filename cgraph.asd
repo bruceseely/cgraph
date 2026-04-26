@@ -63,7 +63,17 @@
                                            (:file "query")))
                              (:module "graphing"
 	                      :depends-on ("setup" "core")
-	                      :components ((:file "concept-type-graph")))))
+	                      :components ((:file "concept-type-graph")))
+                             (:module "generation"
+	                      :depends-on ("setup" "core")
+	                      :serial t
+	                      :components ((:file "syntax-roles")
+                                           (:file "walker")
+                                           (:file "lexicon")
+                                           (:file "morphology")
+                                           (:file "anaphora")
+                                           (:file "realizer")
+                                           (:file "generate")))))
 
                (:module "support"
                 :serial t
@@ -101,6 +111,8 @@
                              (:file "maximal-join-test")
                              (:file "type-definition-test")
                              (:file "query-test")
+
+                             (:file "generation-test")
 
                              (:file "cgraph-tests")
                              ))))

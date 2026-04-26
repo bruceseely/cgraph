@@ -1,0 +1,36 @@
+
+Canonical Graph to text rules
+
+1. The utterance path must visit each concept and relation node at least once. Each concept has an utterance mark that indicates whether the concept was uttered as a word. Each conceptual relation has a traversal mark that indicates whether the utterance path has traversed the arcs of that relation.
+
+• The conceptual relation that links the subject of the sentence to the main predicate is the starting point of the path. For simple active sentences, it is relation of type AGNT. For passive sentences, it is a relation of type OBJ RCPT. In general, it may be a relation of any type.
+
+From a concept node c, the path does not return to the concept from which was reached until all relations linked to c have been traversed.
+
+. For relations that have not yet been traversed, syntactic and stylistic rules determine which arc to follow (e.g. in English, the path must visit adverbs of manner before adverbs of time).
+
+2. Since the path may visit a concept several times, syntactic rules determine when that concept is uttered as a word of the sentence. Some concept types may be expressed in some languages as two words (e.g. verb-particle combinations such as take off or carry out). The separate words may be uttered at either the same or separate visits to the concept node.
+
+3. Adjacent concepts in the graph should be expressed consecutively when possible. When Rule 1 requires the utterance path to take a branch or when Rule 2 skips a concept, the utterance must clarify the order of connections with markers such as intonation, inflection, function words, or conventionalized word order.
+
+4. For graphs nested inside the type or referent field of a concept, the utterance path enters the nested graph when the syntactic rules determine that the containing node is to be expressed. Normally, the entire nested graph is expressed at a single visit to the node, but some syntax rules (such as the raising rules of trans- formational grammar) may permit the utterance path to exit from the nested graph, visit one or more nodes in the outer graph, and then return to finish expressing the nested graph.
+
+5. If the graph has cycles, a concept that is reachable by two or more different paths will only be uttered once with all of its qualifiers. If syntactic rules would also express the concept at a visit reached by a different path, they must instead generate an anaphoric expression-either a pronoun or a short noun phrase that has the minimum number of qualifiers needed for a unique reference in the current context.
+
+6. The utterance path is a cyclic walk that visits every node of the graph and returns to the concept that represents the main predicate. If a graph is complicated, rules of inference may break it into multiple simpler graphs before expressing it in a sentence.
+
+These six rules allow considerable variation of word order, but they do not permit arbitrary movement of sentence constituents. If conceptual graphs are assumed to be universal deep structures and if all languages obey the same general rules for mapping graphs to sentences, then all languages must show certain regularities in their surface structures. Following are some of the implications:
+
+■A concept is expressed only when the utterance path visits its node. Therefore, transformations can move a given constituent only to a limited number of positions in a sentence. Unlike transformational grammar, which requires special assumptions to rule out the unnatural transformations, the rules for scanning conceptual graphs have the proper constraints built into them.
+
+■Rules 1 and 6 limit the number of times a node may be visited. In particular, when the path follows a branch of modifiers, all concepts on that branch must be expressed before the walk returns to the main concept.
+
+■Rule 3 prevents the deeply embedded clauses in The mailman that the dog that the girl that the boy loves owns bit is in the park. Such a sentence skips every other concept in a chain as the walk passes in one direction; on the way back, it skips the ones expressed in the first direction. Since the single function word that is not sufficient to show which concepts were skipped, the deeply embedded clauses violate the rule. A better version would utter adjacent concepts in adjacent content words either in the active form, The boy loves the girl that owns the dog that bit the mailman that is in the park, or in the passive form, In the park is the mailman that was bitten by the dog that is owned by the girl that is loved by the boy.
+
+■Rule 4 for nested graphs has the same effect as the cyclic convention for applying transformations: all the transformations that apply to embedded clauses are performed before those that apply to higher clauses. But the rule also permits raising (Postal 1974), where constituents of a nested graph are expressed at different visits to the containing node. Consider the following graph:
+
+[BELIEVE] (OBJ)+[PROPOSITION: [PERSON: Ivan)+(CONT)+[KITCHEN]].
+
+Since the agent of [BELIEVE] is not present in the graph, English inserts the empty word it as the subject: It is believed that Ivan is in the kitchen. But another rule of English grammar can raise Ivan to the subject position of the main clause: Ivan is believed to be in the kitchen. To generate this sentence, the utterance path enters the nested graph to utter Ivan, exits from it to utter the concept [BELIEVE], and then returns to the nested graph to finish the sentence.
+
+Since the universal rules for translating graphs to sentences allow many options, they must be supplemented with particular rules for any specific language. The specific grammar determines which are to select when more than one arc attached to the current node remains to be traversed. As they map concepts into content words, the grammar rules also insert function words and word inflections. The most general and flexible notation for stating grammar rules is augmented phrase structure grammar (APSG), which Heidorn (1972, 1975) developed for his NLP system (see Section 1.1 for a sample dialog). APSG rules have an underlying skeleton of phrase-structure grammar, but they are augmented with conditions to be tested and actions to be performed. Heidorn's NLP supports two types of APSG rules: encoding rules map graphs into sentences, and decoding rules map sentences into graphs.

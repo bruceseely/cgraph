@@ -1,0 +1,204 @@
+;;; -*- Mode: LISP; Syntax: Common-lisp; Base 10; Lowercase: Yes -*-
+
+(in-package #:conceptual-graphs)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  Lexicon (Phase 2):
+;;  - Part-of-speech classification by walking the type lattice
+;;  - Lemma resolution (per-type overrides; default = downcased label)
+;;  - Irregular-form lookup (verbs and nouns)
+;;  - Number / definiteness derived from a concept's referent
+;;
+;;  Overrides are stored in *lexicon-overrides* keyed by type-label symbol;
+;;  callers may extend them via REGISTER-LEXICON-ENTRY at runtime.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defparameter *lexicon-overrides* (make-hash-table :test 'equal)
+  "Per-concept-type overrides. Key: upcased label string.
+   Value: plist with possible keys :pos :lemma :plural :past :past-participle
+   :present-3sg :gerund :mass-p :proper-p.")
+
+(defun register-lexicon-entry (type-label &rest plist)
+  "Add or replace a lexicon override for TYPE-LABEL."
+  (let ((key (string-upcase (string type-label))))
+    (setf (gethash key *lexicon-overrides*) plist)))
+
+(defun lexicon-entry (type-or-label)
+  (let ((key (cond ((symbolp type-or-label) (string-upcase (string type-or-label)))
+                   ((stringp type-or-label) (string-upcase type-or-label))
+                   ((typep type-or-label 'concept-type)
+                    (string-upcase (string (label type-or-label))))
+                   (t nil))))
+    (and key (gethash key *lexicon-overrides*))))
+
+(defun lexicon-prop (type-or-label key &optional default)
+  (getf (lexicon-entry type-or-label) key default))
+
+;;; --- Part-of-speech classification ------------------------------------------
+
+(defun safe-subtype-p (label-symbol root-symbol)
+  (handler-case (subtype-p label-symbol root-symbol)
+    (error () nil)))
+
+(defun pos-from-hierarchy (concept-type)
+  "Crude POS classification by walking the supertype lattice.
+   Subtypes of ACT/EVENT -> :verb, ATTRIBUTE -> :adj, MANNER -> :adv,
+   anything else under ENTITY -> :noun. Falls back to :noun."
+  (let ((label (label concept-type)))
+    (cond ((or (safe-subtype-p label 'act)
+               (safe-subtype-p label 'event)) :verb)
+          ((safe-subtype-p label 'manner)     :adv)
+          ((safe-subtype-p label 'attribute)  :adj)
+          (t :noun))))
+
+(defun concept-pos (concept)
+  "Determine part-of-speech for CONCEPT, honoring lexicon overrides."
+  (let ((ctype (concept-type concept)))
+    (or (lexicon-prop ctype :pos)
+        (pos-from-hierarchy ctype))))
+
+;;; --- Lemma ------------------------------------------------------------------
+
+(defun base-lemma (concept)
+  "Lower-case lemma for CONCEPT: explicit override > referent name > type label."
+  (let* ((ctype  (concept-type concept))
+         (override (lexicon-prop ctype :lemma))
+         (ref (referent concept))
+         (name (and ref (referent-name concept))))
+    (cond (override override)
+          ((and name (stringp name) (plusp (length name))) name)
+          (t (string-downcase (label ctype))))))
+
+(defun proper-name-p (concept)
+  "True if the lemma should be treated as a proper noun (no article, capitalized)."
+  (or (lexicon-prop (concept-type concept) :proper-p)
+      (let* ((ref (referent concept))
+             (name (and ref (referent-name concept))))
+        (and name (stringp name) (plusp (length name))))))
+
+(defun mass-noun-p (concept)
+  (lexicon-prop (concept-type concept) :mass-p))
+
+;;; --- Number, person, definiteness from referent -----------------------------
+
+(defun concept-number (concept)
+  "Return :plural if the concept's referent denotes a set, else :singular."
+  (cond ((set-spec concept) :plural)
+        (t :singular)))
+
+(defun concept-person (concept)
+  ;; Phase 2: no first/second-person referents in the schema; default 3rd.
+  (declare (ignore concept))
+  3)
+
+(defun concept-definiteness (concept)
+  "Return :definite / :indefinite / :proper / :universal.
+   Phase 2 heuristic: named individual -> :proper, otherwise :indefinite."
+  (cond ((proper-name-p concept) :proper)
+        (t :indefinite)))
+
+;;; --- Irregular tables (small starters; extend as needed) --------------------
+
+(defparameter *irregular-verbs*
+  ;; (lemma past past-participle present-3sg)
+  '(("be"    "was"   "been"   "is")
+    ("have"  "had"   "had"    "has")
+    ("do"    "did"   "done"   "does")
+    ("eat"   "ate"   "eaten"  "eats")
+    ("go"    "went"  "gone"   "goes")
+    ("give"  "gave"  "given"  "gives")
+    ("take"  "took"  "taken"  "takes")
+    ("make"  "made"  "made"   "makes")
+    ("see"   "saw"   "seen"   "sees")
+    ("come"  "came"  "come"   "comes")
+    ("get"   "got"   "gotten" "gets")
+    ("know"  "knew"  "known"  "knows")
+    ("think" "thought" "thought" "thinks")
+    ("say"   "said"  "said"   "says")
+    ("find"  "found" "found"  "finds")
+    ("tell"  "told"  "told"   "tells")
+    ("become" "became" "become" "becomes")
+    ("leave" "left"  "left"   "leaves")
+    ("feel"  "felt"  "felt"   "feels")
+    ("bring" "brought" "brought" "brings")
+    ("begin" "began" "begun"  "begins")
+    ("keep"  "kept"  "kept"   "keeps")
+    ("hold"  "held"  "held"   "holds")
+    ("write" "wrote" "written" "writes")
+    ("stand" "stood" "stood"  "stands")
+    ("sit"   "sat"   "sat"    "sits")
+    ("lie"   "lay"   "lain"   "lies")
+    ("lay"   "laid"  "laid"   "lays")
+    ("run"   "ran"   "run"    "runs")
+    ("ride"  "rode"  "ridden" "rides")
+    ("drive" "drove" "driven" "drives")
+    ("fly"   "flew"  "flown"  "flies")
+    ("buy"   "bought" "bought" "buys")
+    ("send"  "sent"  "sent"   "sends")
+    ("build" "built" "built"  "builds")
+    ("teach" "taught" "taught" "teaches")
+    ("catch" "caught" "caught" "catches")
+    ("read"  "read"  "read"   "reads")
+    ("hear"  "heard" "heard"  "hears")
+    ("speak" "spoke" "spoken" "speaks")
+    ("pay"   "paid"  "paid"   "pays")
+    ("meet"  "met"   "met"    "meets")
+    ("set"   "set"   "set"    "sets")
+    ("hit"   "hit"   "hit"    "hits")
+    ("put"   "put"   "put"    "puts")
+    ("cut"   "cut"   "cut"    "cuts")
+    ("bite"  "bit"   "bitten" "bites")
+    ("believe" "believed" "believed" "believes")
+    ("own"   "owned" "owned"  "owns")
+    ("love"  "loved" "loved"  "loves")
+    ("sell"  "sold"  "sold"   "sells")))
+
+(defparameter *irregular-plurals*
+  '(("man"   "men")
+    ("woman" "women")
+    ("child" "children")
+    ("person" "people")
+    ("foot"  "feet")
+    ("tooth" "teeth")
+    ("goose" "geese")
+    ("mouse" "mice")
+    ("ox"    "oxen")
+    ("sheep" "sheep")
+    ("fish"  "fish")
+    ("deer"  "deer")
+    ("series" "series")
+    ("species" "species")))
+
+(defun irregular-verb-form (lemma form)
+  "FORM is one of :past :past-participle :present-3sg. Returns NIL if not irregular."
+  (let ((row (assoc lemma *irregular-verbs* :test #'string-equal)))
+    (when row
+      (ecase form
+        (:past            (second row))
+        (:past-participle (third row))
+        (:present-3sg     (fourth row))))))
+
+(defun irregular-plural (lemma)
+  (let ((row (assoc lemma *irregular-plurals* :test #'string-equal)))
+    (and row (second row))))
+
+;;; --- Mass-noun registrations -----------------------------------------------
+;;; Mass nouns take no indefinite article ("food", not "a food"). Register a
+;;; common starter set; users can extend with REGISTER-LEXICON-ENTRY.
+
+(dolist (m '(food water milk coffee tea juice beer wine bread rice
+             salt sugar butter cheese meat soup
+             information music news advice knowledge evidence
+             money gold silver oil gas air
+             furniture equipment luggage clothing software
+             substance))
+  (register-lexicon-entry m :mass-p t))
+
+;;; --- Adverb-form overrides -------------------------------------------------
+;;; Some types are abstract category labels rather than specific adjectives,
+;;; so suffix-derivation produces nonsense (MANNER -> "mannerly"). Provide
+;;; an :adv-form override that realize-adv consults first.
+
+(register-lexicon-entry 'manner :adv-form "somehow")
+(register-lexicon-entry 'time   :adv-form "sometime")
+(register-lexicon-entry 'place  :adv-form "somewhere")
