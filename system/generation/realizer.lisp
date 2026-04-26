@@ -37,9 +37,11 @@
          (realize-full-np concept state))))
 
 (defun realize-full-np (concept state)
-  (let ((mods-pre  '())
+  (let ((adj-mods  '())
+        (poss-mods '())
         (head      (noun-form concept))
-        (article   nil))
+        (article   nil)
+        mods-pre)
     (dolist (rel (concept-relations concept))
       (let ((role (relation-role rel)))
         ;; Skip relations already traversed (e.g. consumed by a copular
@@ -47,7 +49,7 @@
         (cond ((and (eq role :adj) (not (traversed-p state rel)))
                (let ((mod (other-end rel concept)))
                  (when (and mod (not (eq mod concept)))
-                   (push (base-lemma mod) mods-pre))))
+                   (push (base-lemma mod) adj-mods))))
               ((and (eq role :poss) (not (traversed-p state rel))
                     ;; POSS links animate (possessor, source) -> entity
                     ;; (possessed, dest=outarc). Only fold the other end in
@@ -60,8 +62,12 @@
                                  (if (eq (concept-definiteness owner) :proper)
                                      (cap (base-lemma owner))
                                      (base-lemma owner)))
-                         mods-pre)))))))
-    (setf mods-pre (nreverse mods-pre))
+                         poss-mods)))))))
+    ;; English pre-modifier order: possessive precedes adjectives. The
+    ;; ordering is fixed grammatically and must NOT depend on the order
+    ;; the arcs happen to appear in concept-relations (which can vary
+    ;; with parse history).
+    (setf mods-pre (append (nreverse poss-mods) (nreverse adj-mods)))
     (let ((first-word (or (first mods-pre) head)))
       (setf article (article-for concept first-word)))
     (when (some (lambda (m) (search "'s" m)) mods-pre)
@@ -70,10 +76,27 @@
                     " "
                     (format nil "~@[~a ~]~{~a ~}~a"
                             article mods-pre head)))
+          (pp-mods (np-post-modifiers concept state))
           (rel-clauses (relative-clauses-for concept state)))
-      (cond (rel-clauses
-             (format nil "~a ~{~a~^, ~}" np-text rel-clauses))
-            (t np-text)))))
+      (format nil "~a~@[ ~{~a~^ ~}~]~@[ ~{~a~^, ~}~]"
+              np-text pp-mods rel-clauses))))
+
+(defun np-post-modifiers (concept state)
+  "Collect PP post-modifiers (e.g. 'in a bottle', 'with a belly') for an NP
+   head from its :pp relations. Direction-aware: the preposition flips
+   depending on whether CONCEPT is the source or destination of the rel."
+  (let ((mods '()))
+    (dolist (rel (concept-relations concept))
+      (when (and (eq (relation-role rel) :pp)
+                 (not (traversed-p state rel)))
+        (let ((prep  (np-pp-preposition rel concept))
+              (other (other-end rel concept)))
+          (when (and prep other)
+            (mark-traversed state rel)
+            (push (format nil "~a ~a" prep
+                          (realize-np other state :case :accusative))
+                  mods)))))
+    (nreverse mods)))
 
 ;;; --- Relative clauses (Phase 4) --------------------------------------------
 

@@ -69,3 +69,30 @@
   (let ((label (label (relation-type rel))))
     (or (position label *pp-relation-priority* :test #'string-equal)
         most-positive-fixnum)))
+
+;;; --- NP-modifier prepositions ----------------------------------------------
+;;; When a :pp relation hangs off an NP head (rather than off the main verb),
+;;; we render it as a post-modifier — "milk in a bottle", "baby with a belly".
+;;; The preposition depends on which SIDE of the relation the NP is on:
+;;; the inarc (source) side and the outarc (dest) side need different preps
+;;; because "bottle containing milk" and "milk in a bottle" are not symmetric.
+
+(defparameter *np-pp-prepositions*
+  ;; (relation-label  source-side-prep  dest-side-prep)
+  '((loc   "in"          "of")
+    (cntns "containing"  "in")
+    (part  "with"        "of")
+    (inst  "with"        "for")
+    (dest  "to"          "for")
+    (time  "at"          nil)
+    (dur   "for"         nil)
+    (age   "aged"        nil))
+  "Source-side: NP is the inarc (source) of the relation.
+   Dest-side:   NP is the outarc (destination) of the relation.")
+
+(defun np-pp-preposition (rel concept)
+  "The preposition to use when REL is attached to CONCEPT as an NP modifier."
+  (let* ((label (label (relation-type rel)))
+         (entry (assoc label *np-pp-prepositions* :test #'string-equal))
+         (source-side (not (eq (outarc rel) concept))))
+    (and entry (if source-side (second entry) (third entry)))))
