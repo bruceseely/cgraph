@@ -84,6 +84,10 @@
 (defun concept-number (concept)
   "Return :plural if the concept's referent denotes a set, else :singular."
   (cond ((set-spec concept) :plural)
+        ;; Set-typed referent (e.g. parsed from '[DOG: {*}]') means plural.
+        ((let ((ref (referent concept)))
+           (and ref (set-p ref)))
+         :plural)
         (t :singular)))
 
 (defun concept-person (concept)
@@ -148,6 +152,25 @@
     ("put"   "put"   "put"    "puts")
     ("cut"   "cut"   "cut"    "cuts")
     ("bite"  "bit"   "bitten" "bites")
+    ("drink" "drank" "drunk"  "drinks")
+    ("sing"  "sang"  "sung"   "sings")
+    ("ring"  "rang"  "rung"   "rings")
+    ("swim"  "swam"  "swum"   "swims")
+    ("fall"  "fell"  "fallen" "falls")
+    ("rise"  "rose"  "risen"  "rises")
+    ("grow"  "grew"  "grown"  "grows")
+    ("throw" "threw" "thrown" "throws")
+    ("blow"  "blew"  "blown"  "blows")
+    ("draw"  "drew"  "drawn"  "draws")
+    ("wear"  "wore"  "worn"   "wears")
+    ("tear"  "tore"  "torn"   "tears")
+    ("break" "broke" "broken" "breaks")
+    ("choose" "chose" "chosen" "chooses")
+    ("steal" "stole" "stolen" "steals")
+    ("sleep" "slept" "slept"  "sleeps")
+    ("lose"  "lost"  "lost"   "loses")
+    ("spend" "spent" "spent"  "spends")
+    ("lend"  "lent"  "lent"   "lends")
     ("believe" "believed" "believed" "believes")
     ("own"   "owned" "owned"  "owns")
     ("love"  "loved" "loved"  "loves")
@@ -202,3 +225,32 @@
 (register-lexicon-entry 'manner :adv-form "somehow")
 (register-lexicon-entry 'time   :adv-form "sometime")
 (register-lexicon-entry 'place  :adv-form "somewhere")
+
+;;; --- Verb-form overrides for state-noun types ------------------------------
+;;; When a state-noun type is used as the main predicate of a clause, we need
+;;; the corresponding verb form. BELIEF -> "believe", INTENTION -> "intend",
+;;; THOUGHT -> "think", etc.
+
+(register-lexicon-entry 'belief    :lemma "believe")
+(register-lexicon-entry 'intention :lemma "intend")
+(register-lexicon-entry 'thought   :lemma "think")
+(register-lexicon-entry 'hope      :lemma "hope")
+(register-lexicon-entry 'fear      :lemma "fear")
+(register-lexicon-entry 'wish      :lemma "wish")
+
+;;; --- Argument-frame overrides for communication verbs ---------------------
+;;; By default the CG :dobj surfaces as direct object and :rcpt as 'to X'.
+;;; Communication verbs flip this: the recipient is unmarked, the info is a
+;;; PP. ':rcpt-direct t' triggers the swap; ':obj-prep' picks the preposition.
+
+(register-lexicon-entry 'inform :rcpt-direct t :obj-prep "about")
+(register-lexicon-entry 'notify :rcpt-direct t :obj-prep "about")
+(register-lexicon-entry 'advise :rcpt-direct t :obj-prep "about")
+(register-lexicon-entry 'remind :rcpt-direct t :obj-prep "of")
+(register-lexicon-entry 'warn   :rcpt-direct t :obj-prep "about")
+(register-lexicon-entry 'ask    :rcpt-direct t :obj-prep "about")
+;; Double-object verbs: the info NP follows the recipient with no preposition
+;; ("tell her the news", "teach the kids math").
+(register-lexicon-entry 'tell   :rcpt-direct t :obj-prep nil)
+(register-lexicon-entry 'teach  :rcpt-direct t :obj-prep nil)
+(register-lexicon-entry 'show   :rcpt-direct t :obj-prep nil)

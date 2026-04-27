@@ -104,13 +104,16 @@
   (if (starts-with-vowel-sound-p word) "an" "a"))
 
 (defun article-for (concept lemma)
-  "Choose a determiner for CONCEPT preceding LEMMA. Returns NIL for no article."
+  "Choose a determiner for CONCEPT preceding LEMMA. Returns NIL for no article.
+   Plural NPs of unspecified count use the bare plural form ('dogs bark'),
+   not 'some dogs bark', which matches default English usage for generic
+   plurals."
   (let ((definiteness (concept-definiteness concept))
         (number       (concept-number concept)))
     (cond ((mass-noun-p concept)        nil)
           ((eq definiteness :proper)    nil)
           ((eq definiteness :universal) "every")
-          ((eq number :plural)          "some")
+          ((eq number :plural)          nil)
           (t (indefinite-article lemma)))))
 
 ;;; --- Adjective -> adverb ---------------------------------------------------

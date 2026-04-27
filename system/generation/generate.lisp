@@ -14,6 +14,7 @@
 (defun graph-to-text (graph)
   "Convert a conceptual graph to an English sentence."
   (let* ((nodes     (graph-nodes graph))
+         (head      (and (typep graph 'graph) (head graph)))
          (relations (graph-relations-of nodes))
          (concepts  (graph-concepts-of nodes))
          (state     (make-walk-state))
@@ -22,6 +23,12 @@
                  (let* ((main    (find-main-predicate nodes))
                         (buckets (and main (classify-relations main))))
                    (cond ((null main) "")
+                         ;; Sowa transformation: when the graph head is the
+                         ;; patient rather than the agent, render in passive
+                         ;; voice with a 'by X' phrase. The head is the user's
+                         ;; topical entry point into the graph.
+                         ((head-is-object-of-p head main buckets)
+                          (realize-passive-with-agent main buckets state))
                          (t (realize-clause main buckets state)))))
                 ((find-if #'act-or-event-concept-p concepts)
                  (let* ((main    (find-if #'act-or-event-concept-p concepts))

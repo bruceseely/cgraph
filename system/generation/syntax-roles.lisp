@@ -17,6 +17,7 @@
     (thme  :dobj)
     (stat  :dobj)
     (cont  :dobj)
+    (goal  :dobj)
     (rcpt  :iobj   "to")
     (inst  :pp     "with")
     (loc   :pp     "in")

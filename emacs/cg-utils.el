@@ -289,14 +289,30 @@ and a relation type share the same name."
     (put emacs-sym 'variable-documentation full-doc)))
 
 (defun cgraph-read-options-from-cl ()
-  "Read current CL option values into Emacs defcustom vars and sync docstrings.
-CL (initializations.lisp) is the source of truth; this reflects its state in Emacs."
+  "Sync cgraph option values between Emacs and CL on SLIME connect.
+
+For each option:
+- If the user has explicitly customized it in Emacs (either in-session via
+  Customize or persistently via 'Save for Future Sessions'), the Emacs value
+  is treated as the source of truth and pushed to CL — overriding the CL
+  default and any value set in initializations.lisp.
+- Otherwise CL is the source of truth and its value is read into Emacs.
+
+This lets Customize 'Save for Future Sessions' persist across sessions
+without breaking the initializations.lisp use case for users who prefer
+to set options in CL."
   (interactive)
   (dolist (entry cgraph--options)
-    (let ((cl-val (slime-eval `(cl:if ,(cdr entry) t nil))))
-      ;; Use set-default to update without triggering :set (which would push back to CL)
-      (set-default (car entry) cl-val))
-    (cgraph--sync-docstring (car entry) (cdr entry))))
+    (let* ((emacs-sym (car entry))
+           (cl-sym    (cdr entry))
+           (customized (or (get emacs-sym 'customized-value)
+                           (get emacs-sym 'saved-value))))
+      (cond (customized
+             (cgraph--push-to-cl cl-sym (symbol-value emacs-sym)))
+            (t
+             (let ((cl-val (slime-eval `(cl:if ,cl-sym t nil))))
+               (set-default emacs-sym cl-val))))
+      (cgraph--sync-docstring emacs-sym cl-sym))))
 
 (defun cgraph-sync-options-to-cl ()
   "Push all Emacs cgraph option values to CL, overriding initializations.lisp."
@@ -310,7 +326,8 @@ CL (initializations.lisp) is the source of truth; this reflects its state in Ema
   '((cgraph-always-format-nodes             . conceptual-graphs::*always-format-nodes*)
     (cgraph-always-show-node-ref            . conceptual-graphs::*always-show-node-ref*)
     (cgraph-allow-dynamic-individual-creation . conceptual-graphs::*allow-dynamic-individual-creation*)
-    (cgraph-always-print-ascii-arrows . conceptual-graphs::*always-print-ascii-arrows*)
+    (cgraph-always-print-ascii-arrows       . conceptual-graphs::*always-print-ascii-arrows*)
+    (cgraph-anaphora-cross-coref            . conceptual-graphs::*anaphora-cross-coref*)
     )
   "Mapping from cgraph Emacs option symbols to their Common Lisp counterparts.")
 
@@ -349,6 +366,19 @@ CL (initializations.lisp) is the source of truth; this reflects its state in Ema
   :set (lambda (sym val)
          (set-default sym val)
          (cgraph--push-to-cl 'conceptual-graphs::*always-print-ascii-arrows* val)))
+
+(defcustom cgraph-anaphora-cross-coref nil
+  "Mirrors conceptual-graphs::*anaphora-cross-coref* in Common Lisp.
+When non-nil, generation treats coref'd concepts as the same referent
+for pronoun selection — a second mention becomes 'he' instead of
+repeating the proper noun. Off by default to avoid pronoun ambiguity
+in nested mental-attitude contexts."
+  :type 'boolean
+  :group 'cgraph
+  :initialize 'custom-initialize-default
+  :set (lambda (sym val)
+         (set-default sym val)
+         (cgraph--push-to-cl 'conceptual-graphs::*anaphora-cross-coref* val)))
 
 
 

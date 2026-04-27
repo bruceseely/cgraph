@@ -50,7 +50,7 @@
     ("[PERSON: Dave]-(agnt)<-[GIVE]-(obj)->[FOOD] (rcpt)->[DOG: spot], (poss)->[DOG: spot]."
      . "Dave gives food to Spot, and he has Spot.")
     ("[PERSON: Dexter]-(agnt)<-[GIVE]-(obj)->[FOOD] (rcpt)->[DOG: spot], (poss)->[DOG: spot]."
-     . "Dexter gives food to Spot, and they have Spot.")
+     . "Dexter gives food to Spot, and he has Spot.")
     ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: dave *j]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: dave *j]." . "Young Dave drives with Dave's old chevy-vehicle to Baltimore.")
     ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: Dave *x]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: Dave *x]." . "Young Dave drives with Dave's old chevy-vehicle to Baltimore.")
 

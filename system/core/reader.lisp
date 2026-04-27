@@ -328,9 +328,10 @@
 
     (consume-whitespace stream)
     ;; set-text does not include the #\{ and #\} characters
-    (let ((set-text (read-string stream :end-chars '(#\}))))
+    (let* ((set-text (read-string stream :end-chars '(#\})))
+           (trimmed  (string-trim " " set-text)))
 
-      (with-input-from-string (stream (string-trim " " set-text))
+      (with-input-from-string (stream trimmed)
         (block nil
           (loop
             (let ((feature (read-term stream :end-chars terms)))
@@ -343,7 +344,15 @@
                         (equal feature "")
                         (equal feature "}"))
                 (return))))))
-      (skip-char stream #\}))
+      (skip-char stream #\})
+      ;; Generic set: both '{*}' and '{}' denote a plural referent with
+      ;; unspecified members. Inside the braces the asterisk-reader may
+      ;; consume '*' and return NIL, leaving set-contents empty; an empty
+      ;; '{}' similarly yields no contents. In either case preserve a "*"
+      ;; placeholder so downstream code can distinguish a generic plural
+      ;; from a missing set entirely.
+      (when (null set-contents)
+        (push "*" set-contents)))
     ;; Reverse to preserve original order (push reverses)
     (list :set (nreverse set-contents))))
 
@@ -396,14 +405,18 @@
 
 ;;; Build a set object from a list of member strings
 (defun build-set-from-specs (member-specs concept-type)
-  "Create a set object by resolving member specs to individuals"
+  "Create a set object by resolving member specs to individuals.
+   When MEMBER-SPECS is non-empty but every member is generic (e.g. '{*}'),
+   still return an empty set — the user has explicitly asked for a plural
+   referent with unspecified members."
   (let ((members (list)))
     (dolist (spec member-specs)
       (let ((individual (resolve-set-member spec concept-type)))
         (when individual
           (push individual members))))
-    (when members
-      (make-set-from-individuals (nreverse members)))))
+    (cond (members      (make-set-from-individuals (nreverse members)))
+          (member-specs (make-set-from-individuals nil))
+          (t            nil))))
 
 
 (defun individual-reader (stream initial-char)
