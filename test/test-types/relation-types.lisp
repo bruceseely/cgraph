@@ -17,6 +17,7 @@
 (:label life-stage  :source-types person      :dest-type life-stage      :desc "life stage")
 (:label loc   :source-types ⊤                 :dest-type place           :desc "location - links anything to its place")
 (:label manr  :source-types act               :dest-type manner          :desc "manner - links an [ACT] to an [ATTRIBUTE] of the act")
+(:label matr  :source-types entity            :dest-type substance       :desc "material")
 (:label membr :source-types set               :dest-type entity          :desc "member - set has member enttity")
 (:label obj   :source-types act               :dest-type entity          :desc "object - links an [ACT] to an [ENTITY], which is acted upon")
 (:label on    :source-types entity            :dest-type entity          :desc "on - links [ENTITY:*x] to [ENTITY:*y], where *x is on *y")

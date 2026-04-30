@@ -29,7 +29,6 @@
           (concept-link-command  (format nil "ln -s ~a  ~a"  external-concept-type-path  *cgraph-types-directory*))
           (relation-link-command (format nil "ln -s ~a ~a" external-relation-type-path *cgraph-types-directory*)))
 
-      ;;(format t "~&concept-link-command: ~s~%"  concept-link-command)
       (delete-type-files)
 
       ;; link the files
@@ -50,7 +49,10 @@
              (format nil "~arelation-types.lisp" *cgraph-types-directory*)))
 
 
-(defun initialize-types (&key external-types-directory supress-warnings)
+(defun initialize-types (&key (external-types-directory *external-types-directory* type-supplied) supress-warnings)
+  (when type-supplied
+    (setf *external-types-directory*  external-types-directory))
+
   ;; ensure files are setup
   (cond (external-types-directory
          (link-cgraph-types-to-external-directory external-types-directory))
@@ -151,11 +153,11 @@
          (data-directory (format nil "~adata/" cgraph-base))
          (concept-types-path (format nil "~aconcept-types.lisp" cgraph-base))
          (relation-types-path (format nil "~arelation-types.lisp" cgraph-base)))
-
     (setf *cgraph* (ensure-directories-exist cgraph-base))
     (setf *cgraph-types-directory* (ensure-directories-exist types-directory))
     (setf *cgraph-data-directory*  (ensure-directories-exist data-directory))
     (setf *cgraph-examples-directory* (format nil "~adefault-types/" (asdf::system-source-directory :cgraph)))
+    (setf *initial-types-directory* *cgraph-types-directory*)
     (initialize-types :external-types-directory external-types-directory))
 
   ;; Set default package for SLIME worker threads (when SLIME is loaded)
@@ -179,10 +181,6 @@
                 (let ((*readtable* (copy-readtable nil)))
                   (funcall orig package)))))))
 
-  (cleanup-files code-base)
-  (cg::report-directories)
-  (terpri)
-
   (when (find-package :swank)
     (swank::eval-in-emacs
      '(progn
@@ -190,23 +188,36 @@
        (load (expand-file-name "~/repo/cgraph/cgraph-filesets.el"))
        (cgraph-read-options-from-cl))))
 
+  (cleanup-files code-base))
 
-  ;; start web server
-  (asdf:load-system :cgraph-web)
-  (cg::start-web-server :port 8060)
-  (terpri)
 
-  (cg::test-cgraph t)
-  ;;(cg::test-all t)
-  )
-
+(in-package :cl-user)
 
 ;;; This is the transition from the :cl-user package to the :cg package
-(in-package :cl-user)
 (defun start-cgraph (code-path &key external-types-directory)
   (setf *package* (or (find-package :conceptual-graphs)
                       (make-package :conceptual-graphs
                                     :use '(:common-lisp :common-lisp-user :uiop)
                                     :nicknames '(:cg :cgraph))))
 
-  (cg::setup-cgraph code-path :external-types-directory external-types-directory))
+  (cg::setup-cgraph code-path :external-types-directory external-types-directory)
+
+  (cg::report-directories)
+  (terpri)
+
+  ;; start web server
+  (terpri)
+  (asdf:load-system :cgraph-web)
+  (cg::start-web-server :port 8060)
+  (terpri)
+
+  (when cg::*run-lexicon-lint-on-startup*
+    (let ((min-sev (case cg::*run-lexicon-lint-on-startup*
+                     (:errors-only     :error)
+                     (:errors-warnings :warn)
+                     (otherwise        :info))))
+      (cg::report-lexicon-lint :min-severity min-sev))
+    (terpri))
+
+  (when cg::*run-tests-on-startup*
+    (cg::test-cgraph t)))

@@ -43,7 +43,7 @@
                       type-definition-test
                       query-test)))
     (dolist (test-name test-names)
-      (format t "~&test-name: ~s~%"  test-name)
+      ;;(format t "~&test-name: ~s~%"  test-name)
       (let ((result (test-one test-name verbose)))
         (setf results (and results result))))
     results))

@@ -48,6 +48,7 @@
 (defvar *cgraph-types-directory* nil)
 (defvar *cgraph-examples-directory* nil)
 (defvar *cgraph-data-directory* nil)
+(defvar *external-types-directory* nil)
 
 (defvar *cgraph-inits*  ())
 
@@ -100,3 +101,21 @@
   "Use the string (eg. \"->\") instead of the single-character arrow (eg. →)")
 
 (defvar *print-without-variables* nil)
+
+(defvar *run-tests-on-startup* t
+  "When non-NIL, start-cgraph runs the test suite at startup.
+   Useful while making modifications; can be disabled during regular
+   use to skip the test report.")
+
+(defvar *run-lexicon-lint-on-startup* :all
+  "Controls whether and how report-lexicon-lint runs at startup.
+   Values:
+     NIL               - don't run.
+     :ERRORS-ONLY      - run, show only error-level findings (silent
+                         unless something is broken).
+     :ERRORS-WARNINGS  - run, show errors and warnings.
+     :ALL (or T)       - run, show all findings (errors, warnings,
+                         info).
+   Default is :ALL, which matches the historical 'on' behavior. Set
+   to :ERRORS-ONLY for regular use, switch back to :ALL while
+   modifying types or relations.")

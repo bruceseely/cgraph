@@ -73,7 +73,8 @@
                                            (:file "morphology")
                                            (:file "anaphora")
                                            (:file "realizer")
-                                           (:file "generate")))))
+                                           (:file "generate")
+                                           (:file "lexicon-lint")))))
 
                (:module "support"
                 :serial t

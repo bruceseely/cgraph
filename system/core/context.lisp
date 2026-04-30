@@ -198,7 +198,8 @@
 
 (defmethod remove-cgraph ((graph graph) &optional (context *context*))
   (when (graphs context)
-    (setf (graphs context) (remove graph (graphs context) :test #'graphs-equal))))
+    (when (find graph (graphs context) :test #'graphs-equal)
+    (setf (graphs context) (remove graph (graphs context) :test #'graphs-equal)))))
 
 
 (defmethod remove-cgraph ((graph string ) &optional (context *context*))

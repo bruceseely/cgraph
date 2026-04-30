@@ -1,6 +1,5 @@
 
 
-
 ;;  ;; Evaluating in Lisp
   ;;
 
@@ -300,19 +299,29 @@ For each option:
 
 This lets Customize 'Save for Future Sessions' persist across sessions
 without breaking the initializations.lisp use case for users who prefer
-to set options in CL."
+to set options in CL.
+
+Bails silently if no SLIME connection exists or the connected Lisp does
+not yet have the :conceptual-graphs package loaded — this avoids a
+protocol-corrupting failure when slime-connected-hook fires against a
+fresh SBCL where cgraph hasn't been loaded yet (eg. after ,quit + C-x l)."
   (interactive)
-  (dolist (entry cgraph--options)
-    (let* ((emacs-sym (car entry))
-           (cl-sym    (cdr entry))
-           (customized (or (get emacs-sym 'customized-value)
-                           (get emacs-sym 'saved-value))))
-      (cond (customized
-             (cgraph--push-to-cl cl-sym (symbol-value emacs-sym)))
-            (t
-             (let ((cl-val (slime-eval `(cl:if ,cl-sym t nil))))
-               (set-default emacs-sym cl-val))))
-      (cgraph--sync-docstring emacs-sym cl-sym))))
+  (when (and (fboundp 'slime-connected-p)
+             (slime-connected-p)
+             (slime-eval '(cl:if (cl:find-package "CONCEPTUAL-GRAPHS") t nil)))
+    (dolist (entry cgraph--options)
+      (let* ((emacs-sym (car entry))
+             (cl-sym    (cdr entry))
+             (customized (or (get emacs-sym 'customized-value)
+                             (get emacs-sym 'saved-value))))
+        (cond (customized
+               (cgraph--push-to-cl cl-sym (symbol-value emacs-sym)))
+              (t
+               ;; Read CL value directly so non-boolean options
+               ;; (keywords, etc.) roundtrip. Booleans stay T/NIL.
+               (let ((cl-val (slime-eval cl-sym)))
+                 (set-default emacs-sym cl-val))))
+        (cgraph--sync-docstring emacs-sym cl-sym)))))
 
 (defun cgraph-sync-options-to-cl ()
   "Push all Emacs cgraph option values to CL, overriding initializations.lisp."
@@ -328,6 +337,8 @@ to set options in CL."
     (cgraph-allow-dynamic-individual-creation . conceptual-graphs::*allow-dynamic-individual-creation*)
     (cgraph-always-print-ascii-arrows       . conceptual-graphs::*always-print-ascii-arrows*)
     (cgraph-anaphora-cross-coref            . conceptual-graphs::*anaphora-cross-coref*)
+    (cgraph-run-tests-on-startup            . conceptual-graphs::*run-tests-on-startup*)
+    (cgraph-run-lexicon-lint-on-startup     . conceptual-graphs::*run-lexicon-lint-on-startup*)
     )
   "Mapping from cgraph Emacs option symbols to their Common Lisp counterparts.")
 
@@ -380,9 +391,86 @@ in nested mental-attitude contexts."
          (set-default sym val)
          (cgraph--push-to-cl 'conceptual-graphs::*anaphora-cross-coref* val)))
 
+(defcustom cgraph-run-tests-on-startup t
+  "Mirrors conceptual-graphs::*run-tests-on-startup* in Common Lisp.
+When non-nil, start-cgraph runs the test suite at startup. Useful
+while making modifications; disable during regular use to skip the
+test report."
+  :type 'boolean
+  :group 'cgraph
+  :initialize 'custom-initialize-default
+  :set (lambda (sym val)
+         (set-default sym val)
+         (cgraph--push-to-cl 'conceptual-graphs::*run-tests-on-startup* val)))
+
+(defcustom cgraph-run-lexicon-lint-on-startup :all
+  "Mirrors conceptual-graphs::*run-lexicon-lint-on-startup* in Common Lisp.
+Controls whether and how report-lexicon-lint runs at startup.
+  Off                  - don't run.
+  Errors only          - run, show only error-level findings (silent
+                         unless something is broken).
+  Errors and warnings  - run, show errors and warnings.
+  All                  - run, show all findings.
+Default is All. Use Errors only for regular use; switch to All while
+modifying types or relations."
+  :type '(choice (const :tag "Off"                   nil)
+                 (const :tag "Errors only"           :errors-only)
+                 (const :tag "Errors and warnings"   :errors-warnings)
+                 (const :tag "All"                   :all))
+  :group 'cgraph
+  :initialize 'custom-initialize-default
+  :set (lambda (sym val)
+         (set-default sym val)
+         (cgraph--push-to-cl 'conceptual-graphs::*run-lexicon-lint-on-startup* val)))
 
 
 (add-hook 'slime-connected-hook #'cgraph-read-options-from-cl)
+
+
+(add-hook 'slime-repl-mode-hook 'goto-address-mode)
+
+
+;;; probably belongs in Emacs init coder
+;; Optional but recommended: open file:// URLs inside Emacs (find-file)
+;; instead of handing them to the OS browser, which will route .md
+;; files to whatever app is registered for them.
+(with-eval-after-load 'browse-url
+    (add-to-list 'browse-url-handlers
+                 (cons "\\`file://" #'browse-url-emacs)))
+
+
+;; (defun cg-open-md-in-typora (url &rest _)
+;;   "Open a file:// URL pointing at a .md file in Typora via `open -a`."
+;;   (let ((path (url-unhex-string
+;;                (replace-regexp-in-string "\\`file://" "" url))))
+;;     (call-process "open" nil 0 nil "-a" "Typora" path)))
+
+(defun cg-open-md-in-typora (url &rest _)
+  "Open URL (file:// .md) in Typora on macOS; fall back to find-file."
+  (let* ((path (url-unhex-string
+                (replace-regexp-in-string "\\`file://" "" url)))
+         (opened (and (eq system-type 'darwin)
+                      (zerop (call-process "open" nil nil nil
+                                           "-a" "Typora" path)))))
+    (unless opened
+      (find-file path))))
+
+(with-eval-after-load 'browse-url
+  (add-to-list 'browse-url-handlers
+               (cons "\\`file://.*\\.md\\'" #'cg-open-md-in-typora)))
+
+
+
+;; cg-utils.el is loaded after SLIME's REPL buffer already exists,
+;; so the hook above won't fire for it. Enable the mode on any REPL
+;; that's already open when this file is loaded.
+(dolist (buf (buffer-list))
+  (with-current-buffer buf
+    (when (derived-mode-p 'slime-repl-mode)
+      (goto-address-mode 1))))
+
+
+
 
 ;;(filesets-init)
 ;;(filesets-reset-fileset)

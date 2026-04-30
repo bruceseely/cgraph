@@ -108,14 +108,21 @@
   ;; Use cgraph-text (no trailing period) — the period belongs only at the outermost level
   (cgraph-text (head object)))
 
+;; (defmethod graphs-equal ((graph1 graph) (graph2 graph) &optional debug)
+;;   "Compare two graphs for equality by comparing their sorted node representations"
+;;   (declare (ignore debug))
+;;   (let* ((nodes1 (sort (copy-list (nodes graph1)) #'alpha-lessp :key #'graph-node-key))
+;;          (nodes2 (sort (copy-list (nodes graph2)) #'alpha-lessp :key #'graph-node-key))
+;;          (keys1 (mapcar #'graph-node-key nodes1))
+;;          (keys2 (mapcar #'graph-node-key nodes2)))
+;;     (equalp keys1 keys2)))
+
 (defmethod graphs-equal ((graph1 graph) (graph2 graph) &optional debug)
   "Compare two graphs for equality by comparing their sorted node representations"
   (declare (ignore debug))
-  (let* ((nodes1 (sort (copy-list (nodes graph1)) #'alpha-lessp :key #'graph-node-key))
-         (nodes2 (sort (copy-list (nodes graph2)) #'alpha-lessp :key #'graph-node-key))
-         (keys1 (mapcar #'graph-node-key nodes1))
-         (keys2 (mapcar #'graph-node-key nodes2)))
-    (equalp keys1 keys2)))
+  (let ((nodes1 (collect-nodes (head graph1)))
+        (nodes2 (collect-nodes (head graph2))))
+    (graphs-equal nodes1 nodes2)))
 
 
 (defgeneric make-cgraph (graph &optional context))

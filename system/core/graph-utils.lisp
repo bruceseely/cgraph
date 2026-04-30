@@ -861,8 +861,6 @@
 (defmethod graphs-equal ((g1 string) (g2 string) &optional debug)
   (graphs-equal (pcg g1) (pcg g2) debug))
 
-
-
 (defun fix-concept-strings (text)
   (let* ((contype-strings (list))
          (times (count #\[ text))

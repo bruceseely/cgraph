@@ -6,24 +6,13 @@
 
   ;;(defmethod unique-individual-p ((ind individual)) ind nil)
 
-  (format t "~&concept-text: ~s~%"  concept-text)
-  (let* (;; (concept (graph-head (pcg concept-text)))
-         (concept (car (pcg concept-text)))
-         ;; (concept-string (pcg (pcg concept-text)))
+  ;;(format t "~&concept-text: ~s~%"  concept-text)
+  (let* ((concept (car (pcg concept-text)))
          (concept-string (pcg (car (pcg concept-text))))
-         (zz (format t "~&concept-string: ~s~%"  concept-string))
-         ;; (recreated-concept (graph-head (pcg (pcg (pcg concept-text)))))
          (recreated-concept (car (pcg concept-text)))
-         (zz (format t "~&recreated-concept: ~s~%"  recreated-concept))
-         ;;(recreated-concept-string (pcg (pcg (pcg (pcg concept-text)))))
          (recreated-concept-string (pcg (car (pcg (pcg (car (pcg concept-text)))))))
-         (zz (format t "~&recreated-concept-string: ~s~%"  recreated-concept-string))
-         (zz (format t "~&concept: ~s~%"  concept))
-         (zz (format t "~&recreated-concept: ~s~%"  recreated-concept))
          (recreated-result (concepts-equal concept recreated-concept))
-         (zz (format t "~&recreated-result: ~s~%"  recreated-result))
-         (summary (string-equal concept-string recreated-concept-string))
-         )
+         (summary (string-equal concept-string recreated-concept-string)))
 
     (when verbose
       (format t "~2%")

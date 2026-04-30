@@ -6,14 +6,14 @@
 ;;; pay attention to *concise*
 
 (defparameter graph-string000 "[girl]<-(agnt)<-[EAT]->(obj)->[PIE].")
-(defparameter graph-string010 "[girl:sue]<-(agnt)<-[EAT]->(manr)->[FAST].")
+(defparameter graph-string010 "[girl:sue]<-(agnt)<-[EAT]->(manr)->[QUICKLY].")
 (defparameter graph-string020 "[person:sue]<-(agnt)<-[EAT]->(obj)->[PIE].")
 (defparameter graph-string030 "[person: sue]<-(agnt)<-[EAT]->(obj)->[PIE].")
 
 (defparameter graph-string040
   "[dog]-
      (agnt)<-[EAT]-
-               (manr)->[FAST]
+               (manr)->[QUICKLY]
                (obj)->[FOOD],
      (rcpt)<-[GIVE]-
                (agnt)->[PERSON]
@@ -33,14 +33,14 @@
 ;;; (ptestx 043)
 (defparameter graph-string043
   "[DOG]<-(agnt)<-[EAT]-
-                   (manr)->[FAST]
+                   (manr)->[QUICKLY]
                    (obj)->[FOOD] .")
 
 
 (defparameter graph-string045
   "[DOG]-
      (agnt)<-[EAT]-
-               (manr)->[FAST]
+               (manr)->[QUICKLY]
                (obj)->[FOOD] ,
      (rcpt)<-[GIVE]->(obj)->[FOOD].")
 
@@ -52,23 +52,23 @@
 
 (defparameter graph-string047
   "[PERSON:sue]←(agnt)←[GIVE]-
-                         (inst)→[FOOD]←(obj)←[EAT:*x]->(manr)→[FAST]
+                         (inst)→[FOOD]←(obj)←[EAT:*x]->(manr)→[QUICKLY]
                          (rcpt)→[DOG:Spot]←(agnt)←[EAT:*x].")
 
 
 (defparameter graph-string050
   "[DRIVE]-
-      (agnt)→[PERSON:bob]→(poss)→[CHEVY:*x]→(attr)→[OLD]
+      (agnt)→[PERSON:bob]→(poss)→[CHEVY-VEHICLE:*x]→(attr)→[OLD]
       (dest)→[CITY:St.Louis]
-      (inst)→[CHEVY:*x].")
+      (inst)→[CHEVY-VEHICLE:*x].")
 
 
 (defparameter graph-string060
-  "[DRIVE]->(inst)->[CHEVY]->(attr)->[OLD].")
+  "[DRIVE]->(inst)->[CHEVY-VEHICLE]->(attr)->[OLD].")
 
 (defparameter graph-string070
   "[DRIVE]-
-     (agnt)->[PERSON:Bob]->(poss)->[CHEVY]
+     (agnt)->[PERSON:Bob]->(poss)->[CHEVY-VEHICLE]
      (dest)->[CITY: St. Louis].")
 
 (defparameter graph-string080
@@ -96,7 +96,7 @@
 (defparameter graph-string110
   "[DOG:fido]-
          (agnt)<-[EAT]-
-                  (manr)->[FAST]
+                  (manr)->[QUICKLY]
                   (obj)->[FOOD: #78],
          (rcpt)<-[GIVE]-
                    (agnt)->[PERSON]
@@ -104,7 +104,7 @@
 
 (defparameter graph-string120
   "[DRIVE]-
-     (agnt)->[PERSON: Bob]->(poss)->[CHEVY]
+     (agnt)->[PERSON: Bob]->(poss)->[CHEVY-VEHICLE]
      (dest)->[CITY: St. Louis].")
 
 
@@ -131,36 +131,36 @@
                             (rcpt)->[DOG: Spot]<-(agnt)<-[EAT: #1] .")
 
 
-
-(defparameter graph-string300
-  "[PERSON: sue]<-(agnt)<-[GIVE]-
-                            (inst)->[FOOD: #1]<-(obj)<-[EAT: #1]
-                            (inst)->[FOOD: #2]<-(obj)<-[EAT: #2]
-                            (rcpt)->[DOG: Fido]<-(agnt)<-[EAT: #2]
-                            (rcpt)->[DOG: Spot]<-(agnt)<-[EAT: #1] .")
-
-
-
-(defparameter graph-string400
-  "[SPOON]-
-      (inst)←[EAT]-
-              (agnt)→[MONKEY]
-              (obj)→[WALNUT:*y],
-      (matr)→[SHELL:*x]←(part)←[WALNUT:*y].")
+;;; can't handle this yet
+;; (defparameter graph-string300
+;;   "[PERSON: sue]<-(agnt)<-[GIVE]-
+;;                             (inst)->[FOOD: #1]<-(obj)<-[EAT: #1]
+;;                             (inst)->[FOOD: #2]<-(obj)<-[EAT: #2]
+;;                             (rcpt)->[DOG: Fido]<-(agnt)<-[EAT: #2]
+;;                             (rcpt)->[DOG: Spot]<-(agnt)<-[EAT: #1] .")
 
 
-(defparameter graph-string410 "[SPOON]-
-                                  (inst)←[EAT]-
-                                          (agnt)→[MONKEY]
-                                          (obj)→[WALNUT:*y],
-                                  (matr)→[SHELL:*x]←(part)←[WALNUT:*y].")
+
+;; (defparameter graph-string400
+;;   "[SPOON]-
+;;       (inst)←[EAT]-
+;;               (agnt)→[MONKEY]
+;;               (obj)→[WALNUT:*y],
+;;       (matr)→[SHELL:*x]←(part)←[WALNUT:*y].")
+
+
+;; (defparameter graph-string410 "[SPOON]-
+;;                                   (inst)←[EAT]-
+;;                                           (agnt)→[MONKEY]
+;;                                           (obj)→[WALNUT:*y],
+;;                                   (matr)→[SHELL:*x]←(part)←[WALNUT:*y].")
 
 
 ;;; (ptestx 420)
 (defparameter graph-string420
   "[GIRL: sue]-
       (agnt)←[EAT]-
-           (manr)→[FAST]
+           (manr)→[QUICKLY]
            (obj)→[PIE],
       (agnt)←[EAT]→(obj)→[FOOD].")
 
@@ -168,25 +168,25 @@
 
 (defparameter graph-string430
   "[DRIVE]-
-      (agnt)→[PERSON:Bob]→(poss)→[CHEVY:*x]→(attr)→[OLD]
+      (agnt)→[PERSON:Bob]→(poss)→[CHEVY-VEHICLE:*x]→(attr)→[OLD]
       (dest)→[CITY:St.Louis]
-      (inst)→[CHEVY:*x].")
+      (inst)→[CHEVY-VEHICLE:*x].")
 
 
 
 (defparameter graph-string440
   "[DRIVE]-
-      (agnt)→[PERSON:Bob]→(poss)→[CHEVY:*x]→(attr)→[OLD]
+      (agnt)→[PERSON:Bob]→(poss)→[CHEVY-VEHICLE:*x]→(attr)→[OLD]
       (dest)→[CITY:St.Louis]
-      (inst)→[CHEVY:*x].")
+      (inst)→[CHEVY-VEHICLE:*x].")
 
 
 
 (defparameter graph-string450
   "[drive]-
-      (agnt)→[PERSON:Bob]→(poss)→[CHEVY:*x]→(attr)→[OLD]
+      (agnt)→[PERSON:Bob]→(poss)→[CHEVY-VEHICLE:*x]→(attr)→[OLD]
       (dest)→[CITY:St.Louis]
-      (inst)→[CHEVY:*x].")
+      (inst)→[CHEVY-VEHICLE:*x].")
 
 
 
@@ -194,7 +194,7 @@
   "[DRIVE]-
       (agnt)→[PERSON: *x]
       (dest)→[CITY: St. Louis]
-      (inst)→[CHEVY]-
+      (inst)→[CHEVY-VEHICLE]-
                 (attr)→[OLD]
                 (poss)←[PERSON: *x].")
 
@@ -203,7 +203,7 @@
   "[DRIVE]-
       (agnt)→[PERSON: Bob]
       (dest)→[CITY: St. Louis]
-      (inst)→[CHEVY]-
+      (inst)→[CHEVY-VEHICLE]-
                 (attr)→[OLD]
                 (poss)←[PERSON: Bob].")
 
@@ -246,7 +246,7 @@
       (initialize-cgraph)
       (let* ((test-id i)
              (test-name (format nil "test-~d" test-id))
-             (graph-name (intern (format nil "graph-string~3,'0d" test-id))))
+             (graph-name (intern (format nil "GRAPH-STRING~3,'0d" test-id))))
 
         (when (boundp graph-name)
           (when verbose

@@ -1,0 +1,56 @@
+
+
+  The full implementation now covers:
+
+  ┌───────────┬────────────────────────────────────────────────────────────────────────────┐
+  │ Sowa rule │                               Implementation                               │
+  ├───────────┼────────────────────────────────────────────────────────────────────────────┤
+  │ Rule 1    │ walker.lisp — find-main-predicate, classify-relations                      │
+  ├───────────┼────────────────────────────────────────────────────────────────────────────┤
+  │ Rule 2    │ lexicon.lisp + morphology.lisp — POS, articles, conjugation, pluralization │
+  ├───────────┼────────────────────────────────────────────────────────────────────────────┤
+  │ Rule 3    │ realizer.lisp — realize-relative-clause (who/that)                         │
+  ├───────────┼────────────────────────────────────────────────────────────────────────────┤
+  │ Rule 4    │ realizer.lisp — realize-nested-graph (that-clauses)                        │
+  ├───────────┼────────────────────────────────────────────────────────────────────────────┤
+  │ Rule 5    │ anaphora.lisp — pronoun selection with case + gender + number              │
+  ├───────────┼────────────────────────────────────────────────────────────────────────────┤
+  │ Rule 6    │ realize-clause returns to main predicate                                   │
+  ├───────────┼────────────────────────────────────────────────────────────────────────────┤
+  │ Polish    │ copula, mass nouns, passive voice, abstract-category adverbs               │
+  └───────────┴────────────────────────────────────────────────────────────────────────────┘
+
+  Six files, ~700 LOC total in system/generation/. 16 tests covering active, passive, copula, anaphora, relative
+  clauses, and nested propositions.
+
+  What's explicitly not in the implementation, per the original Phase plan:
+  - Verb-particle splitting (Sowa Rule 2 second half — "carry out" with displaced particle)
+  - Raising (Sowa Rule 4 second half — "Ivan is believed to be in the kitchen")
+  - Graph decomposition by inference (Sowa Rule 6 second half — splitting a complex graph into multiple sentences)
+  - Tense and aspect beyond present (no past/future/perfect/progressive selection from referent or modifier cues)
+  - Quantification (@every, @some, count referents → "every X", "two X")
+  - Coordination (no AND/OR composition of clauses)
+  - Active/passive choice when both AGNT and OBJ are present (always picks active)
+
+  If you want any of those next, name it. Otherwise the system is ready to use — (graph-to-text "...") from the
+  REPL, or (generation-test t) to confirm. Worth saving a project memory note about the module layout?
+
+
+
+
+⏺ Saved to notes/graph-to-text-implementation-transcript.md — 1953 lines, 80 KB.
+
+  The file contains:
+  - Every user message (your prompts and pasted REPL output)
+  - Every assistant response (analysis, recommendations, summaries)
+  - One-line summaries of every tool call (file reads, edits, bash commands, writes — with paths and short
+  descriptions)
+
+  Internal thinking blocks are encrypted by the platform and aren't recoverable in plaintext, so they're omitted. System-injected meta messages (caveats, hooks, system reminders) are filtered out so the document reads as a real conversation.
+
+The raw source JSONL also remains at
+  ~/.claude/projects/-Users-bseely-repo-cgraph/e649fb12-f4ad-4ee3-9287-01385185c0b1.jsonl
+if you ever want full fidelity. The extractor script is at /tmp/extract_transcript.py if you want to re-run it later (e.g., for the next session) — feel free to copy it somewhere persistent.
+
+
+※ recap: We built a six-phase graph-to-text generator implementing Sowa's 1984 rules; 16 tests pass and the work is committed and pushed as d404a99.
