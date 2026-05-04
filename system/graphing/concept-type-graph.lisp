@@ -172,10 +172,12 @@
 
 ;;; elisp function needed for graphing from minibuffer
 (eval-when (:load-toplevel :execute)
-  (when (find-package :swank)
+  (when (and (find-package :swank)
+             ;; Skip when no active SLIME connection (headless / test runs).
+             (let ((conn (find-symbol "*EMACS-CONNECTION*" :swank)))
+               (and conn (boundp conn) (symbol-value conn))))
     (funcall (intern "EVAL-IN-EMACS" :swank)
              '(defun graph-types (concept-types)
                 "draw a graph of the types around the supplied concept types"
                 (interactive "swhat concept type(s): ")
-                (eval-in-repl  (format "(graph-concept-types '%s)" concept-types)))))
- )
+                (eval-in-repl  (format "(graph-concept-types '%s)" concept-types))))))

@@ -181,7 +181,12 @@
                 (let ((*readtable* (copy-readtable nil)))
                   (funcall orig package)))))))
 
-  (when (find-package :swank)
+  (when (and (find-package :swank)
+             ;; Only push to Emacs when there's an active SLIME connection.
+             ;; Without this guard, headless sbcl runs (e.g. test scripts)
+             ;; trip an ETYPECASE on a NIL connection inside swank.
+             (let ((conn (find-symbol "*EMACS-CONNECTION*" :swank)))
+               (and conn (boundp conn) (symbol-value conn))))
     (swank::eval-in-emacs
      '(progn
        (load "init-cgraph.el")
