@@ -81,8 +81,37 @@
   (or (irregular-verb-form vlemma :past-participle)
       (past-tense vlemma)))
 
+(defun present-participle (vlemma)
+  "Return the -ing form: 'eat' -> 'eating', 'run' -> 'running' (CVC double),
+   'make' -> 'making' (drop silent e), 'lie' -> 'lying' (ie -> y)."
+  (cond ((ends-with vlemma "ie")
+         (concatenate 'string (chop vlemma 2) "ying"))
+        ((and (>= (length vlemma) 2)
+              (eql (last-char vlemma) #\e)
+              ;; Don't drop the e on '-ee' or '-oe' (see/agree, hoe).
+              (not (find (second-last-char vlemma) "eo" :test #'char-equal)))
+         (concatenate 'string (chop vlemma 1) "ing"))
+        ((and (= (length vlemma) 3)
+              (consonant-p (char vlemma 0))
+              (vowel-p     (char vlemma 1))
+              (consonant-p (char vlemma 2))
+              ;; Don't double w / x / y.
+              (not (find (char vlemma 2) "wxy" :test #'char-equal)))
+         (concatenate 'string vlemma (string (char vlemma 2)) "ing"))
+        (t (concatenate 'string vlemma "ing"))))
+
+(defun be-form-for (tense numbr)
+  "Form of 'be' for TENSE+NUMBR — used in passive and progressive."
+  (ecase tense
+    (:present     (if (eq numbr :plural) "are"  "is"))
+    (:past        (if (eq numbr :plural) "were" "was"))
+    (:future      "will be")
+    (:progressive (if (eq numbr :plural) "are"  "is"))))
+
 (defun inflect-verb (vlemma &key (tense :present) (person 3) (numbr :singular))
-  "Return the inflected form of VLEMMA. Phase 2 supports :present and :past.
+  "Return the inflected form of VLEMMA for TENSE/PERSON/NUMBR. Supports
+   :present, :past, :future ('will eat'), :progressive ('is eating' /
+   'are eating'). Compound aspects (past-progressive etc.) are deferred.
    Named INFLECT-VERB rather than CONJUGATE because cl:conjugate is a
    built-in function (complex-conjugate) whose ftype declaration would
    collide and type-check our first argument as a NUMBER."
@@ -91,7 +120,12 @@
      (cond ((and (eql person 3) (eq numbr :singular))
             (present-3sg vlemma))
            (t vlemma)))
-    (:past (past-tense vlemma))))
+    (:past (past-tense vlemma))
+    (:future (format nil "will ~a" vlemma))
+    (:progressive
+     (format nil "~a ~a"
+             (be-form-for :progressive numbr)
+             (present-participle vlemma)))))
 
 ;;; --- Articles / determiners -------------------------------------------------
 

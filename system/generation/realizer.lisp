@@ -297,7 +297,8 @@
       (let* ((numbr  (if subject-concept (concept-number subject-concept) :singular))
              (person (if subject-concept (concept-person subject-concept) 3))
              (lemma  (base-lemma predicate))
-             (verb   (inflect-verb lemma :tense :present
+             (tense  (or (concept-tense predicate) :present))
+             (verb   (inflect-verb lemma :tense tense
                                          :person person :numbr numbr)))
         (push-part verb))
       (mark-uttered state predicate)
@@ -402,7 +403,12 @@
          (surface-subj (and dobj-rel (other-end dobj-rel predicate)))
          (agent        (and subj-rel (other-end subj-rel predicate)))
          (number       (if surface-subj (concept-number surface-subj) :singular))
-         (be-form      (if (eq number :plural) "are" "is"))
+         ;; Tense from the predicate, falling back to present. :progressive
+         ;; doesn't combine with passive in this single-slot scheme; treat
+         ;; it as present for now.
+         (tense        (let ((t* (concept-tense predicate)))
+                         (if (or (null t*) (eq t* :progressive)) :present t*)))
+         (be-form      (be-form-for tense number))
          (parts        '()))
     (labels ((push-part (s) (when (and s (plusp (length s))) (push s parts))))
       (when surface-subj
@@ -444,7 +450,9 @@
   (let* ((dobj-rel     (first (gethash :dobj buckets)))
          (subj-concept (and dobj-rel (other-end dobj-rel predicate)))
          (number       (if subj-concept (concept-number subj-concept) :singular))
-         (be-form      (if (eq number :plural) "are" "is"))
+         (tense        (let ((t* (concept-tense predicate)))
+                         (if (or (null t*) (eq t* :progressive)) :present t*)))
+         (be-form      (be-form-for tense number))
          (parts '()))
     (labels ((push-part (s) (when (and s (plusp (length s))) (push s parts))))
       (when subj-concept

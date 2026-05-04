@@ -60,6 +60,16 @@
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: {*}@every]<-(agnt)<-[BARK]]."
      . "Ivan knows that all dogs bark.")
 
+    ;; Tense / aspect on the verb concept: @past / @future / @progressive.
+    ("[GIRL]<-(agnt)<-[EAT: @past]->(obj)->[PIE]."        . "A girl ate a pie.")
+    ("[GIRL]<-(agnt)<-[EAT: @future]->(obj)->[PIE]."      . "A girl will eat a pie.")
+    ("[GIRL]<-(agnt)<-[EAT: @progressive]->(obj)->[PIE]." . "A girl is eating a pie.")
+    ("[DOG: {*}@every]<-(agnt)<-[BARK: @past]."           . "All dogs barked.")
+    ("[DOG: {*}@every]<-(agnt)<-[BARK: @progressive]."    . "All dogs are barking.")
+    ;; Tense propagates through passive voice (be-form-for picks 'was'/'will be').
+    ("[PIE]<-(obj)<-[EAT: @past]."                        . "A pie was eaten.")
+    ("[PIE]<-(obj)<-[EAT: @future]."                      . "A pie will be eaten.")
+
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
     ("[DOG: #]-(agnt)<-[SIT] (ploc)->[PLACE]."    . "The dog sits at a place.")

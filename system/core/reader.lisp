@@ -454,15 +454,24 @@
   (let* ((referent-rt-terms (list #\space #\#  #\@  #\[  #\*  #\{  #\]))
          (peek (peek-char nil stream nil nil)))
     (cond
-      ;; '@every' / '@some' / etc. — quantifier, not a measure.
+      ;; '@every' / '@past' / etc. — quantifier or tense, not a measure.
+      ;; Tense words win over quantifier words; an unrecognized word is
+      ;; passed through as a quantifier keyword so future additions don't
+      ;; require a parser change.
       ((and peek (alpha-char-p peek))
        (let* ((word (string-downcase
                      (read-string stream :end-chars referent-rt-terms))))
-         (list :quantifier (cond ((string= word "every")     :universal)
-                                 ((string= word "some")      :existential)
-                                 ((string= word "all")       :universal)
-                                 ((string= word "any")       :universal)
-                                 (t (intern (string-upcase word) :keyword))))))
+         (cond ((string= word "past")        (list :tense :past))
+               ((string= word "future")      (list :tense :future))
+               ((string= word "present")     (list :tense :present))
+               ((string= word "progressive") (list :tense :progressive))
+               (t
+                (list :quantifier
+                      (cond ((string= word "every") :universal)
+                            ((string= word "some")  :existential)
+                            ((string= word "all")   :universal)
+                            ((string= word "any")   :universal)
+                            (t (intern (string-upcase word) :keyword))))))))
       (t
        (let ((size (read-number stream)))
          (consume-whitespace stream)
@@ -610,7 +619,10 @@
                                         (coref (getf features :coref))
                                         (set-specs (getf features :set))
                                         (quantifier (getf features :quantifier))
-                                        (props (sans-prop features :id :variable :coref :set :quantifier))
+                                        (tense      (getf features :tense))
+                                        (props (sans-prop features
+                                                          :id :variable :coref :set
+                                                          :quantifier :tense))
                                         (ctype (get-concept-type type-label))
                                         (target-concept
                                           (progn
@@ -656,6 +668,8 @@ Use ?~a for cross-context co-reference instead."
                                    (setf concept target-concept)
                                    (when (and concept quantifier)
                                      (setf (concept-quantifier concept) quantifier))
+                                   (when (and concept tense)
+                                     (setf (concept-tense concept) tense))
                                    (when variable
                                      (set-variable concept variable))
                                    ;; Handle co-reference labels
