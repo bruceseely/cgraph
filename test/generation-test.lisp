@@ -34,6 +34,13 @@
     ("[length: @5ft.]"                   . "The length five feet.")
     ("[rock]→(chrc)→[LENGTH:@25.4 cm]."  . "A rock of the length 25.4 centimeters.")
 
+    ;; Sowa quantifiers: @every / @some on a singular concept.
+    ("[CAT: @every]"                     . "Every cat.")
+    ("[CAT: @all]"                       . "Every cat.")
+    ("[CAT: @any]"                       . "Every cat.")
+    ("[CAT: @some]"                      . "A cat.")
+    ("[DOG: @every]"                     . "Every dog.")
+
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
     ("[DOG: #]-(agnt)<-[SIT] (ploc)->[PLACE]."    . "The dog sits at a place.")

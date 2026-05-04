@@ -96,14 +96,18 @@
   3)
 
 (defun concept-definiteness (concept)
-  "Return :definite / :indefinite / :proper / :universal.
-   Named individual -> :proper; bare or numbered individual marker
-   ([T: #] / [T: #4]) -> :definite; otherwise :indefinite."
-  (cond ((proper-name-p concept) :proper)
-        ((let ((ref (referent concept)))
-           (and ref (individual-p (content ref))))
-         :definite)
-        (t :indefinite)))
+  "Return :definite / :indefinite / :proper / :universal / :existential.
+   '@every' -> :universal, '@some' -> :existential, named individual ->
+   :proper, bare or numbered individual marker ([T: #] / [T: #4]) ->
+   :definite, otherwise :indefinite."
+  (let ((quant (and (typep concept 'concept) (concept-quantifier concept))))
+    (cond ((eq quant :universal)   :universal)
+          ((eq quant :existential) :existential)
+          ((proper-name-p concept) :proper)
+          ((let ((ref (referent concept)))
+             (and ref (individual-p (content ref))))
+           :definite)
+          (t :indefinite))))
 
 ;;; --- Irregular tables (small starters; extend as needed) --------------------
 

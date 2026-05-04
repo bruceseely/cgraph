@@ -452,13 +452,22 @@
   stream initial-char
   (consume-whitespace stream)
   (let* ((referent-rt-terms (list #\space #\#  #\@  #\[  #\*  #\{  #\]))
-         (size (read-number stream)))
-
-    ;;(format t "~&size: ~s" size)
-    (consume-whitespace stream)
-    (let ((units (read-string stream :end-chars referent-rt-terms)))
-      ;;(push (list :measure size) *referent-contents*)
-      (list :measure `(,size ,units)))))
+         (peek (peek-char nil stream nil nil)))
+    (cond
+      ;; '@every' / '@some' / etc. — quantifier, not a measure.
+      ((and peek (alpha-char-p peek))
+       (let* ((word (string-downcase
+                     (read-string stream :end-chars referent-rt-terms))))
+         (list :quantifier (cond ((string= word "every")     :universal)
+                                 ((string= word "some")      :existential)
+                                 ((string= word "all")       :universal)
+                                 ((string= word "any")       :universal)
+                                 (t (intern (string-upcase word) :keyword))))))
+      (t
+       (let ((size (read-number stream)))
+         (consume-whitespace stream)
+         (let ((units (read-string stream :end-chars referent-rt-terms)))
+           (list :measure `(,size ,units))))))))
 
 
 (defun asterisk-reader (stream initial-char)
@@ -600,7 +609,8 @@
                                         (variable (getf features :variable))
                                         (coref (getf features :coref))
                                         (set-specs (getf features :set))
-                                        (props (sans-prop features :id :variable :coref :set))
+                                        (quantifier (getf features :quantifier))
+                                        (props (sans-prop features :id :variable :coref :set :quantifier))
                                         (ctype (get-concept-type type-label))
                                         (target-concept
                                           (progn
@@ -644,6 +654,8 @@ Use ?~a for cross-context co-reference instead."
 
 
                                    (setf concept target-concept)
+                                   (when (and concept quantifier)
+                                     (setf (concept-quantifier concept) quantifier))
                                    (when variable
                                      (set-variable concept variable))
                                    ;; Handle co-reference labels

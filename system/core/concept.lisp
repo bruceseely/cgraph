@@ -23,6 +23,12 @@
    ;; coref label when this is a ?x bound reference (not the defining node)
    (coref-bound-label :initform nil
                       :accessor coref-bound-label)
+   ;; Sowa quantifier on the referent: :universal ('@every'), :existential
+   ;; ('@some'), or NIL. Lives on the concept rather than the referent
+   ;; because '@every' typically has no individual at all.
+   (quantifier :initform nil
+               :initarg :quantifier
+               :accessor concept-quantifier)
    (negated :initform nil
             :initarg :negated
             :accessor negated)))
