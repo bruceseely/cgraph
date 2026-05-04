@@ -47,6 +47,18 @@
     ("[DOG: @every]<-(agnt)<-[BARK]."    . "Every dog barks.")
     ("[DOG: {*}@every]<-(agnt)<-[BARK]." . "All dogs bark.")
     ("[DOG: {*}@some]<-(agnt)<-[BARK]."  . "Some dogs bark.")
+    ;; Quantifiers in non-subject positions.
+    ("[CAT: @every]->(attr)->[FAST]."                          . "Every cat is fast.")
+    ("[CAT: {*}@every]->(attr)->[FAST]."                       . "All cats are fast.")
+    ("[GIRL]<-(agnt)<-[EAT]->(obj)->[PIE: @every]."            . "A girl eats every pie.")
+    ("[GIRL]<-(agnt)<-[EAT]->(obj)->[PIE: {*}@some]."          . "A girl eats some pies.")
+    ("[PERSON: @every]<-(agnt)<-[EAT]->(obj)->[PIE: @some]."   . "Every person eats a pie.")
+    ("[CAT: @every]<-(obj)<-[EAT]."                            . "Every cat is eaten.")
+    ;; Quantifier inside a nested PROPOSITION referent.
+    ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: @every]<-(agnt)<-[BARK]]."
+     . "Ivan knows that every dog barks.")
+    ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: {*}@every]<-(agnt)<-[BARK]]."
+     . "Ivan knows that all dogs bark.")
 
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
