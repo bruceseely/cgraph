@@ -36,7 +36,89 @@
          (mark-uttered state concept)
          (realize-full-np concept state))))
 
+(defun set-member-tally (concept)
+  "When CONCEPT's referent is a set, return (values named-list anon-count):
+   named-list is the in-order list of :name strings, anon-count is the number
+   of remaining members that resolved to individuals without names (e.g.
+   '#123'). Returns NIL when CONCEPT isn't a set referent."
+  (let* ((ref (referent concept))
+         (set (and ref (typep (content ref) 'set) (content ref))))
+    (when set
+      (let ((named '()) (anon 0))
+        (dolist (m (members set))
+          (let ((name (getf (properties m) :name)))
+            (cond ((and (stringp name) (plusp (length name)))
+                   (push name named))
+                  (t (incf anon)))))
+        (values (nreverse named) anon)))))
+
+(defun set-cardinality (concept)
+  "Integer count from a set referent's '@N' annotation, or NIL when absent
+   or when the measure carries units (a measurement, not a count)."
+  (let ((raw (let ((ref (referent concept)))
+               (and ref (measure-property ref)))))
+    (when (and (consp raw) (integerp (first raw))
+               (or (null (second raw))
+                   (and (stringp (second raw))
+                        (zerop (length (second raw))))))
+      (first raw))))
+
+(defun realize-named-set-np (concept)
+  "Render a set referent with at least one named member. Extras come from
+   either an explicit '@N' annotation (count - named) or, when no count is
+   given, from anonymous-individual members like '#123'. Single extra
+   surfaces as 'another dog'; multiple as 'two other dogs' / 'two others'
+   for humans."
+  (multiple-value-bind (names anon) (set-member-tally concept)
+    (when names
+      (let* ((count   (set-cardinality concept))
+             (extras  (cond (count (- count (length names)))
+                            (t     anon)))
+             (singular (base-lemma concept))
+             (plural   (or (lexicon-prop (concept-type concept) :plural)
+                           (pluralize singular))))
+        (when (and (integerp extras) (>= extras 0))
+          (let* ((capped (mapcar #'cap names))
+                 (tail   (cond ((zerop extras) nil)
+                               ((= extras 1)
+                                (cond ((human-p concept) "another")
+                                      (t (format nil "another ~a" singular))))
+                               ((human-p concept)
+                                (format nil "~a others" (number-word extras)))
+                               (t (format nil "~a other ~a"
+                                          (number-word extras) plural))))
+                 (items  (if tail (append capped (list tail)) capped))
+                 (joined (cond ((= (length items) 1) (first items))
+                               ((= (length items) 2)
+                                (format nil "~a and ~a"
+                                        (first items) (second items)))
+                               (t (format nil "~{~a~^, ~}, and ~a"
+                                          (butlast items) (car (last items)))))))
+            (cond ((and tail (not (human-p concept))) joined)
+                  ((human-p concept) joined)
+                  (t (format nil "the ~a ~a" (noun-form concept) joined)))))))))
+
+(defun concept-measure-phrase (concept)
+  "Render a concept's :measure annotation as 'five feet' / '25.4 centimeters'.
+   Returns NIL when the concept has no measure, the units are blank (the
+   bare-cardinal case is handled by concept-count-word), or it's a counted
+   set."
+  (let ((raw (or (getf (properties concept) :measure)
+                 (let ((ref (referent concept)))
+                   (and ref (measure-property ref))))))
+    (cond ((or (null raw) (set-spec concept)) nil)
+          ((and (consp raw) (numberp (first raw)))
+           (let* ((n     (first raw))
+                  (units (second raw))
+                  (head  (cond ((integerp n) (number-word n))
+                               (t (princ-to-string n)))))
+             (cond ((or (null units) (zerop (length units))) nil)
+                   (t (format nil "~a ~a" head (expand-units units n)))))))))
+
 (defun realize-full-np (concept state)
+  (let ((named-set (realize-named-set-np concept)))
+    (when named-set
+      (return-from realize-full-np named-set)))
   (let ((adj-mods  '())
         (poss-mods '())
         (head      (noun-form concept))
@@ -76,26 +158,39 @@
                     " "
                     (format nil "~@[~a ~]~{~a ~}~a"
                             article mods-pre head)))
-          (pp-mods (np-post-modifiers concept state))
+          (measure  (concept-measure-phrase concept))
+          (pp-mods  (np-post-modifiers concept state))
           (rel-clauses (relative-clauses-for concept state)))
-      (format nil "~a~@[ ~{~a~^ ~}~]~@[ ~{~a~^, ~}~]"
-              np-text pp-mods rel-clauses))))
+      (format nil "~a~@[ ~a~]~@[ ~{~a~^ ~}~]~@[ ~{~a~^, ~}~]"
+              np-text measure pp-mods rel-clauses))))
 
 (defun np-post-modifiers (concept state)
-  "Collect PP post-modifiers (e.g. 'in a bottle', 'with a belly') for an NP
-   head from its :pp relations. Direction-aware: the preposition flips
-   depending on whether CONCEPT is the source or destination of the rel."
+  "Collect post-modifiers for an NP head: PP relations ('in a bottle') and
+   :nmod relations ('of length five feet'). Direction-aware for :pp via the
+   np-pp-prepositions table; :nmod uses the relation's declared preposition."
   (let ((mods '()))
     (dolist (rel (concept-relations concept))
-      (when (and (eq (relation-role rel) :pp)
-                 (not (traversed-p state rel)))
-        (let ((prep  (np-pp-preposition rel concept))
-              (other (other-end rel concept)))
-          (when (and prep other)
-            (mark-traversed state rel)
-            (push (format nil "~a ~a" prep
-                          (realize-np other state :case :accusative))
-                  mods)))))
+      (let ((role (relation-role rel)))
+        (cond ((and (eq role :pp) (not (traversed-p state rel)))
+               ;; Direction-aware override (np-pp-prepositions) wins; fall
+               ;; back to the relation's declared preposition for the rest
+               ;; (PLOC, AGE, FROM, ...).
+               (let ((prep  (or (np-pp-preposition rel concept)
+                                (relation-preposition rel)))
+                     (other (other-end rel concept)))
+                 (when (and prep other)
+                   (mark-traversed state rel)
+                   (push (format nil "~a ~a" prep
+                                 (realize-np other state :case :accusative))
+                         mods))))
+              ((and (eq role :nmod) (not (traversed-p state rel)))
+               (let ((prep  (relation-preposition rel))
+                     (other (other-end rel concept)))
+                 (when other
+                   (mark-traversed state rel)
+                   (push (format nil "~@[~a ~]~a" prep
+                                 (realize-np other state :case :accusative))
+                         mods)))))))
     (nreverse mods)))
 
 ;;; --- Relative clauses (Phase 4) --------------------------------------------
@@ -393,8 +488,39 @@
                                  (relation-preposition rel)
                                  (realize-np other state :case :accusative))
                          complements))))))
-      (let ((joined (format nil "~{~a~^ and ~}" (nreverse complements))))
-        (format nil "~a ~a ~a" topic-np copula joined)))))
+      (cond ((null complements) topic-np)
+            (t (let ((joined (format nil "~{~a~^ and ~}" (nreverse complements))))
+                 (format nil "~a ~a ~a" topic-np copula joined)))))))
+
+(defun clause-level-pp-on-p (rel concept)
+  "True if REL is a :pp adjunct on CONCEPT that should be emitted at clause
+   level (e.g. 'sits at the place') rather than as an NP post-modifier."
+  (and (eq (relation-role rel) :pp)
+       (let* ((label (label (relation-type rel))))
+         (find label *clause-level-pp-relations* :test #'string-equal))
+       ;; CONCEPT must be the source side; otherwise the relation describes
+       ;; the dest concept and shouldn't be lifted to this clause.
+       (not (eq (outarc rel) concept))))
+
+(defun promote-subject-adjuncts (subject-concept main-concept state)
+  "For each clause-level :pp relation on SUBJECT-CONCEPT, mark it traversed
+   so the subject NP doesn't fold it in, and return a list of PP strings to
+   append after the verb. MAIN-CONCEPT is the predicate (used for ordering
+   only — the relations themselves attach to the subject)."
+  (declare (ignore main-concept))
+  (let ((promoted '()))
+    (dolist (rel (concept-relations subject-concept))
+      (when (and (clause-level-pp-on-p rel subject-concept)
+                 (not (traversed-p state rel)))
+        (mark-traversed state rel)
+        (let* ((other (other-end rel subject-concept))
+               (prep  (or (np-pp-preposition rel subject-concept)
+                          (relation-preposition rel))))
+          (when (and other prep)
+            (push (format nil "~a ~a" prep
+                          (realize-np other state :case :accusative))
+                  promoted)))))
+    (nreverse promoted)))
 
 (defun realize-clause (main-concept buckets state)
   (mark-clause-relations-traversed buckets state)
@@ -403,9 +529,14 @@
                (when (and s (plusp (length s))) (push s parts))))
       (let* ((subj-rel        (first (gethash :subject buckets)))
              (subject-concept (when subj-rel
-                                (other-end subj-rel main-concept))))
+                                (other-end subj-rel main-concept)))
+             (adjuncts (and subject-concept
+                            (promote-subject-adjuncts subject-concept
+                                                      main-concept state))))
         (when subject-concept
           (push-part (realize-np subject-concept state :case :nominative)))
         (push-part (realize-predicate-body main-concept buckets state
-                                           :subject-concept subject-concept))))
+                                           :subject-concept subject-concept))
+        (dolist (pp adjuncts)
+          (push-part pp))))
     (format nil "~{~a~^ ~}" (nreverse parts))))

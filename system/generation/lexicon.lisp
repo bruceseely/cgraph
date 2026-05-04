@@ -97,8 +97,12 @@
 
 (defun concept-definiteness (concept)
   "Return :definite / :indefinite / :proper / :universal.
-   Phase 2 heuristic: named individual -> :proper, otherwise :indefinite."
+   Named individual -> :proper; bare or numbered individual marker
+   ([T: #] / [T: #4]) -> :definite; otherwise :indefinite."
   (cond ((proper-name-p concept) :proper)
+        ((let ((ref (referent concept)))
+           (and ref (individual-p (content ref))))
+         :definite)
         (t :indefinite)))
 
 ;;; --- Irregular tables (small starters; extend as needed) --------------------

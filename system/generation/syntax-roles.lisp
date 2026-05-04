@@ -18,7 +18,7 @@
     (agnt  :subject)
     (attr  :adj)
     (betw  :pp     "between")
-    (chrc  :adj)
+    (chrc  :nmod   "of")
     (cntns :pp     "containing")
     (cont  :dobj)
     (dest  :pp     "to")
@@ -58,6 +58,13 @@
 ;;; Order in which roles are emitted in an English clause.
 (defparameter *role-emission-order*
   '(:subject :verb :dobj :iobj :pp :adv :pred-cmp))
+
+;;; :pp roles that, when found on a clause's subject NP, are clause-level
+;;; adjuncts ("the dog sits at the place") rather than NP post-modifiers
+;;; ("the dog at the place sits"). Anything not in this list stays inside
+;;; the subject NP — e.g. cntns/part/membr/inst describe the noun itself.
+(defparameter *clause-level-pp-relations*
+  '(loc ploc time dur on temp dest from to))
 
 ;;; Within a single bucket, modifier ordering preferences.
 ;;; English: adverbs of manner before adverbs of time (Rule 1 example).

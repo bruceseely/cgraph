@@ -103,6 +103,46 @@
 (defun indefinite-article (word)
   (if (starts-with-vowel-sound-p word) "an" "a"))
 
+(defparameter *cardinal-words*
+  #("zero" "one" "two" "three" "four" "five" "six" "seven" "eight" "nine"
+    "ten" "eleven" "twelve"))
+
+(defparameter *unit-words*
+  ;; canonical-singular abbrev-or-symbols-spellings -> long form
+  '(("ft"    "foot"     "feet")
+    ("in"    "inch"     "inches")
+    ("yd"    "yard"     "yards")
+    ("mi"    "mile"     "miles")
+    ("cm"    "centimeter" "centimeters")
+    ("mm"    "millimeter" "millimeters")
+    ("m"     "meter"    "meters")
+    ("km"    "kilometer" "kilometers")
+    ("lb"    "pound"    "pounds")
+    ("kg"    "kilogram" "kilograms")
+    ("g"     "gram"     "grams")
+    ("oz"    "ounce"    "ounces")
+    ("sec"   "second"   "seconds")
+    ("min"   "minute"   "minutes")
+    ("hr"    "hour"     "hours")))
+
+(defun expand-units (units count)
+  "Expand a units abbreviation ('ft' / 'ft.') to the singular or plural long
+   form. Counts of exactly 1 take the singular; everything else (including
+   non-integers like 25.4) takes the plural. Pass through unknown units."
+  (let* ((trimmed (string-right-trim ".," units))
+         (key     (string-downcase trimmed))
+         (row     (assoc key *unit-words* :test #'string=)))
+    (cond ((null row) units)
+          ((or (eql count 1) (equal count 1.0)) (second row))
+          (t (third row)))))
+
+(defun number-word (n)
+  "Spell out small non-negative integers; pass through as digits otherwise."
+  (cond ((and (integerp n) (<= 0 n) (< n (length *cardinal-words*)))
+         (aref *cardinal-words* n))
+        ((integerp n) (princ-to-string n))
+        (t (princ-to-string n))))
+
 (defun article-for (concept lemma)
   "Choose a determiner for CONCEPT preceding LEMMA. Returns NIL for no article.
    Plural NPs of unspecified count use the bare plural form ('dogs bark'),
@@ -113,8 +153,33 @@
     (cond ((mass-noun-p concept)        nil)
           ((eq definiteness :proper)    nil)
           ((eq definiteness :universal) "every")
+          ((concept-count-word concept))
+          ((eq definiteness :definite)  "the")
           ((eq number :plural)          nil)
           (t (indefinite-article lemma)))))
+
+(defun concept-count-word (concept)
+  "Spelled-out cardinal for a counted set referent ('{*}@3' -> 'three').
+   The measure annotation may live on the concept (parsed annotations) or on
+   the wrapping referent. The value comes in two shapes: a raw string like
+   '@5' or a parsed (size units) pair where size is already a number and
+   units is a (possibly empty) string. Only emit a determiner when there
+   are no units — '@5 lb' is a weight, not a count."
+  (let* ((ref (referent concept))
+         ;; Read the raw value directly: the concept-level `measure` method
+         ;; assumes a string and crashes on the parsed (size units) shape.
+         (raw (or (getf (properties concept) :measure)
+                  (and ref (measure-property ref)))))
+    (cond ((null raw) nil)
+          ((and (consp raw) (integerp (first raw))
+                (or (null (second raw))
+                    (and (stringp (second raw))
+                         (zerop (length (second raw))))))
+           (number-word (first raw)))
+          ((stringp raw)
+           (let* ((digits (string-left-trim "@ " raw))
+                  (n      (parse-integer digits :junk-allowed t)))
+             (when n (number-word n)))))))
 
 ;;; --- Adjective -> adverb ---------------------------------------------------
 

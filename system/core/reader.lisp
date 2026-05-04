@@ -361,6 +361,25 @@
 ;;; Member can be:
 ;;;   - A string: "Fido" (name), "#123" (id), "*" (generic)
 ;;;   - A plist from read-term: (:NAME "Fido") or (:ID 123)
+(defun check-name-id-consistency (id props)
+  "When a referent supplies both an id and a name, refuse to attach the name
+   to a pre-existing individual that already has a different one. Silently
+   accepting either value would drop the user's other annotation."
+  (let ((name (getf props :name)))
+    (when (and (numberp id) name)
+      (let* ((existing      (find-individual-with-id id))
+             (existing-name (and existing
+                                 (getf (properties existing) :name))))
+        (cond ((and existing-name (not (string-equal existing-name name)))
+               (error "Referent #~a is already named ~s; cannot also be named ~s."
+                      id existing-name name))
+              ;; Existing individual with no name yet: graft the name on so
+              ;; the user's '[T: Name #N]' assertion sticks.
+              ((and existing (null existing-name))
+               (let ((new-props (copy-list (properties existing))))
+                 (setf (getf new-props :name) name)
+                 (setf (properties existing) new-props))))))))
+
 (defun resolve-set-member (member-spec concept-type)
   "Resolve a set member spec to an individual of the given concept-type"
   (cond
@@ -373,13 +392,11 @@
           (let ((id-num (if (numberp id) id (parse-integer (format nil "~a" id) :junk-allowed t))))
             (when id-num
               (or (find-individual-with-id id-num)
-                  (when *allow-dynamic-individual-creation*
-                    (make-individual concept-type nil :id id-num))))))
+                  (make-individual concept-type nil :id id-num)))))
          (name
           (let ((props (list :name name)))
             (or (get-individual concept-type :properties props)
-                (when *allow-dynamic-individual-creation*
-                  (make-individual concept-type props))))))))
+                (make-individual concept-type props)))))))
     ;; Handle string directly
     ((stringp member-spec)
      (let ((trimmed (string-trim " " member-spec)))
@@ -393,14 +410,12 @@
                  (id (parse-integer id-string :junk-allowed t)))
             (when id
               (or (find-individual-with-id id)
-                  (when *allow-dynamic-individual-creation*
-                    (make-individual concept-type nil :id id))))))
+                  (make-individual concept-type nil :id id)))))
          ;; Name reference like "Fido"
          (t
           (let ((props (list :name trimmed)))
             (or (get-individual concept-type :properties props)
-                (when *allow-dynamic-individual-creation*
-                  (make-individual concept-type props))))))))))
+                (make-individual concept-type props)))))))))
 
 
 ;;; Build a set object from a list of member strings
@@ -588,12 +603,18 @@
                                         (props (sans-prop features :id :variable :coref :set))
                                         (ctype (get-concept-type type-label))
                                         (target-concept
-                                          (cond
+                                          (progn
+                                            (check-name-id-consistency id props)
+                                            (cond
                                             ;; Set referent - build set from member specs
                                             (set-specs
                                              (let ((set-obj (build-set-from-specs set-specs ctype)))
                                                (when set-obj
-                                                 (let ((referent (make-referent set-obj)))
+                                                 (let ((referent (make-referent set-obj))
+                                                       (measure  (getf features :measure)))
+                                                   (when measure
+                                                     (setf (getf (properties referent) :measure)
+                                                           measure))
                                                    (make-concept ctype referent)))))
 
                                             ;; Variable or individual referent
@@ -619,7 +640,7 @@ Use ?~a for cross-context co-reference instead."
                                                        (setf individual (make-individual ctype props :id id))))
                                                    (when individual
                                                      (let ((referent (make-referent individual)))
-                                                       (make-concept ctype referent)))))))))
+                                                       (make-concept ctype referent))))))))))
 
 
                                    (setf concept target-concept)

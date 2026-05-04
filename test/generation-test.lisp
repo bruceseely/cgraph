@@ -8,11 +8,44 @@
 ;;; If expected is NIL, we just verify generation succeeds without error.
 
 (defparameter *generation-test-cases*
-  '(("[girl]<-(agnt)<-[EAT]->(obj)->[PIE]."          . "A girl eats a pie.")
+  '(("[girl]"                            . "A girl.")
+    ("[girl: #]"                         . "The girl.")
+    ("[girl: #9999]"                     . "The girl.")
+    ("[girl: Sally]"                     . "Sally.")
+    ("[dog: {}]"                         . "Dogs.")
+    ("[dog: {*}]"                        . "Dogs.")
+    ("[dog: {*}@3]"                      . "Three dogs.")
+    ("[dog: {Spot, Fido}]"               . "The dogs Spot and Fido.")
+    ("[dog: {Butch, Spot, Fido}]"        . "The dogs Butch, Spot, and Fido.")
+
+    ("[DOG: {} @ 5]"                     . "Five dogs.")
+    ("[DOG: {*} @ 5]"                    . "Five dogs.")
+    ("[DOG: {Fido, *} @3]"               . "Fido and two other dogs.")
+    ("[DOG: {Fido, #123}]"               . "Fido and another dog.")
+
+    ("[PERSON: #2]" . "Sally.")
+    ("[PERSON: Judy]" . "Judy.")
+    ("[PERSON: Judy #2]" . "Sally.- should be an error")
+    ("[PERSON: Judy #999]" . "Judy.")
+    ("[PERSON: #2]" . "Sally.")
+    ("[PERSON: Sally #2]" . "Sally.")
+
+    ("[length: @ 5 ft.]"                 . "The length five feet.")
+    ("[length: @5ft.]"                   . "The length five feet.")
+    ("[rock]→(chrc)→[LENGTH:@25.4 cm]."  . "A rock of the length 25.4 centimeters.")
+
+    ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
+    ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
+    ("[DOG: #]-(agnt)<-[SIT] (ploc)->[PLACE]."    . "The dog sits at a place.")
+    ("[PLACE: #]←(ploc)←[DOG: #]←(agnt)←[SIT]."   . "The dog sits at the place.")
+    ("[SIT]→(agnt)→[DOG: #]→(ploc)→[PLACE: #]."   . "The dog sits at the place.")
+
+    ("[girl]<-(agnt)<-[EAT]->(obj)->[PIE]."          . "A girl eats a pie.")
     ("[person: sue]<-(agnt)<-[EAT]->(obj)->[PIE]."   . "Sue eats a pie.")
     ("[girl:sue]<-(agnt)<-[EAT]->(manr)->[MANNER]."  . "Sue eats somehow.")
     ("[DOG]<-(agnt)<-[EAT]->(obj)->[FOOD]."          . "A dog eats food.")
-    ("[CAT]<-(agnt)<-[SIT]->(loc)->[PLACE]."         . "A cat sits in a place.")
+    ("[DOG]->(loc)->[PLACE: #]."                     . "A dog is in the place.")
+    ("[DOG]->(ploc)->[PLACE: #]."                    . "A dog is at the place.")
     ;; Phase 3: anaphora on revisit. Subject and recipient are the same
     ;; node (coreffed via *z), so the second mention becomes a pronoun.
     ;; Uses GIVE because it's defined in the user's type hierarchy and
@@ -32,7 +65,7 @@
      . "Ivan knows that a girl eats a pie.")
     ;; Phase 6: copular (verbless) clauses — no AGNT/EXPR, just an entity
     ;; with attribute or location predicates. Renders with BE-copula.
-    ("[CAT]->(attr)->[FAST]."           . "A cat is fast.")
+    ("[DOG]->(attr)->[FAST]."           . "A dog is fast.")
     ("[PERSON: ivan]->(loc)->[PLACE]."  . "Ivan is in a place.")
     ;; Phase 6: passive voice when there's an act with OBJ but no AGNT.
     ("[PIE]<-(obj)<-[EAT]."             . "A pie is eaten.")
