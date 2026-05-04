@@ -110,15 +110,6 @@
 ;;            (and (eq use :out) (every (lambda (x) (subtype-p concept-type x )) relation-dest-types) t)
 
 
-
-
-;; (subtype-p
-
-
-
-
-
-
 ;;;; should use a confomity test
 ;;; todo check expliciitly for each arc
 (defmethod add-arc-into-relation ((concept concept) (relation relation) &optional index)
@@ -126,6 +117,9 @@
   (let* ((relation-type (relation-type relation))
          (relation-source-types (source-types relation-type))
          (concept-type (concept-type concept)))
+
+
+
     (cond ((or (some (lambda (type) (is-type concept type)) relation-source-types)
                (some (lambda (type) (supertype-p concept-type type))  relation-source-types)
                (some (lambda (type) (equal concept-type type)) relation-source-types))
@@ -136,9 +130,12 @@
            (let ((rtype (relation-type relation))
                  (ctype1 (concept-type concept))
                  (supertypes (supertypes (concept-type concept))))
-
-             (error "Concept-type ~a is not consistent with the in-arc of the '~a' relation type (~a).~% ~a has supertypes ~a~%The in-arc should be one of ~a"
-                    ctype1 rtype relation-source-types ctype1 (supertypes (concept-type ctype1)) supertypes)
+             ;; princ-to-string is used to avoid the #1, #2 shortcuts for symbols
+             (error "Connecting ~a→~a, concept-type ~a is not consistent with the in-arc of the '~a' relation type, ~a.~%~a has supertypes ~a.~%The in-arc of (~a) should be one of ~a."
+                    concept relation
+                    (princ-to-string ctype1) (princ-to-string rtype) (princ-to-string relation-source-types) (princ-to-string ctype1) (princ-to-string (supertypes ctype1))
+                    (princ-to-string rtype) (remove-duplicates (apply #'append (mapcar #'supertypes  relation-source-types)))  ;;(princ-to-string supertypes)
+                    )
              )))))
 
 (defmethod add-arc-into-relation ((relation relation) (concept concept) &optional index)
@@ -169,11 +166,21 @@
            concept)
           (t
            (let ((supertypesx (when concept-type (supertypes concept-type)))
+                 (rtype (relation-type relation))
+                 (ctype1 (concept-type concept))
                  (supertypes (supertypes (get-concept-type relation-dest-type))))
-             (error "Concept type ~a is not consistent with the ~:@(~a~) relation out-arc type, ~a.~% ~a has supertypes ~a~%The out-arc should be one of ~a~%"
-                    (princ-to-string concept-type) (relation-type relation) (princ-to-string relation-dest-type)
-                    (princ-to-string concept-type) (mapcar #'princ-to-string supertypesx)
-                    (mapcar #'princ-to-string supertypes)))))))
+             (error "Connecting ~a←~a, concept-type ~a is not consistent with the out-arc of the '~a' relation type, ~a.~%~a has supertypes ~a.~%The out-arc of (~a) should be one of ~a."
+                    concept relation
+                    (princ-to-string ctype1) (princ-to-string rtype) (princ-to-string relation-dest-type) (princ-to-string ctype1) (princ-to-string (supertypes ctype1))
+                    (princ-to-string rtype) (princ-to-string (supertypes relation-dest-type))
+                    )
+
+             ;; (error "Concept type ~a is not consistent with the ~:@(~a~) relation out-arc type, ~a.   ~% ~a has supertypes ~a~%The out-arc should be one of ~a~%"
+             ;;        (princ-to-string concept-type) (relation-type relation) (princ-to-string relation-dest-type)
+             ;;        (princ-to-string concept-type) (mapcar #'princ-to-string supertypesx)
+             ;;        (mapcar #'princ-to-string supertypes))
+
+             )))))
 
 (defmethod set-arc-from-relation ((concept concept) (relation relation))
   (set-arc-from-relation relation concept))

@@ -208,17 +208,11 @@
                 (poss)←[PERSON: Bob].")
 
 
-
-(defvar *graph)
-(defvar *result)
-
-;;; (ptest 'graph-string000)
-(defun ptest  (graph-name)
+(defmethod ptest  ((graph-string string))
   (initialize-cgraph)
   (let* ((*print-pretty* nil)
          (*allow-dynamic-individual-creation* t)
-         (graph-string (arrows-to-unicode (symbol-value graph-name)))
-         (zz (format t "~&~s~%"  graph-string))
+         (graph-string (arrows-to-unicode graph-string))
          (graph (progn
                   (initialize-cgraph)
                   (parse-cgraph graph-string)))
@@ -226,6 +220,32 @@
          (result (string-equal (string-upcase (without-node-ref (remove #\space (remove #\newline graph-string))))
                                (string-upcase (without-node-ref (remove #\space (remove #\newline formated-graph)))))))
     (values result graph-string formated-graph)))
+
+(defmethod ptest  ((graph-name symbol))
+  (initialize-cgraph)
+  (format t "~&(symbol-value graph-name): ~s~%"  (symbol-value graph-name))
+  (let* ((*print-pretty* nil)
+         (*allow-dynamic-individual-creation* t)
+         (graph-string (arrows-to-unicode (symbol-value graph-name)))
+         )
+    (ptest graph-string)))
+
+
+
+;;; (ptest 'graph-string000)
+;; (defmethod ptest  ((graph-name symbol))
+;;   (initialize-cgraph)
+;;   (format t "~&(symbol-value graph-name): ~s~%"  (symbol-value graph-name))
+;;   (let* ((*print-pretty* nil)
+;;          (*allow-dynamic-individual-creation* t)
+;;          (graph-string (arrows-to-unicode (symbol-value graph-name)))
+;;          (graph (progn
+;;                   (initialize-cgraph)
+;;                   (parse-cgraph graph-string)))
+;;          (formated-graph (progn (arrows-to-unicode (format-cgraph graph))))
+;;          (result (string-equal (string-upcase (without-node-ref (remove #\space (remove #\newline graph-string))))
+;;                                (string-upcase (without-node-ref (remove #\space (remove #\newline formated-graph)))))))
+;;     (values result graph-string formated-graph)))
 
 
 (defun ptestx  (test-id)
@@ -242,43 +262,31 @@
         (*include-node-ref* nil)
         (failed (list))
         (collect (list)))
-    (dotimes (i 500)
-      (initialize-cgraph)
-      (let* ((test-id i)
-             (test-name (format nil "test-~d" test-id))
-             (graph-name (intern (format nil "GRAPH-STRING~3,'0d" test-id))))
 
-        (when (boundp graph-name)
-          (when verbose
-            (format t "~3%== ~a;  === ~3,'0d ======================================~%" test-name graph-name))
-          (multiple-value-bind (pass initial result)
-              (ptest graph-name)
+    (dotimes (test-id 500)
+      (let ((graph-name-string (format nil "GRAPH-STRING~3,'0d" test-id)))
+        (when (find-symbol graph-name-string)
+          (let ((test-name (format nil "test-~d" test-id))
+                (graph-name (intern graph-name-string)))
 
-            ;;(variables-report)
-            ;; (format t "~&...pass: ~s" pass)
-            ;; (format t "~&...initial: ~s" initial)
-            ;; (format t "~&...result: ~s" result)
-
-            (unless pass (push (intern test-name) failed))
-            (push pass collect)
-
-            (when (and verbose (plusp (variable-count)))
-              (format t "~%variables:")
-              (variables-report))
-
-            (when (or verbose (not pass))
-              (format t "~&parsing...      ~s~%" (flatten-cgraph (canonicalize-graph-string initial)))
-              (format t "~&formatted to... ~s~%" (flatten-cgraph result)))
             (when verbose
-              (format t "~&~a ~:[failed ********~;passed~]" test-name pass))))))
+              (format t "~3%== ~a;  === ~3,'0d ======================================~%" test-name graph-name))
+            (multiple-value-bind (pass initial result)
+                (ptest graph-name)
+
+              (unless pass (push (intern test-name) failed))
+              (push pass collect)
+
+              (when (or verbose (not pass))
+                (format t "~&parsing...      ~s~%" (flatten-cgraph (canonicalize-graph-string initial)))
+                (format t "~&formatted to... ~s~%" (flatten-cgraph result)))
+              (when verbose
+                (format t "~&~a ~:[failed ********~;passed~]" test-name pass)))))))
 
     (let ((test-passed (every #'identity collect)))
       (when failed
         (format t "~2&failed: ~:a~%"  (reverse failed)))
       test-passed)))
-
-
-;;; (trace collect-segments make-graph-segments format-cgraph format-segments-from-node format-segments  )
 
 
 

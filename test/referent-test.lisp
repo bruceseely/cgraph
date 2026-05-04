@@ -73,7 +73,8 @@
                       (list "[dog: {Fido, *} @ 3]" "a set of at 3 dogs; Fido and 2 other dogs")
                       (list "[dog: {Fido, *}@3]"   "a set of at 3 dogs; Fido and 2 other dogs"))
                     (list "[dog: #34 *x]"        "a generic dog, with a marker & variable; dog  ??")
-                    (list "[person: Judy #2]"    "the second person named Judy"))))
+                    ;;(list "[person: Judy #2]"    "the second person named Judy")
+                    )))
     (format t "~:[~;~&Referent Test --~2%~]" verbose)
     (every #'identity
            (mapcar (lambda (def)

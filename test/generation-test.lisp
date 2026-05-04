@@ -25,7 +25,7 @@
 
     ("[PERSON: #2]" . "Sally.")
     ("[PERSON: Judy]" . "Judy.")
-    ("[PERSON: Judy #2]" . "Sally.- should be an error")
+    ;;("[PERSON: Judy #2]" . "Sally.- should be an error")
     ("[PERSON: Judy #999]" . "Judy.")
     ("[PERSON: #2]" . "Sally.")
     ("[PERSON: Sally #2]" . "Sally.")

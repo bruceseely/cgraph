@@ -2,7 +2,7 @@
 (:label age   :source-types physical          :dest-type age             :desc "age - links [PHYSICAL] to [AGE], indicating the age of the physical thing")
 (:label agnt  :source-types act               :dest-type animate         :desc "agent - links [ACT] to [ANIMATE], where [ANIMATE] is the actor of the [ACT]")
 (:label attr  :source-types entity            :dest-type attribute       :desc "attribute - links [ENTITY:*x] to [ATTRIBUTE:*y], where *x has an attribute *y")
-(:label chrc  :source-types entity            :dest-type attribute       :desc "characteristic")
+(:label chrc  :source-types entity            :dest-type quality         :desc "characteristic")
 (:label cntns :source-types entity            :dest-type entity          :desc "contains")
 (:label dest  :source-types event             :dest-type place           :desc "destination - links [ACT] to [PLACE], where the act is directed toward place")
 (:label dur   :source-types situation         :dest-type duration        :desc "duration - links [SITUATION] to [DURATION], where duration is the amount of time the situation exists")
