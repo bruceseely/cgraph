@@ -152,7 +152,13 @@
         (number       (concept-number concept)))
     (cond ((mass-noun-p concept)        nil)
           ((eq definiteness :proper)    nil)
-          ((eq definiteness :universal) "every")
+          ;; English splits Sowa's universal across number: "every dog" /
+          ;; "all dogs". Existential plural surfaces as "some dogs"; the
+          ;; singular falls through to the regular indefinite article.
+          ((eq definiteness :universal)
+           (if (eq number :plural) "all" "every"))
+          ((and (eq definiteness :existential) (eq number :plural))
+           "some")
           ((concept-count-word concept))
           ((eq definiteness :definite)  "the")
           ((eq number :plural)          nil)

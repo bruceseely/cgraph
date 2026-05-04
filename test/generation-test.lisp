@@ -40,6 +40,13 @@
     ("[CAT: @any]"                       . "Every cat.")
     ("[CAT: @some]"                      . "A cat.")
     ("[DOG: @every]"                     . "Every dog.")
+    ;; Quantifier over a set referent: universal -> "all", existential -> "some".
+    ("[DOG: {*}@every]"                  . "All dogs.")
+    ("[DOG: {*}@some]"                   . "Some dogs.")
+    ;; Quantified subject in a verbal clause.
+    ("[DOG: @every]<-(agnt)<-[BARK]."    . "Every dog barks.")
+    ("[DOG: {*}@every]<-(agnt)<-[BARK]." . "All dogs bark.")
+    ("[DOG: {*}@some]<-(agnt)<-[BARK]."  . "Some dogs bark.")
 
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
