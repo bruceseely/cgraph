@@ -72,7 +72,9 @@
                                            (:file "lexicon")
                                            (:file "morphology")
                                            (:file "anaphora")
-                                           (:file "realizer")
+                                           (:file "realize-np")
+                                           (:file "realize-pp")
+                                           (:file "realize-clause")
                                            (:file "generate")
                                            (:file "lexicon-lint")))))
 
