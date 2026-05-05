@@ -114,6 +114,17 @@
     ("[PROPOSITION: [GIRL]<-(agnt)<-[EAT: @past]->(obj)->[PIE]]->(and)->[PROPOSITION: [BOY]<-(agnt)<-[DRINK: @past]]."
      . "A girl ate a pie and a boy drank.")
 
+    ;; Phrasal verbs: lexicon override sets :lemma + :particle, the
+    ;; particle surfaces after the inflected main verb in active and
+    ;; passive voice and across tense/aspect.
+    ("[GIRL]<-(agnt)<-[PICK-UP]->(obj)->[PIE]."                   . "A girl picks up a pie.")
+    ("[GIRL]<-(agnt)<-[PICK-UP: @past]->(obj)->[PIE]."            . "A girl picked up a pie.")
+    ("[GIRL]<-(agnt)<-[PICK-UP: @progressive]->(obj)->[PIE]."     . "A girl is picking up a pie.")
+    ("[GIRL]<-(agnt)<-[PICK-UP: @perfect]->(obj)->[PIE]."         . "A girl has picked up a pie.")
+    ("[PIE]<-(obj)<-[PICK-UP]."                                   . "A pie is picked up.")
+    ("[PIE]<-(obj)<-[PICK-UP: @past]."                            . "A pie was picked up.")
+    ("[GIRL]<-(agnt)<-[PICK-UP: @passive]->(obj)->[PIE]."         . "A pie is picked up by a girl.")
+
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
     ("[DOG: #]-(agnt)<-[SIT] (ploc)->[PLACE]."    . "The dog sits at a place.")

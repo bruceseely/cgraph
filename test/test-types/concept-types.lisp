@@ -99,6 +99,7 @@
 (:label pet-owner :supertypes (person) :definition "[PERSON: *lambda]->(poss)->[PET]")
 (:label physical :supertypes (entity))
 (:label physical-attribute :supertypes (attribute))
+(:label pick-up :supertypes (act))
 (:label pie :supertypes (food))
 (:label place :supertypes (inanimate) :canonical-graph "[PLACE]←(loc)←[⊤].")
 (:label proposition :supertypes (abstract-object) :graph-compatible t)

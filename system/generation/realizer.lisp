@@ -347,8 +347,10 @@
              (aspect (or (concept-aspect predicate) :simple))
              (verb   (inflect-verb lemma :tense tense :aspect aspect
                                          :voice :active
-                                         :person person :numbr numbr)))
-        (push-part verb))
+                                         :person person :numbr numbr))
+             (particle (lexicon-prop (concept-type predicate) :particle)))
+        (push-part verb)
+        (when particle (push-part particle)))
       (mark-uttered state predicate)
       ;; Argument frame: by default the CG :dobj is the surface direct object
       ;; and the CG :iobj surfaces with the relation's preposition (typically
@@ -461,6 +463,8 @@
       (when surface-subj
         (push-part (realize-np surface-subj state :case :nominative)))
       (push-part verb)
+      (let ((particle (lexicon-prop (concept-type predicate) :particle)))
+        (when particle (push-part particle)))
       (mark-uttered state predicate)
       (when agent
         (push-part (format nil "by ~a"
@@ -506,6 +510,8 @@
       (when subj-concept
         (push-part (realize-np subj-concept state :case :nominative)))
       (push-part verb)
+      (let ((particle (lexicon-prop (concept-type predicate) :particle)))
+        (when particle (push-part particle)))
       (mark-uttered state predicate)
       (let ((iobj (first (gethash :iobj buckets))))
         (when iobj

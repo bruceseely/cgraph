@@ -239,6 +239,16 @@
 ;;; the corresponding verb form. BELIEF -> "believe", INTENTION -> "intend",
 ;;; THOUGHT -> "think", etc.
 
+;;; --- Particle (phrasal-verb) overrides -------------------------------------
+;;; '[PICK-UP]' surfaces as 'pick up'; the inflectable verb is the lemma and
+;;; the particle is appended after the main verb form. Register particle
+;;; verbs here (or via register-lexicon-entry from user code).
+
+(register-lexicon-entry 'pick-up   :lemma "pick"  :particle "up")
+(register-lexicon-entry 'carry-out :lemma "carry" :particle "out")
+(register-lexicon-entry 'turn-off  :lemma "turn"  :particle "off")
+(register-lexicon-entry 'turn-on   :lemma "turn"  :particle "on")
+
 (register-lexicon-entry 'belief    :lemma "believe")
 (register-lexicon-entry 'intention :lemma "intend")
 (register-lexicon-entry 'thought   :lemma "think")
