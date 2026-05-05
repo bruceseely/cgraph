@@ -105,6 +105,15 @@
     ("[PIE]<-(obj)<-[EAT]->(agnt)->[GIRL]."                       . "A pie is eaten by a girl.")
     ("[PIE]<-(obj)<-[EAT: @active]->(agnt)->[GIRL]."              . "A girl eats a pie.")
 
+    ;; Coordination via Sowa link relations on PROPOSITION concepts.
+    ("[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]->(and)->[PROPOSITION: [BOY]<-(agnt)<-[DRINK]]."
+     . "A girl eats a pie and a boy drinks.")
+    ("[PROPOSITION: [DOG]<-(agnt)<-[BARK]]->(or)->[PROPOSITION: [CAT]<-(agnt)<-[SIT]]."
+     . "A dog barks or a cat sits.")
+    ;; Tense flows through each conjunct independently.
+    ("[PROPOSITION: [GIRL]<-(agnt)<-[EAT: @past]->(obj)->[PIE]]->(and)->[PROPOSITION: [BOY]<-(agnt)<-[DRINK: @past]]."
+     . "A girl ate a pie and a boy drank.")
+
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
     ("[DOG: #]-(agnt)<-[SIT] (ploc)->[PLACE]."    . "The dog sits at a place.")

@@ -11,6 +11,32 @@
 ;;    3. Copular clause         — verbless graphs with attributes/locations.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun coordinator-pair (relations)
+  "Return (values label left-concept right-concept) when RELATIONS contains
+   an AND/OR relation linking exactly two concepts; NIL otherwise. The
+   label is lowercased ('and' / 'or') and ready to splice into output."
+  (let ((rel (find-if (lambda (r)
+                        (member (label (relation-type r))
+                                '("and" "or")
+                                :test #'string-equal))
+                      relations)))
+    (when (and rel (= 2 (length (arcs rel))))
+      (values (string-downcase (label (relation-type rel)))
+              (first (inarcs rel))
+              (outarc rel)))))
+
+(defun realize-coordination (label left right state)
+  "Render two propositions joined by 'and'/'or'. Both sides must carry a
+   graph referent; we recurse through realize-nested-graph (the same
+   machinery that produces 'that <inner>' for embedded clauses, minus the
+   leading 'that') and join the two clauses with the conjunction."
+  (let* ((g1 (graph-referent left))
+         (g2 (graph-referent right))
+         (s1 (and g1 (realize-nested-graph g1 state)))
+         (s2 (and g2 (realize-nested-graph g2 state))))
+    (cond ((or (null s1) (null s2) (zerop (length s1)) (zerop (length s2))) "")
+          (t (format nil "~a ~a ~a" s1 label s2)))))
+
 (defun graph-to-text (graph)
   "Convert a conceptual graph to an English sentence."
   (let* ((nodes     (graph-nodes graph))
@@ -19,7 +45,11 @@
          (concepts  (graph-concepts-of nodes))
          (state     (make-walk-state))
          (clause
-          (cond ((find-subject-relation relations)
+          (or
+           ;; Top-level AND/OR conjoining two propositions.
+           (multiple-value-bind (lbl l r) (coordinator-pair relations)
+             (and lbl (realize-coordination lbl l r state)))
+           (cond ((find-subject-relation relations)
                  (let* ((main    (find-main-predicate nodes))
                         (buckets (and main (classify-relations main))))
                    (cond ((null main) "")
@@ -49,7 +79,7 @@
                 (t
                  (let ((topic (find-copula-topic nodes)))
                    (cond ((null topic) "")
-                         (t (realize-copula-clause topic state))))))))
+                         (t (realize-copula-clause topic state)))))))))
     (cond ((zerop (length clause)) "")
           (t (let* ((leftover (unexpressed-poss-relations nodes state))
                     (tail     (realize-leftover-poss leftover state)))
