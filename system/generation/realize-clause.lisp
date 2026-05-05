@@ -217,33 +217,42 @@
       (mapc #'push-part (realize-adjuncts predicate buckets state)))
     (format nil "~{~a~^ ~}" (nreverse parts))))
 
+(defun realize-copula-complements (topic state)
+  "Walk TOPIC's :adj and :pp relations and render them as predicate
+   complements: adjectives as bare lemmas ('red'), PPs as
+   preposition + NP ('in the bottle'). Returns the strings in graph
+   order. Caller must have marked these relations traversed BEFORE
+   rendering the topic NP, otherwise realize-full-np will fold them in
+   a second time as pre-modifiers."
+  (let ((complements '()))
+    (dolist (rel (concept-relations topic))
+      (let ((role  (relation-role rel))
+            (other (other-end rel topic)))
+        (when (and other (member role '(:adj :pp)))
+          (cond ((eq role :adj)
+                 (push (base-lemma other) complements))
+                ((eq role :pp)
+                 (push (format nil "~@[~a ~]~a"
+                               (relation-preposition rel)
+                               (realize-np other state :case :accusative))
+                       complements))))))
+    (nreverse complements)))
+
 (defun realize-copula-clause (topic state)
   "Render a verbless graph as TOPIC + 'is/are' + complements.
    Used when the graph has no subject-introducing relation (Phase 6)."
-  (let* ((number  (concept-number topic))
-         (copula  (if (eq number :plural) "are" "is"))
-         (complements '()))
+  (let ((copula (if (eq (concept-number topic) :plural) "are" "is")))
     (mark-uttered state topic)
-    ;; Mark predicate-bearing relations traversed BEFORE rendering the topic
-    ;; NP, so they don't get folded in as pre-modifiers of the noun.
+    ;; Mark predicate-bearing relations traversed BEFORE rendering the
+    ;; topic NP, so they don't get folded in as pre-modifiers of the noun.
     (dolist (rel (concept-relations topic))
       (when (member (relation-role rel) '(:adj :pp))
         (mark-traversed state rel)))
-    (let ((topic-np (realize-full-np topic state)))
-      (dolist (rel (concept-relations topic))
-        (let ((role (relation-role rel))
-              (other (other-end rel topic)))
-          (when (and other (member role '(:adj :pp)))
-            (cond ((eq role :adj)
-                   (push (base-lemma other) complements))
-                  ((eq role :pp)
-                   (push (format nil "~@[~a ~]~a"
-                                 (relation-preposition rel)
-                                 (realize-np other state :case :accusative))
-                         complements))))))
+    (let* ((topic-np    (realize-full-np topic state))
+           (complements (realize-copula-complements topic state)))
       (cond ((null complements) topic-np)
-            (t (let ((joined (format nil "~{~a~^ and ~}" (nreverse complements))))
-                 (format nil "~a ~a ~a" topic-np copula joined)))))))
+            (t (format nil "~a ~a ~{~a~^ and ~}"
+                       topic-np copula complements))))))
 
 (defun clause-level-pp-on-p (rel concept)
   "True if REL is a :pp adjunct on CONCEPT that should be emitted at clause
