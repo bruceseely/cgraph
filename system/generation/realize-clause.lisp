@@ -171,15 +171,21 @@
                         :case :accusative
                         :preposition (or (relation-preposition iobj) "to")))))
 
+(defun clause-subject-concept (predicate buckets)
+  "The CG subject concept of PREDICATE — the other end of the AGNT/EXPR
+   relation in BUCKETS' :subject bucket. NIL when there is no subject
+   relation."
+  (let ((subj-rel (first (gethash :subject buckets))))
+    (and subj-rel (other-end subj-rel predicate))))
+
 (defun realize-passive-with-agent (predicate buckets state)
   "Head-driven passive (Sowa transformation): the OBJ becomes the surface
    subject and the AGNT is demoted to a 'by X' phrase. Used when the graph
    head is the patient/object rather than the agent."
   (mark-clause-relations-traversed buckets state)
   (let* ((dobj-rel     (first (gethash :dobj buckets)))
-         (subj-rel     (first (gethash :subject buckets)))
          (surface-subj (and dobj-rel (other-end dobj-rel predicate)))
-         (agent        (and subj-rel (other-end subj-rel predicate)))
+         (agent        (clause-subject-concept predicate buckets))
          (parts        '()))
     (labels ((push-part (s) (when (and s (plusp (length s))) (push s parts))))
       (when surface-subj
@@ -290,19 +296,19 @@
 
 (defun realize-clause (main-concept buckets state)
   (mark-clause-relations-traversed buckets state)
-  (let ((parts '()))
+  ;; promote-subject-adjuncts MUST run before realize-np on the subject:
+  ;; it marks clause-level PPs traversed so the NP doesn't fold them
+  ;; back in as post-modifiers.
+  (let* ((subject  (clause-subject-concept main-concept buckets))
+         (adjuncts (and subject (promote-subject-adjuncts subject
+                                                          main-concept state)))
+         (parts    '()))
     (labels ((push-part (s)
                (when (and s (plusp (length s))) (push s parts))))
-      (let* ((subj-rel        (first (gethash :subject buckets)))
-             (subject-concept (when subj-rel
-                                (other-end subj-rel main-concept)))
-             (adjuncts (and subject-concept
-                            (promote-subject-adjuncts subject-concept
-                                                      main-concept state))))
-        (when subject-concept
-          (push-part (realize-np subject-concept state :case :nominative)))
-        (push-part (realize-predicate-body main-concept buckets state
-                                           :subject-concept subject-concept))
-        (dolist (pp adjuncts)
-          (push-part pp))))
+      (when subject
+        (push-part (realize-np subject state :case :nominative)))
+      (push-part (realize-predicate-body main-concept buckets state
+                                         :subject-concept subject))
+      (dolist (pp adjuncts)
+        (push-part pp)))
     (format nil "~{~a~^ ~}" (nreverse parts))))
