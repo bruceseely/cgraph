@@ -165,6 +165,10 @@
   (when verbose (format t "~%generation-test~%"))
   (reset-cgraph)
   (initialize-cgraph)
+  ;; Ensure the test type hierarchy is in place. test-cgraph loads it once
+  ;; up front; running this test alone after a fresh REPL doesn't, so the
+  ;; relations introduced for tests (e.g. TIME) wouldn't be defined yet.
+  (load-test-types)
   (let ((*allow-dynamic-individual-creation* t)
         (failed '())
         (count 0)
