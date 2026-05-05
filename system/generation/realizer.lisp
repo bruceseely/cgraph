@@ -164,6 +164,35 @@
       (format nil "~a~@[ ~a~]~@[ ~{~a~^ ~}~]~@[ ~{~a~^, ~}~]"
               np-text measure pp-mods rel-clauses))))
 
+(defparameter *time-tense-hints*
+  '((:past    "yesterday" "last-week" "last-month" "last-year" "last-night"
+              "earlier"   "ago")
+    (:future  "tomorrow"  "next-week" "next-month" "next-year"
+              "later"     "soon")
+    (:present "now" "today" "currently"))
+  "Lemma -> implied tense for tense inference from a TIME relation.")
+
+(defun tense-from-time-relation (predicate)
+  "Inspect PREDICATE's TIME arc; if its target's lemma matches a known
+   time word, return the implied tense. NIL when there is no TIME arc or
+   the time word isn't known."
+  (let ((time-rel (find-if (lambda (r)
+                             (string-equal (label (relation-type r)) "time"))
+                           (concept-relations predicate))))
+    (when time-rel
+      (let* ((other (other-end time-rel predicate))
+             (lemma (and other (string-downcase (base-lemma other)))))
+        (when lemma
+          (loop for (tense . words) in *time-tense-hints*
+                when (find lemma words :test #'string=)
+                  return tense))))))
+
+(defun resolve-tense (predicate)
+  "Annotation wins; otherwise infer from a TIME arc; otherwise :present."
+  (or (concept-tense predicate)
+      (tense-from-time-relation predicate)
+      :present))
+
 (defun np-post-modifiers (concept state)
   "Collect post-modifiers for an NP head: PP relations ('in a bottle') and
    :nmod relations ('of length five feet'). Direction-aware for :pp via the
@@ -265,14 +294,31 @@
 
 ;;; --- Prepositional phrase / object NPs -------------------------------------
 
+(defun temporal-adverb-form (concept)
+  "If CONCEPT's name is a recognized temporal adverb ('yesterday' /
+   'tomorrow' / 'now' / ...), return the lowercase form. NIL otherwise.
+   Used to drop the 'at' preposition for adverbial time complements:
+   'A girl ate a pie yesterday', not 'A girl ate a pie at Yesterday'."
+  (let ((lemma (and concept (string-downcase (base-lemma concept)))))
+    (when lemma
+      (loop for entry in *time-tense-hints*
+            when (find lemma (rest entry) :test #'string=)
+              return lemma))))
+
 (defun realize-pp (rel main-concept state)
   (let* ((prep  (or (relation-preposition rel) ""))
-         (other (other-end rel main-concept)))
-    (or (and other
-             (realize-argument other state
-                               :case :accusative
-                               :preposition (and (plusp (length prep)) prep)))
-        "")))
+         (other (other-end rel main-concept))
+         (rel-label (label (relation-type rel))))
+    ;; 'time' arc with a deictic adverb target ('yesterday', 'tomorrow', ...)
+    ;; surfaces as a bare adverb instead of 'at <Name>'.
+    (let ((adv (and other (string-equal rel-label "time")
+                    (temporal-adverb-form other))))
+      (cond (adv (mark-uttered state other) adv)
+            (t (or (and other
+                        (realize-argument other state
+                                          :case :accusative
+                                          :preposition (and (plusp (length prep)) prep)))
+                   ""))))))
 
 (defun realize-adv (rel main-concept state)
   (declare (ignore state))
@@ -297,7 +343,7 @@
       (let* ((numbr  (if subject-concept (concept-number subject-concept) :singular))
              (person (if subject-concept (concept-person subject-concept) 3))
              (lemma  (base-lemma predicate))
-             (tense  (or (concept-tense  predicate) :present))
+             (tense  (resolve-tense predicate))
              (aspect (or (concept-aspect predicate) :simple))
              (verb   (inflect-verb lemma :tense tense :aspect aspect
                                          :voice :active
@@ -405,7 +451,7 @@
          (surface-subj (and dobj-rel (other-end dobj-rel predicate)))
          (agent        (and subj-rel (other-end subj-rel predicate)))
          (number       (if surface-subj (concept-number surface-subj) :singular))
-         (tense        (or (concept-tense  predicate) :present))
+         (tense        (resolve-tense predicate))
          (aspect       (or (concept-aspect predicate) :simple))
          (verb         (inflect-verb (base-lemma predicate)
                                      :tense tense :aspect aspect
@@ -450,7 +496,7 @@
   (let* ((dobj-rel     (first (gethash :dobj buckets)))
          (subj-concept (and dobj-rel (other-end dobj-rel predicate)))
          (number       (if subj-concept (concept-number subj-concept) :singular))
-         (tense        (or (concept-tense  predicate) :present))
+         (tense        (resolve-tense predicate))
          (aspect       (or (concept-aspect predicate) :simple))
          (verb         (inflect-verb (base-lemma predicate)
                                      :tense tense :aspect aspect

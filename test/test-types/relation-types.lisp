@@ -33,6 +33,7 @@
 (:label stat  :source-types state             :dest-type proposition     :desc "statement/content - links [ENTITY] with a [SITUATION]")
 (:label temp  :source-types physical          :dest-type temperature     :desc "temperature - links [PHYSICAL] to [TEMPERATURE], where temperature is the temperature of the physical object")
 (:label thme  :source-types situation         :dest-type entity          :desc "theme - associates some [ENTITY] with a [SITUATION]")
+(:label time  :source-types situation         :dest-type time-period     :desc "time - links a [SITUATION] to a [TIME-PERIOD] indicating when it occurs")
 (:label to    :source-types entity            :dest-type entity          :desc "to - provides an ordering between two concepts, indicates a terminating concept")
 (:label wgt   :source-types physical          :dest-type mass            :desc "weight - links [PHYSICAL] to [MASS], where mass is the weight of the physical object")
 

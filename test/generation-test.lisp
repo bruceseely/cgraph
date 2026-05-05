@@ -84,6 +84,18 @@
     ("[PIE]<-(obj)<-[EAT: @past-perfect]."                        . "A pie had been eaten.")
     ("[PIE]<-(obj)<-[EAT: @progressive]."                         . "A pie is being eaten.")
 
+    ;; Tense inferred from a TIME relation when no explicit @past/@future.
+    ;; The deictic time word also surfaces as a bare adverb (no 'at').
+    ("[GIRL]<-(agnt)<-[EAT]- (obj)→[PIE] (time)→[time-period: yesterday]."
+     . "A girl ate a pie yesterday.")
+    ("[GIRL]<-(agnt)<-[EAT]- (obj)→[PIE] (time)→[time-period: tomorrow]."
+     . "A girl will eat a pie tomorrow.")
+    ("[GIRL]<-(agnt)<-[EAT]- (obj)→[PIE] (time)→[time-period: now]."
+     . "A girl eats a pie now.")
+    ;; Explicit annotation wins over inference.
+    ("[GIRL]<-(agnt)<-[EAT: @past]- (obj)→[PIE] (time)→[time-period: tomorrow]."
+     . "A girl ate a pie tomorrow.")
+
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
     ("[DOG: #]-(agnt)<-[SIT] (ploc)->[PLACE]."    . "The dog sits at a place.")
