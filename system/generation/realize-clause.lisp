@@ -122,27 +122,31 @@
                  (format nil "~a ~a ~a" p-np have-form q-np)))
              rels)))))
 
+(defun realize-possessed-objects (possessor state)
+  "Render the 'possessed' end of each POSS relation on POSSESSOR as an
+   accusative NP. Returns the strings in graph order. Caller must have
+   marked these relations traversed first, so the possessor NP doesn't
+   fold them in as 's-prefixes."
+  (let ((objects '()))
+    (dolist (rel (concept-relations possessor))
+      (when (and (traversed-p state rel) (eq (relation-role rel) :poss))
+        (let ((possessed (other-end rel possessor)))
+          (when possessed
+            (push (realize-np possessed state :case :accusative) objects)))))
+    (nreverse objects)))
+
 (defun realize-have-clause (possessor state)
   "Render 'POSSESSOR has/have X (and Y ...)' for a POSS-only graph."
-  (let* ((number    (concept-number possessor))
-         (have-form (if (eq number :plural) "have" "has"))
-         (parts     '())
-         (objects   '()))
+  (let ((have-form (if (eq (concept-number possessor) :plural) "have" "has")))
     (mark-uttered state possessor)
     ;; Mark the POSS relations traversed BEFORE rendering the topic NP
     ;; so they aren't folded back in as possessive prefixes.
     (dolist (rel (concept-relations possessor))
       (when (eq (relation-role rel) :poss)
         (mark-traversed state rel)))
-    (push (realize-full-np possessor state) parts)
-    (push have-form parts)
-    (dolist (rel (concept-relations possessor))
-      (when (and (traversed-p state rel) (eq (relation-role rel) :poss))
-        (let ((possessed (other-end rel possessor)))
-          (when possessed
-            (push (realize-np possessed state :case :accusative) objects)))))
-    (push (format nil "~{~a~^ and ~}" (nreverse objects)) parts)
-    (format nil "~{~a~^ ~}" (nreverse parts))))
+    (let ((possessor-np (realize-full-np possessor state))
+          (objects      (realize-possessed-objects possessor state)))
+      (format nil "~a ~a ~{~a~^ and ~}" possessor-np have-form objects))))
 
 (defun passive-verb-form (predicate surface-subj)
   "Inflect PREDICATE as a passive form agreeing in number with
