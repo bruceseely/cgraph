@@ -63,37 +63,50 @@
                         (zerop (length (second raw))))))
       (first raw))))
 
+(defun set-extras-phrase (concept extras)
+  "Render the unnamed-remainder of a set as a noun phrase tail. EXTRAS is
+   the count of unnamed members. NIL when zero. Singular humans surface
+   as 'another' (bare); singular non-humans as 'another dog'. Plural
+   humans as 'two others'; plural non-humans as 'two other dogs'."
+  (cond ((or (null extras) (not (integerp extras)) (zerop extras)) nil)
+        ((= extras 1)
+         (cond ((human-p concept) "another")
+               (t (format nil "another ~a" (base-lemma concept)))))
+        ((human-p concept)
+         (format nil "~a others" (number-word extras)))
+        (t
+         (let ((plural (or (lexicon-prop (concept-type concept) :plural)
+                           (pluralize (base-lemma concept)))))
+           (format nil "~a other ~a" (number-word extras) plural)))))
+
+(defun join-with-and (items)
+  "Oxford-comma join: ('A')->'A', ('A' 'B')->'A and B',
+   ('A' 'B' 'C')->'A, B, and C'."
+  (cond ((= (length items) 1) (first items))
+        ((= (length items) 2)
+         (format nil "~a and ~a" (first items) (second items)))
+        (t (format nil "~{~a~^, ~}, and ~a"
+                   (butlast items) (car (last items))))))
+
 (defun realize-named-set-np (concept)
   "Render a set referent with at least one named member. Extras come from
    either an explicit '@N' annotation (count - named) or, when no count is
-   given, from anonymous-individual members like '#123'. Single extra
-   surfaces as 'another dog'; multiple as 'two other dogs' / 'two others'
-   for humans."
+   given, from anonymous-individual members like '#123'. NIL when CONCEPT
+   isn't a named set."
   (multiple-value-bind (names anon) (set-member-tally concept)
     (when names
-      (let* ((count   (set-cardinality concept))
-             (extras  (cond (count (- count (length names)))
-                            (t     anon)))
-             (singular (base-lemma concept))
-             (plural   (or (lexicon-prop (concept-type concept) :plural)
-                           (pluralize singular))))
+      (let* ((count  (set-cardinality concept))
+             (extras (cond (count (- count (length names)))
+                           (t     anon))))
         (when (and (integerp extras) (>= extras 0))
-          (let* ((capped (mapcar #'cap names))
-                 (tail   (cond ((zerop extras) nil)
-                               ((= extras 1)
-                                (cond ((human-p concept) "another")
-                                      (t (format nil "another ~a" singular))))
-                               ((human-p concept)
-                                (format nil "~a others" (number-word extras)))
-                               (t (format nil "~a other ~a"
-                                          (number-word extras) plural))))
-                 (items  (if tail (append capped (list tail)) capped))
-                 (joined (cond ((= (length items) 1) (first items))
-                               ((= (length items) 2)
-                                (format nil "~a and ~a"
-                                        (first items) (second items)))
-                               (t (format nil "~{~a~^, ~}, and ~a"
-                                          (butlast items) (car (last items)))))))
+          (let* ((tail   (set-extras-phrase concept extras))
+                 (items  (if tail
+                             (append (mapcar #'cap names) (list tail))
+                             (mapcar #'cap names)))
+                 (joined (join-with-and items)))
+            ;; Non-human concepts without an extras tail keep the noun in
+            ;; play via 'the dog Spot'; humans and tailed forms ('another
+            ;; dog' / 'two others') already carry enough head information.
             (cond ((and tail (not (human-p concept))) joined)
                   ((human-p concept) joined)
                   (t (format nil "the ~a ~a" (noun-form concept) joined)))))))))
