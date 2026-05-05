@@ -12,6 +12,62 @@
 
 ;;; --- Predicate body (verb + complements, no subject NP) --------------------
 
+(defun active-verb-form (predicate subject-concept)
+  "Inflect PREDICATE in active voice, agreeing with SUBJECT-CONCEPT (or
+   3rd person singular when none). Returns a list of one or two strings:
+   the verb, plus the particle when the lexicon registers one
+   ('pick' + 'up'). Caller splices into the surface order."
+  (let* ((numbr    (if subject-concept (concept-number subject-concept) :singular))
+         (person   (if subject-concept (concept-person subject-concept) 3))
+         (verb     (inflect-verb (base-lemma predicate)
+                                 :tense  (resolve-tense predicate)
+                                 :aspect (or (concept-aspect predicate) :simple)
+                                 :voice  :active
+                                 :person person :numbr numbr))
+         (particle (lexicon-prop (concept-type predicate) :particle)))
+    (if particle (list verb particle) (list verb))))
+
+(defun realize-active-arguments (predicate buckets state)
+  "Render the direct- and indirect-object NPs of PREDICATE in surface
+   order. Default frame: CG :dobj surfaces as the verb's direct object,
+   CG :iobj as a 'to'-prep complement. Communication verbs
+   (INFORM/TELL/...) flip this via the :rcpt-direct lexicon override —
+   the recipient becomes the direct object and the information is
+   demoted to a PP ('inform her about the news'). The :obj-prep override
+   picks the preposition for the demoted info-arg, defaulting to 'about'."
+  (let* ((ptype             (concept-type predicate))
+         (rcpt-direct       (lexicon-prop ptype :rcpt-direct))
+         (cg-dobj-rel       (first (gethash :dobj buckets)))
+         (cg-iobj-rel       (first (gethash :iobj buckets)))
+         (surface-dobj-rel  (if rcpt-direct cg-iobj-rel cg-dobj-rel))
+         (surface-iobj-rel  (if rcpt-direct cg-dobj-rel cg-iobj-rel))
+         (surface-iobj-prep
+          (cond (rcpt-direct (lexicon-prop ptype :obj-prep "about"))
+                (surface-iobj-rel
+                 (or (relation-preposition surface-iobj-rel) "to"))
+                (t nil)))
+         (parts '()))
+    (when surface-dobj-rel
+      (push (realize-argument (other-end surface-dobj-rel predicate) state
+                              :case :accusative)
+            parts))
+    (when surface-iobj-rel
+      (push (realize-argument (other-end surface-iobj-rel predicate) state
+                              :case :accusative
+                              :preposition surface-iobj-prep)
+            parts))
+    (nreverse parts)))
+
+(defun realize-adjuncts (predicate buckets state)
+  "Render PP and adverbial adjuncts on PREDICATE, in bucket order.
+   Voice-agnostic: shared by active and the two passive renderers."
+  (let ((parts '()))
+    (dolist (rel (gethash :pp buckets))
+      (push (realize-pp rel predicate state) parts))
+    (dolist (rel (gethash :adv buckets))
+      (push (realize-adv rel predicate state) parts))
+    (nreverse parts)))
+
 (defun realize-predicate-body (predicate buckets state
                                &key subject-concept)
   "Emit verb + dobj + iobj + PPs + adverbs. SUBJECT-CONCEPT is consulted
@@ -21,46 +77,10 @@
   (let ((parts '()))
     (labels ((push-part (s)
                (when (and s (plusp (length s))) (push s parts))))
-      (let* ((numbr  (if subject-concept (concept-number subject-concept) :singular))
-             (person (if subject-concept (concept-person subject-concept) 3))
-             (lemma  (base-lemma predicate))
-             (tense  (resolve-tense predicate))
-             (aspect (or (concept-aspect predicate) :simple))
-             (verb   (inflect-verb lemma :tense tense :aspect aspect
-                                         :voice :active
-                                         :person person :numbr numbr))
-             (particle (lexicon-prop (concept-type predicate) :particle)))
-        (push-part verb)
-        (when particle (push-part particle)))
+      (mapc #'push-part (active-verb-form predicate subject-concept))
       (mark-uttered state predicate)
-      ;; Argument frame: by default the CG :dobj is the surface direct object
-      ;; and the CG :iobj surfaces with the relation's preposition (typically
-      ;; "to"). Communication verbs like INFORM/TELL flip this — the recipient
-      ;; is the direct object and the information is a PP ("inform her about
-      ;; news"). The flip is driven by lexicon overrides on the verb.
-      (let* ((ptype (concept-type predicate))
-             (rcpt-direct (lexicon-prop ptype :rcpt-direct))
-             (cg-dobj-rel (first (gethash :dobj buckets)))
-             (cg-iobj-rel (first (gethash :iobj buckets)))
-             (surface-dobj-rel (if rcpt-direct cg-iobj-rel cg-dobj-rel))
-             (surface-iobj-rel (if rcpt-direct cg-dobj-rel cg-iobj-rel))
-             (surface-iobj-prep
-              (cond (rcpt-direct (lexicon-prop ptype :obj-prep "about"))
-                    (surface-iobj-rel
-                     (or (relation-preposition surface-iobj-rel) "to"))
-                    (t nil))))
-        (when surface-dobj-rel
-          (push-part (realize-argument (other-end surface-dobj-rel predicate) state
-                                       :case :accusative)))
-        (when surface-iobj-rel
-          (push-part (realize-argument
-                      (other-end surface-iobj-rel predicate) state
-                      :case :accusative
-                      :preposition surface-iobj-prep))))
-      (dolist (rel (gethash :pp buckets))
-        (push-part (realize-pp rel predicate state)))
-      (dolist (rel (gethash :adv buckets))
-        (push-part (realize-adv rel predicate state))))
+      (mapc #'push-part (realize-active-arguments predicate buckets state))
+      (mapc #'push-part (realize-adjuncts predicate buckets state)))
     (format nil "~{~a~^ ~}" (nreverse parts))))
 
 ;;; --- Clause assembly --------------------------------------------------------
@@ -156,10 +176,7 @@
                       (other-end iobj predicate) state
                       :case :accusative
                       :preposition (or (relation-preposition iobj) "to")))))
-      (dolist (rel (gethash :pp buckets))
-        (push-part (realize-pp rel predicate state)))
-      (dolist (rel (gethash :adv buckets))
-        (push-part (realize-adv rel predicate state))))
+      (mapc #'push-part (realize-adjuncts predicate buckets state)))
     (format nil "~{~a~^ ~}" (nreverse parts))))
 
 (defun head-is-object-of-p (head predicate buckets)
@@ -200,10 +217,7 @@
                       (other-end iobj predicate) state
                       :case :accusative
                       :preposition (or (relation-preposition iobj) "to")))))
-      (dolist (rel (gethash :pp buckets))
-        (push-part (realize-pp rel predicate state)))
-      (dolist (rel (gethash :adv buckets))
-        (push-part (realize-adv rel predicate state))))
+      (mapc #'push-part (realize-adjuncts predicate buckets state)))
     (format nil "~{~a~^ ~}" (nreverse parts))))
 
 (defun realize-copula-clause (topic state)
