@@ -144,6 +144,29 @@
     (push (format nil "~{~a~^ and ~}" (nreverse objects)) parts)
     (format nil "~{~a~^ ~}" (nreverse parts))))
 
+(defun passive-verb-form (predicate surface-subj)
+  "Inflect PREDICATE as a passive form agreeing in number with
+   SURFACE-SUBJ (the patient promoted to surface subject). Returns a list
+   of one or two strings: the verb plus the particle when registered."
+  (let* ((number   (if surface-subj (concept-number surface-subj) :singular))
+         (verb     (inflect-verb (base-lemma predicate)
+                                 :tense  (resolve-tense predicate)
+                                 :aspect (or (concept-aspect predicate) :simple)
+                                 :voice  :passive :numbr number))
+         (particle (lexicon-prop (concept-type predicate) :particle)))
+    (if particle (list verb particle) (list verb))))
+
+(defun realize-iobj-pp (predicate buckets state)
+  "When PREDICATE has an :iobj relation, render it as a prepositional
+   phrase ('to her' / 'about the news'). NIL otherwise. Used by both
+   passive renderers; active goes through realize-active-arguments
+   which folds in the rcpt-direct surface-frame flip."
+  (let ((iobj (first (gethash :iobj buckets))))
+    (when iobj
+      (realize-argument (other-end iobj predicate) state
+                        :case :accusative
+                        :preposition (or (relation-preposition iobj) "to")))))
+
 (defun realize-passive-with-agent (predicate buckets state)
   "Head-driven passive (Sowa transformation): the OBJ becomes the surface
    subject and the AGNT is demoted to a 'by X' phrase. Used when the graph
@@ -153,29 +176,16 @@
          (subj-rel     (first (gethash :subject buckets)))
          (surface-subj (and dobj-rel (other-end dobj-rel predicate)))
          (agent        (and subj-rel (other-end subj-rel predicate)))
-         (number       (if surface-subj (concept-number surface-subj) :singular))
-         (tense        (resolve-tense predicate))
-         (aspect       (or (concept-aspect predicate) :simple))
-         (verb         (inflect-verb (base-lemma predicate)
-                                     :tense tense :aspect aspect
-                                     :voice :passive :numbr number))
          (parts        '()))
     (labels ((push-part (s) (when (and s (plusp (length s))) (push s parts))))
       (when surface-subj
         (push-part (realize-np surface-subj state :case :nominative)))
-      (push-part verb)
-      (let ((particle (lexicon-prop (concept-type predicate) :particle)))
-        (when particle (push-part particle)))
+      (mapc #'push-part (passive-verb-form predicate surface-subj))
       (mark-uttered state predicate)
       (when agent
         (push-part (format nil "by ~a"
                            (realize-np agent state :case :accusative))))
-      (let ((iobj (first (gethash :iobj buckets))))
-        (when iobj
-          (push-part (realize-argument
-                      (other-end iobj predicate) state
-                      :case :accusative
-                      :preposition (or (relation-preposition iobj) "to")))))
+      (push-part (realize-iobj-pp predicate buckets state))
       (mapc #'push-part (realize-adjuncts predicate buckets state)))
     (format nil "~{~a~^ ~}" (nreverse parts))))
 
@@ -196,27 +206,14 @@
    verb has a direct object (Phase 6)."
   (mark-clause-relations-traversed buckets state)
   (let* ((dobj-rel     (first (gethash :dobj buckets)))
-         (subj-concept (and dobj-rel (other-end dobj-rel predicate)))
-         (number       (if subj-concept (concept-number subj-concept) :singular))
-         (tense        (resolve-tense predicate))
-         (aspect       (or (concept-aspect predicate) :simple))
-         (verb         (inflect-verb (base-lemma predicate)
-                                     :tense tense :aspect aspect
-                                     :voice :passive :numbr number))
-         (parts '()))
+         (surface-subj (and dobj-rel (other-end dobj-rel predicate)))
+         (parts        '()))
     (labels ((push-part (s) (when (and s (plusp (length s))) (push s parts))))
-      (when subj-concept
-        (push-part (realize-np subj-concept state :case :nominative)))
-      (push-part verb)
-      (let ((particle (lexicon-prop (concept-type predicate) :particle)))
-        (when particle (push-part particle)))
+      (when surface-subj
+        (push-part (realize-np surface-subj state :case :nominative)))
+      (mapc #'push-part (passive-verb-form predicate surface-subj))
       (mark-uttered state predicate)
-      (let ((iobj (first (gethash :iobj buckets))))
-        (when iobj
-          (push-part (realize-argument
-                      (other-end iobj predicate) state
-                      :case :accusative
-                      :preposition (or (relation-preposition iobj) "to")))))
+      (push-part (realize-iobj-pp predicate buckets state))
       (mapc #'push-part (realize-adjuncts predicate buckets state)))
     (format nil "~{~a~^ ~}" (nreverse parts))))
 
