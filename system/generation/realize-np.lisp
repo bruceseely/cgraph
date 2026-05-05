@@ -115,19 +115,16 @@
              (cond ((or (null units) (zerop (length units))) nil)
                    (t (format nil "~a ~a" head (expand-units units n)))))))))
 
-(defun realize-full-np (concept state)
-  (let ((named-set (realize-named-set-np concept)))
-    (when named-set
-      (return-from realize-full-np named-set)))
+(defun np-pre-modifiers (concept state)
+  "Walk CONCEPT's relations and collect pre-head modifiers in English
+   order: possessive prefixes ('Mary's', 'the boy's') followed by
+   adjectives. Side effect: marks consumed POSS relations traversed so
+   later passes don't fold them in a second time. Skips relations already
+   traversed (e.g. consumed by a copular clause as a predicate complement)."
   (let ((adj-mods  '())
-        (poss-mods '())
-        (head      (noun-form concept))
-        (article   nil)
-        mods-pre)
+        (poss-mods '()))
     (dolist (rel (concept-relations concept))
       (let ((role (relation-role rel)))
-        ;; Skip relations already traversed (e.g. consumed by a copular
-        ;; clause as a predicate complement) to avoid double-emission.
         (cond ((and (eq role :adj) (not (traversed-p state rel)))
                (let ((mod (other-end rel concept)))
                  (when (and mod (not (eq mod concept)))
@@ -149,20 +146,30 @@
     ;; ordering is fixed grammatically and must NOT depend on the order
     ;; the arcs happen to appear in concept-relations (which can vary
     ;; with parse history).
-    (setf mods-pre (append (nreverse poss-mods) (nreverse adj-mods)))
-    (let ((first-word (or (first mods-pre) head)))
-      (setf article (article-for concept first-word)))
-    (when (some (lambda (m) (search "'s" m)) mods-pre)
-      (setf article nil))
-    (let ((np-text (string-trim
-                    " "
-                    (format nil "~@[~a ~]~{~a ~}~a"
-                            article mods-pre head)))
-          (measure  (concept-measure-phrase concept))
-          (pp-mods  (np-post-modifiers concept state))
-          (rel-clauses (relative-clauses-for concept state)))
-      (format nil "~a~@[ ~a~]~@[ ~{~a~^ ~}~]~@[ ~{~a~^, ~}~]"
-              np-text measure pp-mods rel-clauses))))
+    (append (nreverse poss-mods) (nreverse adj-mods))))
+
+(defun np-article-with-mods (concept mods-pre head)
+  "Choose the surface article for CONCEPT given its pre-modifiers and head.
+   A possessive prefix ('Mary's') suppresses the article — English
+   doesn't allow 'a Mary's pie', the possessive is sufficient."
+  (cond ((some (lambda (m) (search "'s" m)) mods-pre) nil)
+        (t (article-for concept (or (first mods-pre) head)))))
+
+(defun realize-full-np (concept state)
+  (let ((named-set (realize-named-set-np concept)))
+    (when named-set
+      (return-from realize-full-np named-set)))
+  (let* ((head        (noun-form concept))
+         (mods-pre    (np-pre-modifiers concept state))
+         (article     (np-article-with-mods concept mods-pre head))
+         (np-text     (string-trim " "
+                                   (format nil "~@[~a ~]~{~a ~}~a"
+                                           article mods-pre head)))
+         (measure     (concept-measure-phrase concept))
+         (pp-mods     (np-post-modifiers concept state))
+         (rel-clauses (relative-clauses-for concept state)))
+    (format nil "~a~@[ ~a~]~@[ ~{~a~^ ~}~]~@[ ~{~a~^, ~}~]"
+            np-text measure pp-mods rel-clauses)))
 
 (defun np-post-modifiers (concept state)
   "Collect post-modifiers for an NP head: PP relations ('in a bottle') and
