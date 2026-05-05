@@ -40,6 +40,12 @@
    (aspect :initform nil
            :initarg :aspect
            :accessor concept-aspect)
+   ;; Voice annotation: :active (default) / :passive. '@passive' on the
+   ;; main verb forces the realizer to use the passive transformation
+   ;; even when the graph head is on the agent rather than the object.
+   (voice :initform nil
+          :initarg :voice
+          :accessor concept-voice)
    (negated :initform nil
             :initarg :negated
             :accessor negated)))

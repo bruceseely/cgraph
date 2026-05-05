@@ -23,6 +23,14 @@
                  (let* ((main    (find-main-predicate nodes))
                         (buckets (and main (classify-relations main))))
                    (cond ((null main) "")
+                         ;; '@passive' on the verb forces the passive
+                         ;; transformation regardless of which side the
+                         ;; head is on; '@active' explicitly suppresses
+                         ;; the head-driven passive choice.
+                         ((eq (concept-voice main) :passive)
+                          (realize-passive-with-agent main buckets state))
+                         ((eq (concept-voice main) :active)
+                          (realize-clause main buckets state))
                          ;; Sowa transformation: when the graph head is the
                          ;; patient rather than the agent, render in passive
                          ;; voice with a 'by X' phrase. The head is the user's

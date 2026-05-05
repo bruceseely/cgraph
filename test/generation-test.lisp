@@ -96,6 +96,15 @@
     ("[GIRL]<-(agnt)<-[EAT: @past]- (obj)→[PIE] (time)→[time-period: tomorrow]."
      . "A girl ate a pie tomorrow.")
 
+    ;; Voice annotation: '@passive' forces the passive transformation even
+    ;; when the head is on the agent; '@active' overrides the head-driven
+    ;; passive default when the head is on the object.
+    ("[GIRL]<-(agnt)<-[EAT: @passive]->(obj)->[PIE]."             . "A pie is eaten by a girl.")
+    ("[GIRL]<-(agnt)<-[EAT: @passive @past]->(obj)->[PIE]."       . "A pie was eaten by a girl.")
+    ("[GIRL]<-(agnt)<-[EAT: @passive @perfect]->(obj)->[PIE]."    . "A pie has been eaten by a girl.")
+    ("[PIE]<-(obj)<-[EAT]->(agnt)->[GIRL]."                       . "A pie is eaten by a girl.")
+    ("[PIE]<-(obj)<-[EAT: @active]->(agnt)->[GIRL]."              . "A girl eats a pie.")
+
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
     ("[DOG: #]-(agnt)<-[SIT] (ploc)->[PLACE]."    . "The dog sits at a place.")
@@ -164,7 +173,10 @@
       (incf count)
       (let* ((input    (car case))
              (expected (cdr case))
-             (actual   (handler-case (graph-to-text input)
+             ;; Build through make-cgraph so the graph carries its head;
+             ;; head is needed by graph-to-text's voice dispatch (Sowa
+             ;; head-driven passive transformation).
+             (actual   (handler-case (graph-to-text (make-cgraph input))
                          (error (c)
                            (format nil "<error: ~a>" c))))
              (ok (cond ((null expected) (and actual (plusp (length actual))))

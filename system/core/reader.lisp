@@ -486,6 +486,9 @@
                (when tense  (setf out (list* :tense  tense  out)))
                (when aspect (setf out (list* :aspect aspect out)))
                out))
+            ;; Voice annotations.
+            ((string= word "passive") (list :voice :passive))
+            ((string= word "active")  (list :voice :active))
             ;; Quantifier keywords (unchanged).
             ((string= word "every") (list :quantifier :universal))
             ((string= word "some")  (list :quantifier :existential))
@@ -658,9 +661,10 @@
                                         (quantifier (getf features :quantifier))
                                         (tense      (getf features :tense))
                                         (aspect     (getf features :aspect))
+                                        (voice      (getf features :voice))
                                         (props (sans-prop features
                                                           :id :variable :coref :set
-                                                          :quantifier :tense :aspect))
+                                                          :quantifier :tense :aspect :voice))
                                         (ctype (get-concept-type type-label))
                                         (target-concept
                                           (progn
@@ -710,6 +714,8 @@ Use ?~a for cross-context co-reference instead."
                                      (setf (concept-tense concept) tense))
                                    (when (and concept aspect)
                                      (setf (concept-aspect concept) aspect))
+                                   (when (and concept voice)
+                                     (setf (concept-voice concept) voice))
                                    (when variable
                                      (set-variable concept variable))
                                    ;; Handle co-reference labels
