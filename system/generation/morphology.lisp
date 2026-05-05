@@ -100,32 +100,77 @@
          (concatenate 'string vlemma (string (char vlemma 2)) "ing"))
         (t (concatenate 'string vlemma "ing"))))
 
-(defun be-form-for (tense numbr)
-  "Form of 'be' for TENSE+NUMBR — used in passive and progressive."
+(defun have-aux-for (tense numbr)
+  "'has'/'have'/'had'/'will have' as required by TENSE+NUMBR."
   (ecase tense
-    (:present     (if (eq numbr :plural) "are"  "is"))
-    (:past        (if (eq numbr :plural) "were" "was"))
-    (:future      "will be")
-    (:progressive (if (eq numbr :plural) "are"  "is"))))
+    (:present (if (eq numbr :plural) "have" "has"))
+    (:past    "had")
+    (:future  "will have")))
 
-(defun inflect-verb (vlemma &key (tense :present) (person 3) (numbr :singular))
-  "Return the inflected form of VLEMMA for TENSE/PERSON/NUMBR. Supports
-   :present, :past, :future ('will eat'), :progressive ('is eating' /
-   'are eating'). Compound aspects (past-progressive etc.) are deferred.
+(defun be-aux-for (tense numbr)
+  "'is'/'are'/'was'/'were'/'will be' as required by TENSE+NUMBR.
+   Used as the leading auxiliary in progressive and simple-passive forms."
+  (ecase tense
+    (:present (if (eq numbr :plural) "are"  "is"))
+    (:past    (if (eq numbr :plural) "were" "was"))
+    (:future  "will be")))
+
+(defun active-aux-chain (tense aspect numbr)
+  "Auxiliary chain that precedes the main verb form in active voice.
+   '' (no aux) for simple-present/past; 'is'/'are'/'was'/'were' for
+   progressive; 'has'/'have'/'had'/'will have' for perfect; 'has been' /
+   'had been' / 'will have been' for perfect-progressive; 'will' for
+   simple-future; 'will be' for future-progressive."
+  (ecase aspect
+    (:simple
+     (case tense (:future "will") (t nil)))
+    (:progressive (be-aux-for tense numbr))
+    (:perfect (have-aux-for tense numbr))
+    (:perfect-progressive
+     (format nil "~a been" (have-aux-for tense numbr)))))
+
+(defun passive-aux-chain (tense aspect numbr)
+  "Auxiliary chain ending in 'be'/'been'/'being' for passive voice.
+   The main verb form is always the past participle."
+  (ecase aspect
+    (:simple (be-aux-for tense numbr))
+    (:progressive (format nil "~a being" (be-aux-for tense numbr)))
+    (:perfect (format nil "~a been" (have-aux-for tense numbr)))
+    ;; Perfect-progressive passive ('has been being eaten') is so rare in
+    ;; English that we treat it as perfect-passive in this scheme.
+    (:perfect-progressive (format nil "~a been" (have-aux-for tense numbr)))))
+
+(defun active-main-form (vlemma tense aspect numbr person)
+  "The main verb form following the active aux chain."
+  (ecase aspect
+    (:simple
+     (ecase tense
+       (:present (if (and (eql person 3) (eq numbr :singular))
+                     (present-3sg vlemma)
+                     vlemma))
+       (:past   (past-tense vlemma))
+       (:future vlemma)))
+    (:progressive          (present-participle vlemma))
+    (:perfect              (past-participle    vlemma))
+    (:perfect-progressive  (present-participle vlemma))))
+
+(defun inflect-verb (vlemma &key (tense :present) (aspect :simple)
+                                 (voice :active) (person 3) (numbr :singular))
+  "Render the verb phrase for the given grammatical features. Supports
+   :present/:past/:future tenses and :simple/:progressive/:perfect/
+   :perfect-progressive aspects in both :active and :passive voice.
    Named INFLECT-VERB rather than CONJUGATE because cl:conjugate is a
    built-in function (complex-conjugate) whose ftype declaration would
    collide and type-check our first argument as a NUMBER."
-  (ecase tense
-    (:present
-     (cond ((and (eql person 3) (eq numbr :singular))
-            (present-3sg vlemma))
-           (t vlemma)))
-    (:past (past-tense vlemma))
-    (:future (format nil "will ~a" vlemma))
-    (:progressive
-     (format nil "~a ~a"
-             (be-form-for :progressive numbr)
-             (present-participle vlemma)))))
+  (let* ((aux  (ecase voice
+                 (:active  (active-aux-chain  tense aspect numbr))
+                 (:passive (passive-aux-chain tense aspect numbr))))
+         (main (ecase voice
+                 (:active  (active-main-form vlemma tense aspect numbr person))
+                 (:passive (past-participle  vlemma)))))
+    (cond ((and aux (plusp (length aux)))
+           (format nil "~a ~a" aux main))
+          (t main))))
 
 ;;; --- Articles / determiners -------------------------------------------------
 

@@ -29,12 +29,17 @@
    (quantifier :initform nil
                :initarg :quantifier
                :accessor concept-quantifier)
-   ;; Tense/aspect annotation on a verb concept: :present (default) / :past
-   ;; / :future / :progressive. Set via '[V: @past]' etc. and consumed by
-   ;; the realizer when emitting the predicate body.
+   ;; Tense annotation on a verb concept: :present (default) / :past /
+   ;; :future. Set via '[V: @past]' etc. and consumed by the realizer.
    (tense :initform nil
           :initarg :tense
           :accessor concept-tense)
+   ;; Aspect annotation: :simple (default) / :progressive / :perfect /
+   ;; :perfect-progressive. Combines with TENSE for compound forms like
+   ;; 'had eaten' or 'will have been eating'.
+   (aspect :initform nil
+           :initarg :aspect
+           :accessor concept-aspect)
    (negated :initform nil
             :initarg :negated
             :accessor negated)))

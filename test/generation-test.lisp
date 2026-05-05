@@ -70,6 +70,20 @@
     ("[PIE]<-(obj)<-[EAT: @past]."                        . "A pie was eaten.")
     ("[PIE]<-(obj)<-[EAT: @future]."                      . "A pie will be eaten.")
 
+    ;; Compound tense/aspect: hyphenated annotations on the verb concept.
+    ("[GIRL]<-(agnt)<-[EAT: @perfect]->(obj)->[PIE]."             . "A girl has eaten a pie.")
+    ("[GIRL]<-(agnt)<-[EAT: @past-perfect]->(obj)->[PIE]."        . "A girl had eaten a pie.")
+    ("[GIRL]<-(agnt)<-[EAT: @past-progressive]->(obj)->[PIE]."    . "A girl was eating a pie.")
+    ("[GIRL]<-(agnt)<-[EAT: @future-perfect]->(obj)->[PIE]."      . "A girl will have eaten a pie.")
+    ("[GIRL]<-(agnt)<-[EAT: @future-progressive]->(obj)->[PIE]."  . "A girl will be eating a pie.")
+    ("[GIRL]<-(agnt)<-[EAT: @perfect-progressive]->(obj)->[PIE]." . "A girl has been eating a pie.")
+    ("[DOG: {*}@every]<-(agnt)<-[BARK: @perfect]."                . "All dogs have barked.")
+    ("[DOG: {*}@every]<-(agnt)<-[BARK: @past-progressive]."       . "All dogs were barking.")
+    ;; Compound aspect in passive voice.
+    ("[PIE]<-(obj)<-[EAT: @perfect]."                             . "A pie has been eaten.")
+    ("[PIE]<-(obj)<-[EAT: @past-perfect]."                        . "A pie had been eaten.")
+    ("[PIE]<-(obj)<-[EAT: @progressive]."                         . "A pie is being eaten.")
+
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
     ("[DOG: #]-(agnt)<-[SIT] (ploc)->[PLACE]."    . "The dog sits at a place.")

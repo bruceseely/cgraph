@@ -447,6 +447,52 @@
            (list :id 't)))))
 
 
+(defun split-string-on-char (s ch)
+  "Split S into substrings on every occurrence of CH; empty pieces dropped."
+  (let ((result '()) (start 0))
+    (loop for i below (length s) do
+          (when (char= (char s i) ch)
+            (when (< start i)
+              (push (subseq s start i) result))
+            (setf start (1+ i))))
+    (when (< start (length s))
+      (push (subseq s start) result))
+    (nreverse result)))
+
+(defun parse-at-word (word)
+  "Parse an '@<word>' annotation. Recognized forms: tense ('past'/'future'/
+   'present'), aspect ('progressive'/'perfect'/'perfect-progressive'), and
+   compounds joined with '-' ('past-progressive'/'future-perfect'/...).
+   Anything else is returned as a generic quantifier keyword. Returns a
+   plist suitable for splicing into the read-features collection."
+  (let ((parts (split-string-on-char word #\-))
+        (tense nil)
+        (aspect-words '()))
+    (dolist (p parts)
+      (cond ((member p '("past" "future" "present") :test #'string=)
+             (setf tense (intern (string-upcase p) :keyword)))
+            ((member p '("simple" "progressive" "perfect") :test #'string=)
+             (push p aspect-words))))
+    (let ((aspect (cond ((null aspect-words) nil)
+                        ((equal aspect-words '("progressive"))   :progressive)
+                        ((equal aspect-words '("perfect"))       :perfect)
+                        ((equal aspect-words '("simple"))        :simple)
+                        ;; '@perfect-progressive' or '@progressive-perfect'.
+                        ((and (member "perfect"     aspect-words :test #'string=)
+                              (member "progressive" aspect-words :test #'string=))
+                         :perfect-progressive))))
+      (cond ((or tense aspect)
+             (let ((out '()))
+               (when tense  (setf out (list* :tense  tense  out)))
+               (when aspect (setf out (list* :aspect aspect out)))
+               out))
+            ;; Quantifier keywords (unchanged).
+            ((string= word "every") (list :quantifier :universal))
+            ((string= word "some")  (list :quantifier :existential))
+            ((string= word "all")   (list :quantifier :universal))
+            ((string= word "any")   (list :quantifier :universal))
+            (t (list :quantifier (intern (string-upcase word) :keyword)))))))
+
 (defun measure-reader (stream initial-char)
   ;;(format t "~% ===> (measure-reader ~a ~s)~%" stream initial-char)
   stream initial-char
@@ -454,24 +500,13 @@
   (let* ((referent-rt-terms (list #\space #\#  #\@  #\[  #\*  #\{  #\]))
          (peek (peek-char nil stream nil nil)))
     (cond
-      ;; '@every' / '@past' / etc. — quantifier or tense, not a measure.
-      ;; Tense words win over quantifier words; an unrecognized word is
-      ;; passed through as a quantifier keyword so future additions don't
-      ;; require a parser change.
+      ;; '@every' / '@past' / '@past-progressive' / etc.
+      ;; Tense and aspect can compose ('@past-progressive', '@future-perfect').
+      ;; Unrecognized words pass through as quantifier keywords.
       ((and peek (alpha-char-p peek))
        (let* ((word (string-downcase
                      (read-string stream :end-chars referent-rt-terms))))
-         (cond ((string= word "past")        (list :tense :past))
-               ((string= word "future")      (list :tense :future))
-               ((string= word "present")     (list :tense :present))
-               ((string= word "progressive") (list :tense :progressive))
-               (t
-                (list :quantifier
-                      (cond ((string= word "every") :universal)
-                            ((string= word "some")  :existential)
-                            ((string= word "all")   :universal)
-                            ((string= word "any")   :universal)
-                            (t (intern (string-upcase word) :keyword))))))))
+         (parse-at-word word)))
       (t
        (let ((size (read-number stream)))
          (consume-whitespace stream)
@@ -522,8 +557,10 @@
           (cond ((null token) (return)) ; exit loop
                 ((equal token ""))      ; don't exit, don't save
                 ((listp token)
-                 ;; (push token collect)
-                 (setf collect (list* (car token) (cadr token) collect)))))))
+                 ;; Splice the entire plist token into collect — sub-readers
+                 ;; may return multi-pair plists like (:tense :past :aspect
+                 ;; :progressive) for compound annotations.
+                 (setf collect (append token collect)))))))
     collect))
 
 
@@ -620,9 +657,10 @@
                                         (set-specs (getf features :set))
                                         (quantifier (getf features :quantifier))
                                         (tense      (getf features :tense))
+                                        (aspect     (getf features :aspect))
                                         (props (sans-prop features
                                                           :id :variable :coref :set
-                                                          :quantifier :tense))
+                                                          :quantifier :tense :aspect))
                                         (ctype (get-concept-type type-label))
                                         (target-concept
                                           (progn
@@ -670,6 +708,8 @@ Use ?~a for cross-context co-reference instead."
                                      (setf (concept-quantifier concept) quantifier))
                                    (when (and concept tense)
                                      (setf (concept-tense concept) tense))
+                                   (when (and concept aspect)
+                                     (setf (concept-aspect concept) aspect))
                                    (when variable
                                      (set-variable concept variable))
                                    ;; Handle co-reference labels

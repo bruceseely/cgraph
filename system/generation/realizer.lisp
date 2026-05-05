@@ -297,8 +297,10 @@
       (let* ((numbr  (if subject-concept (concept-number subject-concept) :singular))
              (person (if subject-concept (concept-person subject-concept) 3))
              (lemma  (base-lemma predicate))
-             (tense  (or (concept-tense predicate) :present))
-             (verb   (inflect-verb lemma :tense tense
+             (tense  (or (concept-tense  predicate) :present))
+             (aspect (or (concept-aspect predicate) :simple))
+             (verb   (inflect-verb lemma :tense tense :aspect aspect
+                                         :voice :active
                                          :person person :numbr numbr)))
         (push-part verb))
       (mark-uttered state predicate)
@@ -403,18 +405,16 @@
          (surface-subj (and dobj-rel (other-end dobj-rel predicate)))
          (agent        (and subj-rel (other-end subj-rel predicate)))
          (number       (if surface-subj (concept-number surface-subj) :singular))
-         ;; Tense from the predicate, falling back to present. :progressive
-         ;; doesn't combine with passive in this single-slot scheme; treat
-         ;; it as present for now.
-         (tense        (let ((t* (concept-tense predicate)))
-                         (if (or (null t*) (eq t* :progressive)) :present t*)))
-         (be-form      (be-form-for tense number))
+         (tense        (or (concept-tense  predicate) :present))
+         (aspect       (or (concept-aspect predicate) :simple))
+         (verb         (inflect-verb (base-lemma predicate)
+                                     :tense tense :aspect aspect
+                                     :voice :passive :numbr number))
          (parts        '()))
     (labels ((push-part (s) (when (and s (plusp (length s))) (push s parts))))
       (when surface-subj
         (push-part (realize-np surface-subj state :case :nominative)))
-      (push-part be-form)
-      (push-part (past-participle (base-lemma predicate)))
+      (push-part verb)
       (mark-uttered state predicate)
       (when agent
         (push-part (format nil "by ~a"
@@ -450,15 +450,16 @@
   (let* ((dobj-rel     (first (gethash :dobj buckets)))
          (subj-concept (and dobj-rel (other-end dobj-rel predicate)))
          (number       (if subj-concept (concept-number subj-concept) :singular))
-         (tense        (let ((t* (concept-tense predicate)))
-                         (if (or (null t*) (eq t* :progressive)) :present t*)))
-         (be-form      (be-form-for tense number))
+         (tense        (or (concept-tense  predicate) :present))
+         (aspect       (or (concept-aspect predicate) :simple))
+         (verb         (inflect-verb (base-lemma predicate)
+                                     :tense tense :aspect aspect
+                                     :voice :passive :numbr number))
          (parts '()))
     (labels ((push-part (s) (when (and s (plusp (length s))) (push s parts))))
       (when subj-concept
         (push-part (realize-np subj-concept state :case :nominative)))
-      (push-part be-form)
-      (push-part (past-participle (base-lemma predicate)))
+      (push-part verb)
       (mark-uttered state predicate)
       (let ((iobj (first (gethash :iobj buckets))))
         (when iobj
