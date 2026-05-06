@@ -61,18 +61,91 @@
         (when (and chain (>= (length chain) 2))
           (values (first labels) chain))))))
 
+(defun active-conjunct-info (concept)
+  "Inspect CONCEPT (a proposition referent in an AND/OR chain) and
+   decide whether it would render as an active verbal clause. Returns
+   (values main buckets head) when yes, NIL when the conjunct would
+   dispatch to passive/copula/have/coord — in which case shared-subject
+   collapse is skipped and the caller falls back to per-clause rendering."
+  (let* ((g (and concept (graph-referent concept)))
+         (nodes (and g (graph-nodes g)))
+         (head  (and (typep g 'graph) (head g)))
+         (relations (and nodes (graph-relations-of nodes))))
+    (when (and relations (find-subject-relation relations))
+      (let* ((main    (find-main-predicate nodes))
+             (buckets (and main (classify-relations main))))
+        (when main
+          (let ((voice (concept-voice main)))
+            (cond ((eq voice :passive) nil)
+                  ((eq voice :active) (values main buckets head))
+                  ((head-is-object-of-p head main buckets) nil)
+                  (t (values main buckets head)))))))))
+
+(defun shared-coordination-subject (concepts)
+  "When every concept in CONCEPTS is a proposition that would render as
+   an active clause AND all of those clauses' subjects refer to the
+   same individual (instance equality, shared coref-bound-label, or
+   matching referent id via same-individual-p), return the first
+   conjunct's subject — that's the surface subject of the collapsed
+   form. NIL when any conjunct would dispatch to a non-active clause
+   shape, or when the subjects don't agree."
+  (let ((shared nil))
+    (dolist (c concepts shared)
+      (multiple-value-bind (main buckets) (active-conjunct-info c)
+        (cond ((null main) (return nil))
+              (t (let ((subj (clause-subject-concept main buckets)))
+                   (cond ((null subj) (return nil))
+                         ((null shared) (setf shared subj))
+                         ((not (same-individual-p shared subj))
+                          (return nil))))))))))
+
+(defun realize-shared-subject-coordination (label concepts shared-subj state)
+  "Render the collapsed form: subject NP once, followed by a coordinated
+   verb phrase. Each conjunct contributes only its predicate body (verb
+   + complements, no subject NP) via realize-predicate-body. Verb
+   agreement uses the conjunct's local subject concept, which carries
+   the same number/person as SHARED-SUBJ."
+  ;; Pre-mark each conjunct's subject relation traversed BEFORE rendering
+  ;; the shared subject NP. Without this, realize-full-np finds the
+  ;; first conjunct's AGNT relation as an unrealized predication and
+  ;; emits a relative clause ('Sue who eats eats and drinks').
+  (dolist (c concepts)
+    (multiple-value-bind (main buckets) (active-conjunct-info c)
+      (declare (ignore main))
+      (when buckets
+        (dolist (rel (gethash :subject buckets))
+          (mark-traversed state rel)))))
+  (let* ((subj-np (realize-np shared-subj state :case :nominative))
+         (vps (mapcar
+               (lambda (c)
+                 (multiple-value-bind (main buckets) (active-conjunct-info c)
+                   (when main
+                     (let ((local-subj (clause-subject-concept main buckets)))
+                       (mark-clause-relations-traversed buckets state)
+                       (realize-predicate-body main buckets state
+                                               :subject-concept local-subj)))))
+               concepts)))
+    (cond ((or (null subj-np) (zerop (length subj-np))) "")
+          ((some (lambda (v) (or (null v) (zerop (length v)))) vps) "")
+          (t (format nil "~a ~a" subj-np
+                     (join-with-conjunction vps label))))))
+
 (defun realize-coordination (label concepts state)
-  "Render N propositions joined by 'and' or 'or'. Each concept must
-   carry a graph referent; we recurse through realize-nested-graph
-   (which routes through realize-graph-clause so per-conjunct tense,
-   voice, etc. flow naturally) and join with Oxford-comma punctuation:
-   'A and B' (binary), 'A, B, and C' (n-ary)."
-  (let ((clauses (mapcar (lambda (c)
-                           (let ((g (graph-referent c)))
-                             (and g (realize-nested-graph g state))))
-                         concepts)))
-    (cond ((some (lambda (s) (or (null s) (zerop (length s)))) clauses) "")
-          (t (join-with-conjunction clauses label)))))
+  "Render N propositions joined by 'and' or 'or'. When all conjuncts
+   share a subject ('Sue eats and Sue drinks'), collapse to shared-
+   subject form ('Sue eats and drinks'). Otherwise render each conjunct
+   as a full clause via realize-nested-graph and join with Oxford-comma
+   punctuation: 'A and B' (binary), 'A, B, and C' (n-ary)."
+  (let ((shared-subj (shared-coordination-subject concepts)))
+    (cond (shared-subj
+           (realize-shared-subject-coordination label concepts shared-subj state))
+          (t
+           (let ((clauses (mapcar (lambda (c)
+                                    (let ((g (graph-referent c)))
+                                      (and g (realize-nested-graph g state))))
+                                  concepts)))
+             (cond ((some (lambda (s) (or (null s) (zerop (length s)))) clauses) "")
+                   (t (join-with-conjunction clauses label))))))))
 
 (defun realize-graph-clause (nodes state &optional head)
   "Render NODES as a single clause: AND/OR coordination, voice-annotated /

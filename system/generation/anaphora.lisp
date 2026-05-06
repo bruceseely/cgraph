@@ -147,6 +147,23 @@
        (pronoun-for concept :case case :state state)
        t))
 
+(defun same-individual-p (c1 c2)
+  "True when concepts C1 and C2 refer to the same identified individual:
+   eq instance, sharing a coref-bound label, or both having a referent
+   whose content carries the same individual id. Used by shared-subject
+   coordination collapse to decide whether the conjuncts of an AND/OR
+   chain share one subject ('Sue eats and drinks' vs. 'Sue eats and
+   Bob drinks')."
+  (or (eq c1 c2)
+      (let ((label1 (and c1 (coref-bound-label c1)))
+            (label2 (and c2 (coref-bound-label c2))))
+        (and label1 label2 (eq label1 label2)))
+      (let* ((r1  (and c1 (referent c1)))
+             (r2  (and c2 (referent c2)))
+             (id1 (and r1 (ignore-errors (id (content r1)))))
+             (id2 (and r2 (ignore-errors (id (content r2))))))
+        (and id1 id2 (equal id1 id2)))))
+
 (defun singular-they-p (concept)
   "True for a singular human of unknown gender — the surface pronoun is
    'they' (singular-they), which takes plural verb agreement in standard

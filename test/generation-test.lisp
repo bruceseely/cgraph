@@ -119,6 +119,25 @@
      . "A girl eats, a boy drinks, and a dog barks.")
     ("[PROPOSITION: [DOG]<-(agnt)<-[BARK]]->(or)->[PROPOSITION: [CAT]<-(agnt)<-[SIT]]->(or)->[PROPOSITION: [GIRL]<-(agnt)<-[EAT]]->(or)->[PROPOSITION: [BOY]<-(agnt)<-[DRINK]]."
      . "A dog barks, a cat sits, a girl eats, or a boy drinks.")
+    ;; Shared-subject coordination: when every conjunct of an AND/OR
+    ;; chain has the SAME subject (compared via referent id), collapse
+    ;; to one subject NP plus a coordinated VP. Different subjects fall
+    ;; through to per-clause rendering ('Sue eats and Bob drinks'
+    ;; tested above already).
+    ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT]]->(and)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
+     . "Sue eats and drinks.")
+    ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT]]->(and)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]->(and)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[SIT]]."
+     . "Sue eats, drinks, and sits.")
+    ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT]->(obj)->[PIE]]->(and)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
+     . "Sue eats a pie and drinks.")
+    ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT]]->(or)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
+     . "Sue eats or drinks.")
+    ;; Per-conjunct tense flows independently — the shared subject
+    ;; doesn't force a single tense on the VP.
+    ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT: @past]]->(and)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK: @past]]."
+     . "Sue ate and drank.")
+    ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT: @past]]->(and)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
+     . "Sue ate and drinks.")
 
     ;; Phrasal verbs: lexicon override sets :lemma + :particle, the
     ;; particle surfaces after the inflected main verb in active and
