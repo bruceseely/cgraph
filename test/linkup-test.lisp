@@ -31,8 +31,7 @@
     pass))
 
 (defun linkup-test (&optional verbose)
-  (load-test-types)
-
+  (with-test-types
   (let ((*include-node-ref* nil)
         (graph-strings (list
                         "[DOG: Spot]<-(agnt)<-[EAT]."
@@ -53,7 +52,7 @@
     (dolist (graph-string graph-strings)
       (let ((pass (test-linkup graph-string verbose)))
         (setf result (and result pass))))
-    result))
+    result)))
 
 
 

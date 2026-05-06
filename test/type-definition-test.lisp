@@ -182,24 +182,23 @@
 
 (defun type-definition-test (&optional verbose)
   "Run all type definition tests"
-  (when verbose
-    (format t "~&~%==========================================~%")
-    (format t "~&=== TYPE DEFINITION TEST SUITE ===~%")
-    (format t "~&==========================================~%"))
-
-  (load-test-types)
-  (let ((results
-          (mapcar (lambda (def)
-                    (test-td (car def) (cadr def) verbose))
-                  (list (list "Definition String Stored" #'test-definition-string-stored)
-                        (list "No Definition String" #'test-no-definition-string)
-                        (list "Definition Parsing" #'test-definition-parsing)
-                        (list "Definition Caching" #'test-definition-caching)
-                        (list "Expand Generic Concept" #'test-expand-generic-concept)
-                        (list "Expand With Referent" #'test-expand-with-referent)
-                        (list "Expand Preserves Arcs" #'test-expand-preserves-arcs)
-                        (list "No Definition Returns Original" #'test-no-definition-returns-original)))))
-    (every #'identity results)))
+  (with-test-types
+    (when verbose
+      (format t "~&~%==========================================~%")
+      (format t "~&=== TYPE DEFINITION TEST SUITE ===~%")
+      (format t "~&==========================================~%"))
+    (let ((results
+            (mapcar (lambda (def)
+                      (test-td (car def) (cadr def) verbose))
+                    (list (list "Definition String Stored" #'test-definition-string-stored)
+                          (list "No Definition String" #'test-no-definition-string)
+                          (list "Definition Parsing" #'test-definition-parsing)
+                          (list "Definition Caching" #'test-definition-caching)
+                          (list "Expand Generic Concept" #'test-expand-generic-concept)
+                          (list "Expand With Referent" #'test-expand-with-referent)
+                          (list "Expand Preserves Arcs" #'test-expand-preserves-arcs)
+                          (list "No Definition Returns Original" #'test-no-definition-returns-original)))))
+      (every #'identity results))))
 
 
 (defun qq (def)

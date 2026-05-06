@@ -60,10 +60,10 @@
 
 
 (defun segment-test (&optional verbose)
-  (let ((result t)
-        (*allow-dynamic-individual-creation* t)
-        (*include-node-ref* nil))
-    (load-test-types)
-    (setq result (and (test-segments-collect-segments verbose) result))
-    (setq result (and (test-segments-split-segment verbose) result))
-    result))
+  (with-test-types
+    (let ((result t)
+          (*allow-dynamic-individual-creation* t)
+          (*include-node-ref* nil))
+      (setq result (and (test-segments-collect-segments verbose) result))
+      (setq result (and (test-segments-split-segment verbose) result))
+      result)))

@@ -7,15 +7,13 @@
 
 (defvar *pc)
 (defmethod cache-test (&optional verbose)
-
-  (setf verbose t) ; <==================================================<<<<
-
-  (load-test-types)
-  (let* ((*include-node-ref* nil)
-         (parent-context (make-context))
-         (con1 (make-concept 'dog '(:name "Spot") :context parent-context))
-         (computed-id (when con1
-                        (when (referent con1) (id (content (referent con1)))))))
+  (with-test-types
+    (setf verbose t) ; <==================================================<<<<
+    (let* ((*include-node-ref* nil)
+           (parent-context (make-context))
+           (con1 (make-concept 'dog '(:name "Spot") :context parent-context))
+           (computed-id (when con1
+                          (when (referent con1) (id (content (referent con1)))))))
 
     (when verbose
       (format t "~&parent-context: ~s~%"  parent-context)
@@ -58,4 +56,4 @@
 
               (and (concepts-equal con1 lookup-con1)
                    (concepts-equal con2 lookup-con2)
-                   ))))))))
+                   )))))))))

@@ -111,14 +111,13 @@
 
 (defun coreference-test (&optional verbose)
   "Run all coreference tests"
-  (when verbose
-    (format t "~&~%Running coreference tests...~%"))
-
-  (load-test-types)
-  (and
-   (test-coref-link-method verbose)
-   (test-coref-basic verbose)
-   (test-coref-formatting verbose)
-   (test-coref-nested-graph verbose)
-   ;;(format t "~&All coreference tests passed!~%")
-   ))
+  (with-test-types
+    (when verbose
+      (format t "~&~%Running coreference tests...~%"))
+    (and
+     (test-coref-link-method verbose)
+     (test-coref-basic verbose)
+     (test-coref-formatting verbose)
+     (test-coref-nested-graph verbose)
+     ;;(format t "~&All coreference tests passed!~%")
+     )))

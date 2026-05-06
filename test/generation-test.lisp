@@ -182,17 +182,14 @@
     ))
 
 (defun generation-test (&optional verbose)
-  (when verbose (format t "~%generation-test~%"))
-  (reset-cgraph)
-  (initialize-cgraph)
-  ;; Ensure the test type hierarchy is in place. test-cgraph loads it once
-  ;; up front; running this test alone after a fresh REPL doesn't, so the
-  ;; relations introduced for tests (e.g. TIME) wouldn't be defined yet.
-  (load-test-types)
-  (let ((*allow-dynamic-individual-creation* t)
-        (failed '())
-        (count 0)
-        (passed 0))
+  (with-test-types
+    (when verbose (format t "~%generation-test~%"))
+    (reset-cgraph)
+    (initialize-cgraph)
+    (let ((*allow-dynamic-individual-creation* t)
+          (failed '())
+          (count 0)
+          (passed 0))
     (dolist (case *generation-test-cases*)
       (incf count)
       (let* ((input    (car case))
@@ -213,4 +210,4 @@
           (format t "    actual:   ~s~%" actual))))
     (when (and verbose (null failed))
       (format t "~&  all ~d generation cases passed.~%" count))
-    (null failed)))
+    (null failed))))

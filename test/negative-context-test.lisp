@@ -193,16 +193,14 @@
 
 (defun negative-context-test (&optional verbose)
   "Run all negative context tests"
-  (when verbose
-    (format t "~&~%Running negative context tests...~%"))
-
-  (load-test-types)
-
-  (and
-   (test-neg-parse-basic verbose)
-   (test-neg-format-roundtrip verbose)
-   (test-neg-nested verbose)
-   (test-neg-context-flag verbose)
-   (test-neg-anon-context verbose)
-   (test-neg-anon-negated verbose)
-   (test-neg-anon-equivalence verbose)))
+  (with-test-types
+    (when verbose
+      (format t "~&~%Running negative context tests...~%"))
+    (and
+     (test-neg-parse-basic verbose)
+     (test-neg-format-roundtrip verbose)
+     (test-neg-nested verbose)
+     (test-neg-context-flag verbose)
+     (test-neg-anon-context verbose)
+     (test-neg-anon-negated verbose)
+     (test-neg-anon-equivalence verbose))))

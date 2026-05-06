@@ -430,7 +430,7 @@
 
 
 (defun format-test (&optional verbose)
-  (load-test-types)
+  (with-test-types
   (when verbose (format t "~%FORMAT-TEST~%"))
   (let ((collect (list))
         (failed (list))
@@ -459,7 +459,7 @@
         (format t "~2&failed: ~a~%"  (reverse (mapcar (lambda (n) (format nil "test-~a" n)) failed)))
         (dolist (test (reverse failed))
           (format t "~&  (ftest ~a)" test)))
-      test-passed)))
+      test-passed))))
 
 #|
 

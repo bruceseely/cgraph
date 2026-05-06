@@ -89,7 +89,8 @@
 	       (:module "test"
                 :serial t
 	        :depends-on ("system")
-	        :components ((:file "graphs-for-testing")
+	        :components ((:file "cgraph-tests")
+                             (:file "graphs-for-testing")
                              (:file "type-test")
                              (:file "linkup-test")
                              (:file "segment-test")
@@ -116,6 +117,4 @@
                              (:file "query-test")
 
                              (:file "generation-test")
-
-                             (:file "cgraph-tests")
                              ))))

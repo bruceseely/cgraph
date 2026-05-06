@@ -40,20 +40,15 @@
 
 
 (defun variable-test (&optional verbose)
-  (let ((*print-pretty* nil)
-        (*concise* nil)
-        (*include-node-ref* nil)
-        (result t)
-        (num-tests 10))
-
-
-    (load-test-types)
-
-    (when verbose
-      (format t "~%VARIABLE-TEST~%"))
-
-    (dotimes (test-num num-tests)
-      (let ((pass (vartest test-num verbose)))
-        (setf result (and result pass))))
-
-    result))
+  (with-test-types
+    (let ((*print-pretty* nil)
+          (*concise* nil)
+          (*include-node-ref* nil)
+          (result t)
+          (num-tests 10))
+      (when verbose
+        (format t "~%VARIABLE-TEST~%"))
+      (dotimes (test-num num-tests)
+        (let ((pass (vartest test-num verbose)))
+          (setf result (and result pass))))
+      result)))

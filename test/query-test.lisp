@@ -156,22 +156,20 @@
 
 (defun query-test (&optional verbose)
   "Run all query tests. Returns T if all pass, NIL otherwise."
-  (let ((pass t)
-        (*allow-dynamic-individual-creation* t))
-
-    (load-test-types)
-
-    (when verbose
-      (format t "~&~%=== Query Tests ===~%"))
-    (dolist (test-fn '(test-query-simple-match
-                       test-query-no-match
-                       test-query-variable-bindings
-                       test-query-multiple-variables
-                       ;; test-query-multiple-variables2
-                       ;; test-query-combined-graphs
-                       test-query-type-subsumption))
-      (let ((result (funcall test-fn verbose)))
-        (setf pass (and pass result))))
-    (when verbose
-      (format t "~&~%Overall: ~:[SOME TESTS FAILED~;ALL TESTS PASSED~]~%" pass))
-    pass))
+  (with-test-types
+    (let ((pass t)
+          (*allow-dynamic-individual-creation* t))
+      (when verbose
+        (format t "~&~%=== Query Tests ===~%"))
+      (dolist (test-fn '(test-query-simple-match
+                         test-query-no-match
+                         test-query-variable-bindings
+                         test-query-multiple-variables
+                         ;; test-query-multiple-variables2
+                         ;; test-query-combined-graphs
+                         test-query-type-subsumption))
+        (let ((result (funcall test-fn verbose)))
+          (setf pass (and pass result))))
+      (when verbose
+        (format t "~&~%Overall: ~:[SOME TESTS FAILED~;ALL TESTS PASSED~]~%" pass))
+      pass)))

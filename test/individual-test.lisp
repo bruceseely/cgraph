@@ -198,11 +198,9 @@
 
 
 (defun individual-test (&optional verbose)
-  (when verbose
-    (format t "~%INDIVIDUAL-TEST~%"))
-
-  (load-test-types)
-
-  (and (individual-test-1 verbose)
-       (individual-test-2 verbose)
-       (individual-test-3 verbose)))
+  (with-test-types
+    (when verbose
+      (format t "~%INDIVIDUAL-TEST~%"))
+    (and (individual-test-1 verbose)
+         (individual-test-2 verbose)
+         (individual-test-3 verbose))))

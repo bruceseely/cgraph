@@ -249,16 +249,14 @@
 
 (defun maximal-join-test (&optional verbose)
   "Run all maximal join tests. Returns T if all pass, NIL otherwise."
-  (let ((pass t)
-        (*allow-dynamic-individual-creation* t))
-
-    (load-test-types)
-
-    (when verbose
-      (format t "~&~%=== Maximal Join Tests ===~%"))
-    (dolist (test-fn (maximal-join-test-defs))
-      (let ((result (funcall test-fn verbose)))
-        (setf pass (and pass result))))
-    (when verbose
-      (format t "~&~%Overall: ~:[SOME TESTS FAILED~;ALL TESTS PASSED~]~%" pass))
-    pass))
+  (with-test-types
+    (let ((pass t)
+          (*allow-dynamic-individual-creation* t))
+      (when verbose
+        (format t "~&~%=== Maximal Join Tests ===~%"))
+      (dolist (test-fn (maximal-join-test-defs))
+        (let ((result (funcall test-fn verbose)))
+          (setf pass (and pass result))))
+      (when verbose
+        (format t "~&~%Overall: ~:[SOME TESTS FAILED~;ALL TESTS PASSED~]~%" pass))
+      pass)))

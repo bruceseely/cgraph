@@ -400,9 +400,7 @@
 
 (defun formation-rules-test (&optional verbose)
   "Run all atomic formation rule tests"
-
-  (load-test-types)
-
+  (with-test-types
   (when verbose
     (format t "~&~%==========================================~%")
     (format t "~&=== ATOMIC FORMATION RULES TEST SUITE ===~%")
@@ -424,7 +422,7 @@
       ;; (format t "~&==========================================~%")
       )
 
-    (every #'identity results)))
+    (every #'identity results))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; INTEGRATION TESTS - Composition of Formation Rules

@@ -28,6 +28,27 @@
              (print-concept-types)))))
   t)
 
+(defmacro with-test-types (&body body)
+  "Evaluate BODY with the test type catalog loaded. On exit (including
+   non-local exit) restore whichever catalog was loaded on entry, using
+   *loaded-types-source* to identify it. NIL prior states stay as the
+   test catalog (nothing meaningful to restore); :default re-establishes
+   the copied example-types fallback; an external-directory string is
+   re-linked and reloaded."
+  (let ((prior (gensym "PRIOR-TYPES-SOURCE-")))
+    `(let ((,prior *loaded-types-source*))
+       (load-test-types)
+       (unwind-protect (progn ,@body)
+         (cond ((or (null ,prior)
+                    (equal ,prior *loaded-types-source*))
+                nil)
+               ((eq ,prior :default)
+                (delete-type-files)
+                (clear-cgraph-type-catalogs)
+                (initialize-types :external-types-directory nil))
+               (t
+                (initialize-types :external-types-directory ,prior)))))))
+
 
 
 (defvar *max-test-name-len* 0)
@@ -51,18 +72,16 @@
   (let* ((sep1 "-=-")
          (sep2 (if (oddp (length name)) "" "="))
          (sep3 (subseq "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=" 0 *max-test-name-len*))
-         (text (format nil "~a ~a ~a~a" sep1 name sep2 sep3)))
-
+         (text (format nil "~a ~a ~a~a" sep1 name sep2 sep3))
+         (pass (ignore-errors
+                (let ((*standard-output* sb-impl::*null-broadcast-stream*))
+                  (funcall (intern (string-upcase name)))))))
     (when (or verbose (not pass))
-      (format t "~&~a" (subseq text 0 (+ *max-test-name-len* 8))))
+      (format t "~&~a ~:[failed <<<~;passed~]~%"
+              (subseq text 0 (+ *max-test-name-len* 8))
+              pass))
     (finish-output)
-
-    (let ((pass (ignore-errors
-                 (let ((*standard-output* sb-impl::*null-broadcast-stream*))
-                   (funcall (intern (string-upcase name)))))))
-      (when (or verbose (not pass))
-        (format t " ~:[failed <<<~;passed~]~%" pass))
-      pass)))
+    pass))
 
 ;; (defun test-one (name &optional verbose)
 ;;   (let* ((sep1 "-=-")
@@ -104,8 +123,5 @@
     results))
 
 (defun test-cgraph (&optional verbose)
-  (let ((external-dir *external-types-directory*))
-    (load-test-types)
-    (let ((result (test-all verbose)))
-      (initialize-types :external-types-directory external-dir)
-      result)))
+  (with-test-types
+    (test-all verbose)))

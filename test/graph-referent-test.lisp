@@ -439,11 +439,8 @@
 
 (defun graph-referent-test (&optional verbose)
   "Run all graph referent tests"
+  (with-test-types
   (setf *test-output* (when verbose *standard-output*))
-
-  (setup-graph-referent-test-types)
-
-
   (when verbose
     (format *test-output* "~%~%========================================"))
   (format *test-output* "~%GRAPH REFERENT TEST")
@@ -471,4 +468,4 @@
     (format *test-output* "~%~%Summary: ~d/~d tests passed"
             (count t results) (length results))
     (format *test-output* "~%Overall: ~:[FAIL~;PASS~]~%" (every #'identity results))
-    (every #'identity results)))
+    (every #'identity results))))

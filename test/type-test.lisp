@@ -106,15 +106,13 @@
 
 
 (defun type-test (&optional verbose)
-  (when verbose (format t "~&TYPE-TEST~%"))
-  (initialize-cgraph)
-
-  (load-test-types)
-  (let ((result (not (null
-                     (and
-                      (type-test1)
-                      (type-test2)
-                      (type-test3))))))
-
-    (when verbose (format t "~&TYPE-TEST ~:[failed~;passed~]~%" result))
-    result))
+  (with-test-types
+    (when verbose (format t "~&TYPE-TEST~%"))
+    (initialize-cgraph)
+    (let ((result (not (null
+                        (and
+                         (type-test1)
+                         (type-test2)
+                         (type-test3))))))
+      (when verbose (format t "~&TYPE-TEST ~:[failed~;passed~]~%" result))
+      result)))

@@ -38,14 +38,12 @@
 
 
 (defun combine-test (&optional verbose)
-
-  (load-test-types)
-  (check-type-lattice)
-
-  (let ((pass t))
-  (dolist (rec (combine-test-defs))
-    (setf pass (and (test-combine (car rec) (cdr rec) verbose) pass)))
-    pass))
+  (with-test-types
+    (check-type-lattice)
+    (let ((pass t))
+      (dolist (rec (combine-test-defs))
+        (setf pass (and (test-combine (car rec) (cdr rec) verbose) pass)))
+      pass)))
 
 
 ;; (progn
