@@ -113,6 +113,12 @@
     ;; Tense flows through each conjunct independently.
     ("[PROPOSITION: [GIRL]<-(agnt)<-[EAT: @past]->(obj)->[PIE]]->(and)->[PROPOSITION: [BOY]<-(agnt)<-[DRINK: @past]]."
      . "A girl ate a pie and a boy drank.")
+    ;; n-ary coordination: chained AND/OR across 3+ propositions joins
+    ;; with Oxford-comma punctuation ('A, B, and C' / 'A, B, or C').
+    ("[PROPOSITION: [GIRL]<-(agnt)<-[EAT]]->(and)->[PROPOSITION: [BOY]<-(agnt)<-[DRINK]]->(and)->[PROPOSITION: [DOG]<-(agnt)<-[BARK]]."
+     . "A girl eats, a boy drinks, and a dog barks.")
+    ("[PROPOSITION: [DOG]<-(agnt)<-[BARK]]->(or)->[PROPOSITION: [CAT]<-(agnt)<-[SIT]]->(or)->[PROPOSITION: [GIRL]<-(agnt)<-[EAT]]->(or)->[PROPOSITION: [BOY]<-(agnt)<-[DRINK]]."
+     . "A dog barks, a cat sits, a girl eats, or a boy drinks.")
 
     ;; Phrasal verbs: lexicon override sets :lemma + :particle, the
     ;; particle surfaces after the inflected main verb in active and

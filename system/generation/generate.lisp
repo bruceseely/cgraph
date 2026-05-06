@@ -11,31 +11,68 @@
 ;;    3. Copular clause         — verbless graphs with attributes/locations.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun coordinator-pair (relations)
-  "Return (values label left-concept right-concept) when RELATIONS contains
-   an AND/OR relation linking exactly two concepts; NIL otherwise. The
-   label is lowercased ('and' / 'or') and ready to splice into output."
-  (let ((rel (find-if (lambda (r)
-                        (member (label (relation-type r))
-                                '("and" "or")
-                                :test #'string-equal))
-                      relations)))
-    (when (and rel (= 2 (length (arcs rel))))
-      (values (string-downcase (label (relation-type rel)))
-              (first (inarcs rel))
-              (outarc rel)))))
+(defun coordinator-relations (relations)
+  "Filter RELATIONS down to binary AND/OR relations (the ones that link
+   two concepts via a single inarc and outarc). NIL when none."
+  (remove-if-not
+   (lambda (r)
+     (and (= 2 (length (arcs r)))
+          (member (label (relation-type r))
+                  '("and" "or")
+                  :test #'string-equal)))
+   relations))
 
-(defun realize-coordination (label left right state)
-  "Render two propositions joined by 'and'/'or'. Both sides must carry a
-   graph referent; we recurse through realize-nested-graph (the same
-   machinery that produces 'that <inner>' for embedded clauses, minus the
-   leading 'that') and join the two clauses with the conjunction."
-  (let* ((g1 (graph-referent left))
-         (g2 (graph-referent right))
-         (s1 (and g1 (realize-nested-graph g1 state)))
-         (s2 (and g2 (realize-nested-graph g2 state))))
-    (cond ((or (null s1) (null s2) (zerop (length s1)) (zerop (length s2))) "")
-          (t (format nil "~a ~a ~a" s1 label s2)))))
+(defun order-coordinator-chain (coord-rels)
+  "Treat each AND/OR relation as a directed edge inarc->outarc and walk
+   them as a single linear chain. Returns the ordered list of concepts,
+   or NIL when the relations don't form one chain (branching, cycles,
+   disconnected pieces)."
+  (let* ((edges (mapcar (lambda (r) (cons (first (inarcs r)) (outarc r)))
+                        coord-rels))
+         (sources (mapcar #'car edges))
+         (dests   (mapcar #'cdr edges))
+         (head    (find-if-not (lambda (s) (member s dests)) sources)))
+    (when head
+      (let ((chain    (list head))
+            (next     head)
+            (remaining edges))
+        (loop
+          (let ((edge (find next remaining :key #'car)))
+            (cond ((null edge)
+                   (return (and (null remaining) chain)))
+                  (t (setf next (cdr edge))
+                     (setf chain (append chain (list next)))
+                     (setf remaining (remove edge remaining :test #'eq))))))))))
+
+(defun coordinator-chain (relations)
+  "Return (values label concept-list) when RELATIONS contains one or
+   more AND-relations or OR-relations linking propositions in a single
+   linear chain. The label is lowercased and concept-list is in surface
+   order. Mixed and/or chains return NIL — the caller falls through to
+   non-coordination dispatch."
+  (let* ((coord-rels (coordinator-relations relations))
+         (labels     (remove-duplicates
+                      (mapcar (lambda (r)
+                                (string-downcase (label (relation-type r))))
+                              coord-rels)
+                      :test #'string=)))
+    (when (and coord-rels (= 1 (length labels)))
+      (let ((chain (order-coordinator-chain coord-rels)))
+        (when (and chain (>= (length chain) 2))
+          (values (first labels) chain))))))
+
+(defun realize-coordination (label concepts state)
+  "Render N propositions joined by 'and' or 'or'. Each concept must
+   carry a graph referent; we recurse through realize-nested-graph
+   (which routes through realize-graph-clause so per-conjunct tense,
+   voice, etc. flow naturally) and join with Oxford-comma punctuation:
+   'A and B' (binary), 'A, B, and C' (n-ary)."
+  (let ((clauses (mapcar (lambda (c)
+                           (let ((g (graph-referent c)))
+                             (and g (realize-nested-graph g state))))
+                         concepts)))
+    (cond ((some (lambda (s) (or (null s) (zerop (length s)))) clauses) "")
+          (t (join-with-conjunction clauses label)))))
 
 (defun realize-graph-clause (nodes state &optional head)
   "Render NODES as a single clause: AND/OR coordination, voice-annotated /
@@ -44,8 +81,8 @@
    so a nested graph dispatches the same way as a top-level one."
   (let ((relations (graph-relations-of nodes))
         (concepts  (graph-concepts-of nodes)))
-    (or (multiple-value-bind (lbl l r) (coordinator-pair relations)
-          (and lbl (realize-coordination lbl l r state)))
+    (or (multiple-value-bind (lbl concepts) (coordinator-chain relations)
+          (and lbl (realize-coordination lbl concepts state)))
         (cond ((find-subject-relation relations)
                (let* ((main    (find-main-predicate nodes))
                       (buckets (and main (classify-relations main))))

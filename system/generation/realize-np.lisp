@@ -79,14 +79,19 @@
                            (pluralize (base-lemma concept)))))
            (format nil "~a other ~a" (number-word extras) plural)))))
 
-(defun join-with-and (items)
-  "Oxford-comma join: ('A')->'A', ('A' 'B')->'A and B',
-   ('A' 'B' 'C')->'A, B, and C'."
+(defun join-with-conjunction (items conjunction)
+  "Oxford-comma join with a custom CONJUNCTION word:
+   ('A')->'A', ('A' 'B')->'A <conj> B', ('A' 'B' 'C')->'A, B, <conj> C'."
   (cond ((= (length items) 1) (first items))
         ((= (length items) 2)
-         (format nil "~a and ~a" (first items) (second items)))
-        (t (format nil "~{~a~^, ~}, and ~a"
-                   (butlast items) (car (last items))))))
+         (format nil "~a ~a ~a" (first items) conjunction (second items)))
+        (t (format nil "~{~a~^, ~}, ~a ~a"
+                   (butlast items) conjunction (car (last items))))))
+
+(defun join-with-and (items)
+  "Oxford-comma 'and' join: ('A')->'A', ('A' 'B')->'A and B',
+   ('A' 'B' 'C')->'A, B, and C'."
+  (join-with-conjunction items "and"))
 
 (defun realize-named-set-np (concept)
   "Render a set referent with at least one named member. Extras come from
