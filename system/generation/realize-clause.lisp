@@ -14,27 +14,32 @@
 
 (defun active-verb-form (predicate subject-concept)
   "Inflect PREDICATE in active voice, agreeing with SUBJECT-CONCEPT (or
-   3rd person singular when none). Returns a list of one or two strings:
-   the verb, plus the particle when the lexicon registers one
-   ('pick' + 'up'). Caller splices into the surface order."
-  (let* ((numbr    (if subject-concept (concept-number subject-concept) :singular))
-         (person   (if subject-concept (concept-person subject-concept) 3))
-         (verb     (inflect-verb (base-lemma predicate)
-                                 :tense  (resolve-tense predicate)
-                                 :aspect (or (concept-aspect predicate) :simple)
-                                 :voice  :active
-                                 :person person :numbr numbr))
-         (particle (lexicon-prop (concept-type predicate) :particle)))
-    (if particle (list verb particle) (list verb))))
+   3rd person singular when none). Returns a one-element list — caller
+   splices it into the surface order. Particles are placed by
+   realize-active-arguments (split or joined depending on dobj)."
+  (let* ((numbr  (if subject-concept (concept-number subject-concept) :singular))
+         (person (if subject-concept (concept-person subject-concept) 3))
+         (verb   (inflect-verb (base-lemma predicate)
+                               :tense  (resolve-tense predicate)
+                               :aspect (or (concept-aspect predicate) :simple)
+                               :voice  :active
+                               :person person :numbr numbr)))
+    (list verb)))
 
-(defun realize-active-arguments (predicate buckets state)
+(defun realize-active-arguments (predicate buckets state &key particle)
   "Render the direct- and indirect-object NPs of PREDICATE in surface
    order. Default frame: CG :dobj surfaces as the verb's direct object,
    CG :iobj as a 'to'-prep complement. Communication verbs
    (INFORM/TELL/...) flip this via the :rcpt-direct lexicon override —
    the recipient becomes the direct object and the information is
    demoted to a PP ('inform her about the news'). The :obj-prep override
-   picks the preposition for the demoted info-arg, defaulting to 'about'."
+   picks the preposition for the demoted info-arg, defaulting to 'about'.
+
+   When PARTICLE is supplied (a phrasal-verb particle like 'up'/'out'),
+   it splits around the dobj: 'pick up a pie' (joined; dobj is full NP)
+   vs. 'pick it up' (split; dobj surfaces as a pronoun). Particle is
+   emitted right after the verb when there is no dobj at all
+   ('he shows off')."
   (let* ((ptype             (concept-type predicate))
          (rcpt-direct       (lexicon-prop ptype :rcpt-direct))
          (cg-dobj-rel       (first (gethash :dobj buckets)))
@@ -46,11 +51,17 @@
                 (surface-iobj-rel
                  (or (relation-preposition surface-iobj-rel) "to"))
                 (t nil)))
+         (dobj-concept (and surface-dobj-rel
+                            (other-end surface-dobj-rel predicate)))
+         (split-particle-p (and particle dobj-concept
+                                (would-surface-as-pronoun-p dobj-concept state)))
          (parts '()))
-    (when surface-dobj-rel
-      (push (realize-argument (other-end surface-dobj-rel predicate) state
-                              :case :accusative)
-            parts))
+    (when (and particle (not split-particle-p))
+      (push particle parts))
+    (when dobj-concept
+      (push (realize-argument dobj-concept state :case :accusative) parts))
+    (when split-particle-p
+      (push particle parts))
     (when surface-iobj-rel
       (push (realize-argument (other-end surface-iobj-rel predicate) state
                               :case :accusative
@@ -79,7 +90,9 @@
                (when (and s (plusp (length s))) (push s parts))))
       (mapc #'push-part (active-verb-form predicate subject-concept))
       (mark-uttered state predicate)
-      (mapc #'push-part (realize-active-arguments predicate buckets state))
+      (let ((particle (lexicon-prop (concept-type predicate) :particle)))
+        (mapc #'push-part (realize-active-arguments predicate buckets state
+                                                    :particle particle)))
       (mapc #'push-part (realize-adjuncts predicate buckets state)))
     (format nil "~{~a~^ ~}" (nreverse parts))))
 

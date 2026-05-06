@@ -137,6 +137,16 @@
                     (concept-number source)
                     case)))
 
+(defun would-surface-as-pronoun-p (concept state &key (case :accusative))
+  "True when realize-np would render CONCEPT as a pronoun in this STATE
+   rather than as an NP or 'the X' fallback. Pure peek — no mutation.
+   Used by particle splitting to decide between 'pick up the toy' and
+   'pick it up'."
+  (and concept
+       (uttered-or-coref-uttered-p state concept)
+       (pronoun-for concept :case case :state state)
+       t))
+
 (defun singular-they-p (concept)
   "True for a singular human of unknown gender — the surface pronoun is
    'they' (singular-they), which takes plural verb agreement in standard

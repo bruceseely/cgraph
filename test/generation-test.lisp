@@ -124,6 +124,18 @@
     ("[PIE]<-(obj)<-[PICK-UP]."                                   . "A pie is picked up.")
     ("[PIE]<-(obj)<-[PICK-UP: @past]."                            . "A pie was picked up.")
     ("[GIRL]<-(agnt)<-[PICK-UP: @passive]->(obj)->[PIE]."         . "A pie is picked up by a girl.")
+    ;; Pronoun-driven particle splitting: when the surface direct object
+    ;; will surface as a pronoun ('him' / 'her'), the particle goes
+    ;; AFTER the dobj — 'pick him up', not 'pick up him'. Full-NP dobjs
+    ;; keep the joined form. Auto-reflexive uses with :agnt + :obj at
+    ;; the same coref need '@active' to suppress the head-driven passive
+    ;; transformation (the head is also the dobj).
+    ("[BOY: *z]<-(agnt)<-[PICK-UP: @active]->(obj)->[BOY: *z]."   . "A boy picks him up.")
+    ("[GIRL: *z]<-(agnt)<-[PICK-UP: @active]->(obj)->[GIRL: *z]." . "A girl picks her up.")
+    ;; Splitting inside a relative clause — the inner clause's dobj is
+    ;; coref'd with the outer head, so the second mention is a pronoun.
+    ("[BOY]<-(agnt)<-[GIVE]->(obj)->[GIRL: *z]<-(agnt)<-[PICK-UP]->(obj)->[GIRL: *z]."
+     . "A boy gives a girl who picks her up.")
 
     ("[DOG]-(agnt)<-[SIT](loc)->[PLACE]."         . "A dog sits in a place.")
     ("[DOG]-(agnt)<-[SIT](ploc)->[PLACE]."        . "A dog sits at a place.")
