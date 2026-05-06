@@ -28,7 +28,8 @@
 
 (defun clear-cgraph-type-catalogs ()
   (clear-concept-catalog)
-  (clear-relation-catalog))
+  (clear-relation-catalog)
+  (setf *loaded-types-source* nil))
 
 
 
@@ -1374,14 +1375,17 @@
 (defun load-cgraph-types (&optional supress-warnings)
   (make-top-concept-type)
   (make-bottom-concept-type)
-  (list
-   (load-concept-types (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
-   (load-relation-types (format nil "~arelation-types.lisp" *cgraph-types-directory*))))
+  (let ((result
+         (list
+          (load-concept-types (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
+          (load-relation-types (format nil "~arelation-types.lisp" *cgraph-types-directory*)))))
+    (setf *loaded-types-source* (or *external-types-directory* :default))
+    result))
 
 
 (defun unload-cgraph-types (&optional supress-warnings)
-  (clrhash *concept-type-catalog*)
-  (clrhash *relation-type-catalog*))
+  (declare (ignore supress-warnings))
+  (clear-cgraph-type-catalogs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  ;; Type Print  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;

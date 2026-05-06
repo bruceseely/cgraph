@@ -10,16 +10,22 @@
     test-mames))
 
 (defun load-test-types (&optional verbose)
+  "Load the test type hierarchy from test/test-types/. Idempotent: returns
+   immediately when the catalog is already the test catalog, so individual
+   test files can call this at the top without churning a previously loaded
+   user catalog or paying the unload/reload cost on every call."
   (let* ((cgraph-directory (asdf:system-source-directory "cgraph"))
          (test-directory (format nil "~atest/" cgraph-directory))
-         (test-types-directory (format nil "~atest-types/" test-directory))
-         ;; (concept-types-file (format nil "~aconcept-types.lisp" test-types-directory))
-         ;; (relation-types-file (format nil "~arelation-types.lisp" test-types-directory))
-         )
-    (unload-cgraph-types)
-    (initialize-types :external-types-directory test-types-directory)
-    (when verbose
-      (print-concept-types)))
+         (test-types-directory (format nil "~atest-types/" test-directory)))
+    (cond ((equal *loaded-types-source* test-types-directory)
+           (when verbose
+             (format t "~&Test types already loaded from ~a~%"
+                     test-types-directory)))
+          (t
+           (unload-cgraph-types)
+           (initialize-types :external-types-directory test-types-directory)
+           (when verbose
+             (print-concept-types)))))
   t)
 
 

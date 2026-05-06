@@ -50,6 +50,12 @@
 (defvar *cgraph-data-directory* nil)
 (defvar *external-types-directory* nil)
 
+;;; Tracks which type catalog is currently in memory so callers can avoid
+;;; redundant unload/reload cycles. NIL means no types loaded;
+;;; :default means the example types were copied (no external source);
+;;; otherwise holds the external-directory string that was loaded from.
+(defvar *loaded-types-source* nil)
+
 (defvar *cgraph-inits*  ())
 
 ;;; holds the current conttext
