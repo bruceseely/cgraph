@@ -204,6 +204,17 @@
      . "A dog was believed to be fast.")
     ("[KNOW]->(stat)->[PROPOSITION: [PERSON: ivan]<-(agnt)<-[EAT]->(obj)->[PIE]]."
      . "Ivan is known to eat a pie.")
+    ;; Active raising / ECM. Active raising is opt-in via '@raising'
+    ;; (the lexicon flag alone fires only the passive form), so existing
+    ;; 'X knows that ...' tests don't change unless explicitly annotated.
+    ("[PERSON: mary]<-(expr)<-[KNOW: @raising]->(stat)->[PROPOSITION: [PERSON: ivan]<-(agnt)<-[EAT]->(obj)->[PIE]]."
+     . "Mary knows Ivan to eat a pie.")
+    ("[PERSON: mary]<-(expr)<-[BELIEF: @raising]->(stat)->[PROPOSITION: [PERSON: ivan]->(loc)->[PLACE]]."
+     . "Mary believes Ivan to be in a place.")
+    ("[PERSON: mary]<-(expr)<-[BELIEF: @raising]->(stat)->[PROPOSITION: [DOG]->(attr)->[FAST]]."
+     . "Mary believes a dog to be fast.")
+    ("[PERSON: mary]<-(expr)<-[BELIEF: @raising @past]->(stat)->[PROPOSITION: [DOG]->(attr)->[FAST]]."
+     . "Mary believed a dog to be fast.")
     ;; Phase 6: copular (verbless) clauses — no AGNT/EXPR, just an entity
     ;; with attribute or location predicates. Renders with BE-copula.
     ("[DOG]->(attr)->[FAST]."           . "A dog is fast.")

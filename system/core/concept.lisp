@@ -46,6 +46,15 @@
    (voice :initform nil
           :initarg :voice
           :accessor concept-voice)
+   ;; Raising opt-in: '@raising' on a cognitive verb (whose lexicon
+   ;; entry has :raising t) selects the ECM / raised form for the
+   ;; active case ('Mary believes Ivan to be smart' instead of 'Mary
+   ;; believes that Ivan is smart'). Passive raising fires from the
+   ;; lexicon flag alone; active raising requires this annotation so
+   ;; existing 'X knows that ...' tests don't silently change.
+   (raising :initform nil
+            :initarg :raising
+            :accessor concept-raising-p)
    (negated :initform nil
             :initarg :negated
             :accessor negated)))

@@ -489,6 +489,8 @@
             ;; Voice annotations.
             ((string= word "passive") (list :voice :passive))
             ((string= word "active")  (list :voice :active))
+            ;; Raising opt-in for active / ECM rendering.
+            ((string= word "raising") (list :raising t))
             ;; Quantifier keywords (unchanged).
             ((string= word "every") (list :quantifier :universal))
             ((string= word "some")  (list :quantifier :existential))
@@ -662,9 +664,11 @@
                                         (tense      (getf features :tense))
                                         (aspect     (getf features :aspect))
                                         (voice      (getf features :voice))
+                                        (raising    (getf features :raising))
                                         (props (sans-prop features
                                                           :id :variable :coref :set
-                                                          :quantifier :tense :aspect :voice))
+                                                          :quantifier :tense :aspect :voice
+                                                          :raising))
                                         (ctype (get-concept-type type-label))
                                         (target-concept
                                           (progn
@@ -716,6 +720,8 @@ Use ?~a for cross-context co-reference instead."
                                      (setf (concept-aspect concept) aspect))
                                    (when (and concept voice)
                                      (setf (concept-voice concept) voice))
+                                   (when (and concept raising)
+                                     (setf (concept-raising-p concept) raising))
                                    (when variable
                                      (set-variable concept variable))
                                    ;; Handle co-reference labels

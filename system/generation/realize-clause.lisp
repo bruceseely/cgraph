@@ -359,6 +359,41 @@
     (cond ((null complements) "to be")
           (t (format nil "to be ~{~a~^ and ~}" complements)))))
 
+(defun realize-active-raising (predicate buckets state)
+  "Render the active-raising form: '<outer-subject> <verb> <inner-subject>
+   to <inner-infinitive>'. Used when PREDICATE has :raising in its
+   lexicon entry, '@raising' annotation set, an EXPR/AGNT outer subject,
+   and a clausal :dobj. The inner clause's subject becomes the outer
+   surface dobj (ECM); the inner predicate becomes a 'to'-infinitive."
+  (multiple-value-bind (mode inner-subj inner-main inner-buckets dobj-concept)
+      (raising-info predicate buckets)
+    (cond ((null mode) "")
+          (t
+           (mark-clause-relations-traversed buckets state)
+           (mark-uttered state dobj-concept)
+           ;; Same pre-marking as passive raising: keep the inner
+           ;; predicate from getting pulled into the lifted NP.
+           (when (eq mode :active)
+             (dolist (rel (gethash :subject inner-buckets))
+               (mark-traversed state rel)))
+           (when (eq mode :copula)
+             (dolist (rel (concept-relations inner-subj))
+               (when (member (relation-role rel) '(:adj :pp))
+                 (mark-traversed state rel))))
+           (let* ((outer-subj (clause-subject-concept predicate buckets))
+                  (subj-np    (and outer-subj
+                                   (realize-np outer-subj state :case :nominative)))
+                  (verb-list  (active-verb-form predicate outer-subj))
+                  (raised-np  (realize-np inner-subj state :case :accusative))
+                  (infinitive (case mode
+                                (:active (realize-verbal-infinitive
+                                          inner-main inner-buckets state))
+                                (:copula (realize-copula-infinitive
+                                          inner-subj state)))))
+             (mark-uttered state predicate)
+             (format nil "~a ~{~a~^ ~} ~a ~a"
+                     (or subj-np "") verb-list raised-np infinitive))))))
+
 (defun realize-passive-raising (predicate buckets state)
   "Render the passive-raising form: '<inner-subject> is/are <past-
    participle> to <inner-infinitive>'. Lifts the inner clause's subject

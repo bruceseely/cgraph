@@ -200,6 +200,16 @@
                (let* ((main    (find-main-predicate nodes))
                       (buckets (and main (classify-relations main))))
                  (cond ((null main) "")
+                       ;; '@raising' on a cognitive verb (whose lexicon
+                       ;; entry has :raising t) selects the ECM form —
+                       ;; 'Mary believes Ivan to be smart' instead of
+                       ;; 'Mary believes that Ivan is smart'. Opt-in,
+                       ;; so existing 'X knows that ...' tests stay
+                       ;; unchanged.
+                       ((and (concept-raising-p main)
+                             (lexicon-prop (concept-type main) :raising)
+                             (raising-info main buckets))
+                        (realize-active-raising main buckets state))
                        ;; '@passive' on the verb forces the passive
                        ;; transformation regardless of which side the
                        ;; head is on; '@active' explicitly suppresses
