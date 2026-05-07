@@ -584,176 +584,171 @@
 
 
 ;;; initial-char is what was read that caused concept-reader to be called
-(defun concept-reader (stream initial-char)
-  ;;(format t "~& ===> (concept-reader ~a ~s)~%" stream initial-char)
+(defun read-concept-type-label (stream)
+  "Read the type-label portion of a concept ('GIRL', 'PROPOSITION', or
+   a quoted string), validate that it's a defined type, and return
+   (values type-label next-char)."
+  (multiple-value-bind (type-string next-char) (alpha-read stream :alpha-only t)
+    ;; Strings are allowed alongside symbols, e.g. '[\"compound name\"]'.
+    (let* ((string-type-p (find #\" type-string :test #'char-equal))
+           (stripped      (remove #\" type-string))
+           (type-label    (cond (string-type-p stripped)
+                                (t (intern (string-upcase stripped))))))
+      (unless (get-concept-type type-label)
+        (error 'concept-type-lookup-failed :text type-label))
+      (values type-label next-char))))
 
+(defun read-graph-referent-concept (stream type-label)
+  "Read a graph referent — '[X: [graph]]' (or anonymous '[[graph]]'
+   when TYPE-LABEL is 'PROPOSITION). Creates a child context inheriting
+   the current negation, parses the inner graph, and wraps it as the
+   referent of a fresh concept of TYPE-LABEL."
+  (let* ((*in-graph-referent* t)
+         (*concepts-in-graph* (list))
+         ;; Inner concepts must NOT inherit the outer ~negation marker.
+         (*context*           (make-context *context* :negated *negated-concept*))
+         (*negated-concept*   nil)
+         (graph-tokens  (read-cgraph-tokens stream))
+         (linked-tokens (linkup graph-tokens))
+         (graph         (make-cgraph linked-tokens))
+         (ctype         (get-concept-type type-label))
+         ;; The outer concept doesn't exist yet; the bidirectional link
+         ;; in make-referent's optional 'concept' arg is therefore NIL.
+         (referent      (make-referent graph nil)))
+    (make-concept ctype referent)))
+
+(defun resolve-target-concept (ctype features)
+  "Build the concept implied by FEATURES — set referent, bound-variable
+   reference, individual lookup, or a dynamically-created individual
+   when *allow-dynamic-individual-creation* is on. Returns the concept
+   or NIL when nothing resolves."
+  (let ((id        (getf features :id))
+        (variable  (getf features :variable))
+        (set-specs (getf features :set))
+        (props     (sans-prop features
+                              :id :variable :coref :set
+                              :quantifier :tense :aspect :voice :raising)))
+    (check-name-id-consistency id props)
+    (cond
+      (set-specs
+       (let ((set-obj (build-set-from-specs set-specs ctype)))
+         (when set-obj
+           (let ((referent (make-referent set-obj))
+                 (measure  (getf features :measure)))
+             (when measure
+               (setf (getf (properties referent) :measure) measure))
+             (make-concept ctype referent)))))
+      (t
+       ;; Variable lookup → individual lookup → dynamic creation. Each
+       ;; arm returns NIL to fall through to the next via OR.
+       (or (when variable
+             (let ((existing (variable-node variable)))
+               (when existing
+                 (when (and (context existing)
+                            (not (eq (context existing) *context*)))
+                   (error "Variable *~a is defined in a different context. ~
+Use ?~a for cross-context co-reference instead."
+                          variable variable))
+                 existing)))
+           (get-concept ctype props :id id)
+           (let ((individual (get-individual ctype :id id :properties props)))
+             (unless individual
+               (when (and *allow-dynamic-individual-creation*
+                          (or id (plusp (length props))))
+                 (unless id (setf id (next-individual-number)))
+                 (setf individual (make-individual ctype props :id id))))
+             (when individual
+               (let ((referent (make-referent individual)))
+                 (make-concept ctype referent)))))))))
+
+(defun apply-concept-annotations (concept features)
+  "Set the @-word annotation slots from FEATURES: quantifier, tense,
+   aspect, voice, raising. Each fires only when its key is non-NIL,
+   leaving the slot at its default otherwise."
+  (let ((quantifier (getf features :quantifier))
+        (tense      (getf features :tense))
+        (aspect     (getf features :aspect))
+        (voice      (getf features :voice))
+        (raising    (getf features :raising)))
+    (when quantifier (setf (concept-quantifier concept) quantifier))
+    (when tense      (setf (concept-tense concept) tense))
+    (when aspect     (setf (concept-aspect concept) aspect))
+    (when voice      (setf (concept-voice concept) voice))
+    (when raising    (setf (concept-raising-p concept) raising))))
+
+(defun register-concept-coreference (concept coref-label)
+  "Bind CONCEPT to its COREF-LABEL. If a defining concept already
+   exists for that label (registered via *x or a prior ?x), link this
+   one as a bound occurrence; otherwise register this concept as the
+   defining occurrence and as a variable for query binding extraction.
+   Checks coref-labels first (legacy ?x/?x style) then variable-node
+   (standard *x outer / ?x inner usage)."
+  (let ((defining-concept (or (coref-label-node coref-label)
+                              (variable-node coref-label))))
+    (cond (defining-concept
+           (link-coreference concept defining-concept)
+           (setf (coref-bound-label concept) coref-label))
+          (t
+           (set-coref-label concept coref-label)
+           (set-variable concept coref-label)))))
+
+(defun read-feature-referent-concept (stream type-label)
+  "Read the features after the colon in '[TYPE: features]' (id, *x
+   variable, coref label, set spec, properties), resolve them to a
+   concept, and apply @-word annotations and variable/coref state."
+  (let* ((features (read-features stream))
+         (variable (getf features :variable))
+         (coref    (getf features :coref))
+         (ctype    (get-concept-type type-label))
+         (concept  (resolve-target-concept ctype features)))
+    (when concept
+      (apply-concept-annotations concept features)
+      (when variable (set-variable concept variable))
+      (when coref    (register-concept-coreference concept coref)))
+    concept))
+
+(defun read-concept-with-referent (stream type-label)
+  "After the colon in '[TYPE: ...]', dispatch to the graph-referent
+   reader (when the next char is '[' or '~') or the feature-referent
+   reader."
+  (consume-whitespace stream)
+  (let ((peek (peek-char nil stream)))
+    (cond ((or (char-equal peek #\[) (char-equal peek #\~))
+           (read-graph-referent-concept stream type-label))
+          (t
+           (read-feature-referent-concept stream type-label)))))
+
+(defun concept-reader (stream initial-char)
+  "Read a concept '[TYPE]', '[TYPE: features]', '[TYPE: [graph]]', or
+   the anonymous '[[graph]]' shorthand for '[PROPOSITION: [graph]]'.
+   Returns (values concept 'concept) or NIL when nothing is built."
+  (unless (char-equal initial-char #\[)
+    (error "concept parse error"))
   (with-readtable-mods (list (list #\: #'referent-reader)
                              (list #\] #'concept-ender))
     (let ((concept nil)
           (*referent-contents* (list)))
-
-      (unless (char-equal initial-char #\[)
-        (error "concept parse error"))
-
       (consume-whitespace stream)
-
-      ;; Check for anonymous context: [[graph]] is shorthand for [PROPOSITION: [graph]]
-      ;; This also handles ~[[graph]] when *negated-concept* is set by negation-reader
       (let ((peek-next (peek-char nil stream nil nil)))
-
-        (cond ((and peek-next (char-equal peek-next #\[))
-               ;; Anonymous context — implicit PROPOSITION with graph referent
-               (let* ((*in-graph-referent* t)
-                      (*concepts-in-graph* (list))
-                      (*context* (make-context *context* :negated *negated-concept*))
-                      (*negated-concept* nil) ; reset so inner concepts aren't marked negated
-                      (graph-tokens (read-cgraph-tokens stream))
-                      (linked-tokens (linkup graph-tokens))
-                      (graph (make-cgraph linked-tokens))
-                      (ctype (get-concept-type 'proposition))
-                      (referent (make-referent graph concept)))
-                 (setf concept (make-concept ctype referent))))
-
-              (t
-               ;; Normal concept: read type label and referent
-               (multiple-value-bind (concept-type-string next-char)
-                   (alpha-read stream :alpha-only t)
-
-                 ;; we want to be able to read STRINGS as well as SYMBOLS
-                 (let* ((string-type-p (not (null (find #\" concept-type-string :test #'char-equal))))
-                        (stripped (remove #\" concept-type-string))
-                        (type-label (cond (string-type-p stripped)
-                                          (t (intern (string-upcase stripped))))))
-
-                   ;; Check that the concept type is defined before proceeding
-                   (unless (get-concept-type type-label)
-                     (error 'concept-type-lookup-failed :text type-label))
-
-                   (cond ((char-equal next-char #\]) ; generic concept, with no referent
-                          ;; generic concepts are not cached
-                          (setf concept (make-concept type-label nil)))
-
-                         ((skip-char stream #\:)
-                          (consume-whitespace stream)
-
-                          ;; read REFERENT field
-                          ;; A graph referent starts with [ or ~ (for negated contexts like ~[...])
-                          (cond ((let ((pc (peek-char nil stream)))
-                                   (or (char-equal pc #\[) (char-equal pc #\~)))
-                                 ;; read a graph from the referent field
-                                 ;; Create a child context for the nested graph
-                                 (let* ((*in-graph-referent* t)
-                                        (*concepts-in-graph* (list))
-                                        (*context* (make-context *context* :negated *negated-concept*))
-                                        (*negated-concept* nil) ; reset so inner concepts aren't marked negated
-                                        (graph-tokens (read-cgraph-tokens stream))
-                                        (linked-tokens (linkup graph-tokens))
-                                        (graph (make-cgraph linked-tokens))
-                                        (ctype (get-concept-type type-label))
-                                        (referent (make-referent graph concept))
-                                        )
-                                   (setf concept (make-concept ctype referent))))
-                                (t
-                                 ;; read features from the referent field
-                                 (let* ((features (read-features stream))
-                                        (id (getf features :id))
-                                        (variable (getf features :variable))
-                                        (coref (getf features :coref))
-                                        (set-specs (getf features :set))
-                                        (quantifier (getf features :quantifier))
-                                        (tense      (getf features :tense))
-                                        (aspect     (getf features :aspect))
-                                        (voice      (getf features :voice))
-                                        (raising    (getf features :raising))
-                                        (props (sans-prop features
-                                                          :id :variable :coref :set
-                                                          :quantifier :tense :aspect :voice
-                                                          :raising))
-                                        (ctype (get-concept-type type-label))
-                                        (target-concept
-                                          (progn
-                                            (check-name-id-consistency id props)
-                                            (cond
-                                            ;; Set referent - build set from member specs
-                                            (set-specs
-                                             (let ((set-obj (build-set-from-specs set-specs ctype)))
-                                               (when set-obj
-                                                 (let ((referent (make-referent set-obj))
-                                                       (measure  (getf features :measure)))
-                                                   (when measure
-                                                     (setf (getf (properties referent) :measure)
-                                                           measure))
-                                                   (make-concept ctype referent)))))
-
-                                            ;; Variable or individual referent
-                                            ;; Use or to allow fallthrough: if variable exists, look it up;
-                                            ;; if not found (first occurrence), fall through to create new concept
-                                            (t
-                                             (or (when variable
-                                                   (let ((existing (variable-node variable)))
-                                                     (when existing
-                                                       (when (and (context existing)
-                                                                  (not (eq (context existing) *context*)))
-                                                         (error "Variable *~a is defined in a different context. ~
-Use ?~a for cross-context co-reference instead."
-                                                                variable variable))
-                                                       existing)))
-                                                 (get-concept ctype props :id id)
-                                                 (let ((individual (get-individual ctype :id id :properties props)))
-                                                   (unless individual
-                                                     (when (and *allow-dynamic-individual-creation*
-                                                                (or id
-                                                                    (plusp (length props))))
-                                                       (unless id (setf id (next-individual-number)))
-                                                       (setf individual (make-individual ctype props :id id))))
-                                                   (when individual
-                                                     (let ((referent (make-referent individual)))
-                                                       (make-concept ctype referent))))))))))
-
-
-                                   (setf concept target-concept)
-                                   (when (and concept quantifier)
-                                     (setf (concept-quantifier concept) quantifier))
-                                   (when (and concept tense)
-                                     (setf (concept-tense concept) tense))
-                                   (when (and concept aspect)
-                                     (setf (concept-aspect concept) aspect))
-                                   (when (and concept voice)
-                                     (setf (concept-voice concept) voice))
-                                   (when (and concept raising)
-                                     (setf (concept-raising-p concept) raising))
-                                   (when variable
-                                     (set-variable concept variable))
-                                   ;; Handle co-reference labels
-                                   ;; ?x is a bound reference if *x or a prior ?x already defines
-                                   ;; the label. Check coref-labels first (covers legacy ?x/?x style
-                                   ;; and *x when registered there), then fall back to variable-node
-                                   ;; (covers standard *x outer / ?x inner usage).
-                                   (when coref
-                                     (let ((defining-concept (or (coref-label-node coref)
-                                                                 (variable-node coref))))
-                                       (if defining-concept
-                                           ;; Bound occurrence - link to defining concept
-                                           (progn
-                                             (link-coreference concept defining-concept)
-                                             (setf (coref-bound-label concept) coref))
-                                           ;; Defining occurrence - register this concept
-                                           (progn
-                                             (set-coref-label concept coref)
-                                             ;; register as variable for query binding extraction
-                                             (set-variable concept coref)))))))))
-
-                         ;; skip the node-ref, if present
-                         ((skip-char stream #\+)
-                          (read-number stream))))))))
-
-      ;; end of concept definition
-      (skip-char stream #\] )
-
-      ;; mark negated concepts
+        (cond
+          ;; '[[graph]]' — anonymous PROPOSITION with graph referent.
+          ;; Also covers '~[[graph]]' via the surrounding *negated-concept*.
+          ((and peek-next (char-equal peek-next #\[))
+           (setf concept (read-graph-referent-concept stream 'proposition)))
+          (t
+           (multiple-value-bind (type-label next-char)
+               (read-concept-type-label stream)
+             (cond ((char-equal next-char #\])
+                    ;; Generic concept: no referent. Not cached.
+                    (setf concept (make-concept type-label nil)))
+                   ((skip-char stream #\:)
+                    (setf concept (read-concept-with-referent stream type-label)))
+                   ((skip-char stream #\+)
+                    ;; Trailing '+N' node-ref marker — consume and ignore.
+                    (read-number stream)))))))
+      (skip-char stream #\])
       (when (and concept *negated-concept*)
         (setf (negated concept) t))
-
       (when concept
         (values concept 'concept)))))
 
