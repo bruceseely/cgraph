@@ -325,3 +325,70 @@
       (dolist (pp adjuncts)
         (push-part pp)))
     (format nil "~{~a~^ ~}" (nreverse parts))))
+
+;;; --- Raising (Sowa Rule 4 second half) -------------------------------------
+;;; A cognitive verb with :raising in the lexicon and a clausal :dobj
+;;; surfaces in the no-agent case as 'X is believed to be Y' instead of
+;;; the awkward fallback ('A believe.', 'It is believed that X is Y').
+;;; The detector raising-info lives in generate.lisp next to active-
+;;; conjunct-info; this file holds the renderers.
+
+(defun realize-verbal-infinitive (main buckets state)
+  "Render 'to <verb> <complements>' for raising — the inner predicate
+   stripped of its subject. Particles thread through realize-active-
+   arguments; PP/adv adjuncts follow."
+  (mark-clause-relations-traversed buckets state)
+  (mark-uttered state main)
+  (let* ((particle (lexicon-prop (concept-type main) :particle))
+         (verb     (base-lemma main))
+         (args     (realize-active-arguments main buckets state :particle particle))
+         (adjuncts (realize-adjuncts main buckets state))
+         (parts    (append (list "to" verb) args adjuncts)))
+    (format nil "~{~a~^ ~}"
+            (remove-if (lambda (s) (or (null s) (zerop (length s)))) parts))))
+
+(defun realize-copula-infinitive (topic state)
+  "Render 'to be <complements>' for raising — the inner copular clause
+   stripped of its topic NP (which has been lifted to the outer
+   surface subject). Mirrors realize-copula-clause without the topic."
+  (mark-uttered state topic)
+  (dolist (rel (concept-relations topic))
+    (when (member (relation-role rel) '(:adj :pp))
+      (mark-traversed state rel)))
+  (let ((complements (realize-copula-complements topic state)))
+    (cond ((null complements) "to be")
+          (t (format nil "to be ~{~a~^ and ~}" complements)))))
+
+(defun realize-passive-raising (predicate buckets state)
+  "Render the passive-raising form: '<inner-subject> is/are <past-
+   participle> to <inner-infinitive>'. Lifts the inner clause's subject
+   to the outer surface and strips it from the inner rendering. Returns
+   the empty string when raising-info doesn't apply."
+  (multiple-value-bind (mode inner-subj inner-main inner-buckets dobj-concept)
+      (raising-info predicate buckets)
+    (cond ((null mode) "")
+          (t
+           (mark-clause-relations-traversed buckets state)
+           (mark-uttered state predicate)
+           (mark-uttered state dobj-concept)
+           ;; Active inner: pre-mark its :subject relation traversed so
+           ;; the lifted NP doesn't pick the inner predicate up as a
+           ;; relative clause.
+           (when (eq mode :active)
+             (dolist (rel (gethash :subject inner-buckets))
+               (mark-traversed state rel)))
+           ;; Copular inner: pre-mark :adj/:pp on the topic so they
+           ;; don't fold into the lifted NP — they'll surface as the
+           ;; 'to be X' complements instead.
+           (when (eq mode :copula)
+             (dolist (rel (concept-relations inner-subj))
+               (when (member (relation-role rel) '(:adj :pp))
+                 (mark-traversed state rel))))
+           (let* ((subj-np    (realize-np inner-subj state :case :nominative))
+                  (verb-list  (passive-verb-form predicate inner-subj))
+                  (infinitive (case mode
+                                (:active (realize-verbal-infinitive
+                                          inner-main inner-buckets state))
+                                (:copula (realize-copula-infinitive
+                                          inner-subj state)))))
+             (format nil "~a ~{~a~^ ~} ~a" subj-np verb-list infinitive))))))

@@ -249,12 +249,21 @@
 (register-lexicon-entry 'turn-off  :lemma "turn"  :particle "off")
 (register-lexicon-entry 'turn-on   :lemma "turn"  :particle "on")
 
-(register-lexicon-entry 'belief    :lemma "believe")
+(register-lexicon-entry 'belief    :lemma "believe" :raising t)
 (register-lexicon-entry 'intention :lemma "intend")
 (register-lexicon-entry 'thought   :lemma "think")
 (register-lexicon-entry 'hope      :lemma "hope")
 (register-lexicon-entry 'fear      :lemma "fear")
 (register-lexicon-entry 'wish      :lemma "wish")
+
+;;; --- Raising verbs (Sowa Rule 4 second half) ------------------------------
+;;; Cognitive verbs that, when their AGNT/EXPR is absent (passive use),
+;;; render with the inner subject lifted to the outer surface subject:
+;;; '[KNOW]->(stat)->[PROPOSITION: [Ivan]->(loc)->[PLACE]]' becomes
+;;; 'Ivan is known to be in a place' rather than 'A know.' or
+;;; 'It is known that Ivan is in a place'.
+
+(register-lexicon-entry 'know :raising t)
 
 ;;; --- Argument-frame overrides for communication verbs ---------------------
 ;;; By default the CG :dobj surfaces as direct object and :rcpt as 'to X'.

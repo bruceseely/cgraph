@@ -191,6 +191,19 @@
     ;; concept holds an inner graph that becomes a 'that' clause.
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]."
      . "Ivan knows that a girl eats a pie.")
+    ;; Sowa Rule 4 second half — raising. A cognitive verb with :raising
+    ;; in the lexicon and a clausal :dobj, used without an EXPR/AGNT,
+    ;; lifts the inner clause's subject to the outer surface and renders
+    ;; with a 'to'-infinitive. Both verbal and copular inner clauses
+    ;; are supported.
+    ("[BELIEF]->(stat)->[PROPOSITION: [PERSON: ivan]->(loc)->[PLACE]]."
+     . "Ivan is believed to be in a place.")
+    ("[BELIEF]->(stat)->[PROPOSITION: [DOG]->(attr)->[FAST]]."
+     . "A dog is believed to be fast.")
+    ("[BELIEF: @past]->(stat)->[PROPOSITION: [DOG]->(attr)->[FAST]]."
+     . "A dog was believed to be fast.")
+    ("[KNOW]->(stat)->[PROPOSITION: [PERSON: ivan]<-(agnt)<-[EAT]->(obj)->[PIE]]."
+     . "Ivan is known to eat a pie.")
     ;; Phase 6: copular (verbless) clauses — no AGNT/EXPR, just an entity
     ;; with attribute or location predicates. Renders with BE-copula.
     ("[DOG]->(attr)->[FAST]."           . "A dog is fast.")

@@ -130,6 +130,46 @@
           (t (format nil "~a ~a" subj-np
                      (join-with-conjunction vps label))))))
 
+(defun raising-info (predicate buckets)
+  "When PREDICATE has :raising in its lexicon entry AND a clausal :dobj
+   whose inner graph dispatches cleanly, return (values mode inner-subj
+   inner-main inner-buckets dobj-concept). Mode is :active when the
+   inner clause is verbal with a subject, :copula when it's verbless
+   with a topic carrying :adj/:pp predicates. NIL when raising doesn't
+   apply (no flag, no clausal dobj, or unsupported inner shape)."
+  (when (lexicon-prop (concept-type predicate) :raising)
+    (let* ((dobj-rel (first (gethash :dobj buckets)))
+           (dobj-concept (and dobj-rel (other-end dobj-rel predicate))))
+      (when (and dobj-concept (clausal-concept-p dobj-concept))
+        ;; Try active dispatch first (inner clause has a subject).
+        (multiple-value-bind (main inner-buckets) (active-conjunct-info dobj-concept)
+          (let ((subj (and main (clause-subject-concept main inner-buckets))))
+            (cond (subj (values :active subj main inner-buckets dobj-concept))
+                  (t
+                   ;; Fall back to copular inner: topic with :adj/:pp.
+                   (let* ((g (graph-referent dobj-concept))
+                          (nodes (and g (graph-nodes g)))
+                          (topic (and nodes (find-copula-topic nodes))))
+                     (when (and topic
+                                (some (lambda (r)
+                                        (member (relation-role r) '(:adj :pp)))
+                                      (concept-relations topic)))
+                       (values :copula topic nil nil dobj-concept)))))))))))
+
+(defun find-passive-raising-predicate (concepts)
+  "When CONCEPTS contains a single state/event concept whose lexicon
+   entry has :raising and whose buckets pass raising-info, return
+   (values predicate buckets). NIL otherwise. Used by realize-graph-
+   clause's no-subject branch to dispatch to passive raising before
+   falling through to act-or-event/copula."
+  (dolist (c concepts)
+    (when (lexicon-prop (concept-type c) :raising)
+      (let ((buckets (classify-relations c)))
+        (when (raising-info c buckets)
+          (return-from find-passive-raising-predicate
+            (values c buckets))))))
+  nil)
+
 (defun realize-coordination (label concepts state)
   "Render N propositions joined by 'and' or 'or'. When all conjuncts
    share a subject ('Sue eats and Sue drinks'), collapse to shared-
@@ -175,6 +215,14 @@
                        ((head-is-object-of-p head main buckets)
                         (realize-passive-with-agent main buckets state))
                        (t (realize-clause main buckets state)))))
+              ;; Passive raising: a cognitive verb with :raising in its
+              ;; lexicon entry and a clausal :dobj. 'Ivan is believed to
+              ;; be in a place' rather than the awkward fallback that
+              ;; would otherwise kick in for a stative verb without
+              ;; an EXPR/AGNT.
+              ((multiple-value-bind (pred buckets)
+                   (find-passive-raising-predicate concepts)
+                 (and pred (realize-passive-raising pred buckets state))))
               ((find-if #'act-or-event-concept-p concepts)
                (let* ((main    (find-if #'act-or-event-concept-p concepts))
                       (buckets (classify-relations main)))
