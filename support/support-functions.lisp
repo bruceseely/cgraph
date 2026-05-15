@@ -1,7 +1,7 @@
 ;;; Support Functions that don't involve Spike.
 
 
-(in-package #:conceptual-graphs)
+(in-package #:cl)
 
 
 ;;(format t "~5&Loading support-functions.lisp~%")

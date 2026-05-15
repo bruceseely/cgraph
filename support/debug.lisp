@@ -1,6 +1,6 @@
 
 
-(in-package #:conceptual-graphs)
+(in-package #:cl)
 
 
 (defun flatten (l)
