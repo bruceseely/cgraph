@@ -203,4 +203,37 @@
   (graph-to-text g))
 
 (let ((g (make-cgraph "[PERSON: Molly *y]←(expr)←[belief]→(stat)→[proposition: [person: Bob *x]←(expr)←[desire]→(goal)→[situation: [person: Bob ?x]←(agnt)←[INFORM]- (rcpt)→[PERSON: Molly ?y] (inst)→[TELEPHONE] (obj)→[NEWS]")))
+  (format t "~%~a" (pcg g))
+  (graph-to-text g))
+
+
+
+(let ((kb (make-context)))
+  (make-cgraph "[PERSON: Dave]←(agnt)←[DRIVE]" kb)
+  (make-cgraph "[PERSON: Dave]→(poss)→[CHEVY-VEHICLE]" kb)
+  (make-cgraph "[DRIVE]→(inst)→[CHEVY-VEHICLE]" kb)
+  (make-cgraph "[CITY: Baltimore]←(dest)<-[DRIVE]" kb)
+  (make-cgraph "[PERSON: Dave]→(attr)→[YOUNG]" kb)
+  (make-cgraph "[CHEVY-VEHICLE]→(attr)→[OLD]" kb)
+  (consolidate-cgraphs kb)
+  (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" kb))
+
+
+
+(let ((kb (make-context)))
+  (make-cgraph "[PERSON: Dave]←(agnt)←[DRIVE]" kb)
+  (make-cgraph "[PERSON: Dave]→(poss)→[CHEVY-VEHICLE]" kb)
+  (make-cgraph "[DRIVE]→(inst)→[CHEVY-VEHICLE]" kb)
+  (make-cgraph "[CITY: Baltimore]←(dest)<-[DRIVE]" kb)
+  (make-cgraph "[PERSON: Dave]→(attr)→[YOUNG]" kb)
+  (make-cgraph "[CHEVY-VEHICLE]→(attr)→[OLD]" kb)
+  (let (( result1 (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" kb)))
+    (consolidate-cgraphs kb)
+    (let ((result2 (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" kb)))
+      (format t "~&result1: ~s~%"  result1)
+      (format t "~&result2: ~s~%"  result2))))
+
+
+(let ((g (make-cgraph "[PERSON: Molly *y]←(expr)←[belief]→(stat)→[proposition: [person: Bob *x]←(expr)←[desire]→(goal)→[situation: [person: Bob ?x]←(agnt)←[INFORM]- (rcpt)→[PERSON: Molly ?y] (inst)→[TELEPHONE] (obj)→[NEWS]")))
+  (format t "~%~a" (pcg g))
   (graph-to-text g))

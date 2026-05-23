@@ -78,6 +78,21 @@
     (nreverse results)))
 
 
+(defmethod query :around (pattern context &key first-only)
+  (let ((results (call-next-method))
+        (texts (list)))
+    (dolist (result results)
+      (push (say (pcg (getf result :graph))) texts))
+    (values results texts)))
+
+
+(defmethod say-query-results ((results list))
+  (let ((texts (list)))
+    (dolist (result results)
+      (let ((graph (getf result :graph)))
+        (push (say (pcg graph)) texts)))
+    texts))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; EXTRACT-BINDINGS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

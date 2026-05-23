@@ -23,11 +23,11 @@
   "Create and populate a context for query testing."
   (let ((kb (make-context)))
     (make-cgraph "[PERSON: Dave]←(agnt)←[DRIVE]" kb)
-    (make-cgraph "[PERSON: Dave]→(poss)→[CHEVY]" kb)
-    (make-cgraph "[DRIVE]→(inst)→[CHEVY]" kb)
+    (make-cgraph "[PERSON: Dave]→(poss)→[CHEVY-VEHICLE]" kb)
+    (make-cgraph "[DRIVE]→(inst)→[CHEVY-VEHICLE]" kb)
     (make-cgraph "[CITY: Baltimore]←(dest)<-[DRIVE]" kb)
     (make-cgraph "[PERSON: Dave]→(attr)→[YOUNG]" kb)
-    (make-cgraph "[CHEVY]→(attr)→[OLD]" kb)
+    (make-cgraph "[CHEVY-VEHICLE]→(attr)→[OLD]" kb)
     kb))
 
 
