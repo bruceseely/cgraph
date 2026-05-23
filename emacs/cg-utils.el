@@ -336,6 +336,7 @@ fresh SBCL where cgraph hasn't been loaded yet (eg. after ,quit + C-x l)."
     (cgraph-always-show-node-ref            . conceptual-graphs::*always-show-node-ref*)
     (cgraph-allow-dynamic-individual-creation . conceptual-graphs::*allow-dynamic-individual-creation*)
     (cgraph-always-print-ascii-arrows       . conceptual-graphs::*always-print-ascii-arrows*)
+    (cgraph-indent-graph-referents          . conceptual-graphs::*indent-graph-referents*)
     (cgraph-anaphora-cross-coref            . conceptual-graphs::*anaphora-cross-coref*)
     (cgraph-run-tests-on-startup            . conceptual-graphs::*run-tests-on-startup*)
     (cgraph-run-lexicon-lint-on-startup     . conceptual-graphs::*run-lexicon-lint-on-startup*)
@@ -377,6 +378,15 @@ fresh SBCL where cgraph hasn't been loaded yet (eg. after ,quit + C-x l)."
   :set (lambda (sym val)
          (set-default sym val)
          (cgraph--push-to-cl 'conceptual-graphs::*always-print-ascii-arrows* val)))
+
+(defcustom cgraph-indent-graph-referents nil
+  "Mirrors conceptual-graphs::*indent-graph-referents* in Common Lisp."
+  :type 'boolean
+  :group 'cgraph
+  :initialize 'custom-initialize-default
+  :set (lambda (sym val)
+         (set-default sym val)
+         (cgraph--push-to-cl 'conceptual-graphs::*indent-graph-referents* val)))
 
 (defcustom cgraph-anaphora-cross-coref nil
   "Mirrors conceptual-graphs::*anaphora-cross-coref* in Common Lisp.

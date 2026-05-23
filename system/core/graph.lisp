@@ -106,7 +106,18 @@
 
 (defmethod format-object ((object graph) &rest keys &key &allow-other-keys)
   ;; Use cgraph-text (no trailing period) — the period belongs only at the outermost level
-  (cgraph-text (head object)))
+  (declare (ignore keys))
+  (let ((inner (cgraph-text (head object))))
+    (cond (*indent-graph-referents*
+           (let* ((pad (make-string *graph-referent-indent* :initial-element #\space))
+                  (newline-pad (concatenate 'string (string #\newline) pad))
+                  ;; Re-indent every line of the nested graph so that wrapped
+                  ;; branches inside it line up under their owner's new column,
+                  ;; and prepend a newline+pad so the nested graph starts on
+                  ;; its own line.
+                  (indented (frob-substrings inner (list (string #\newline)) newline-pad)))
+             (concatenate 'string newline-pad indented)))
+          (t inner))))
 
 ;; (defmethod graphs-equal ((graph1 graph) (graph2 graph) &optional debug)
 ;;   "Compare two graphs for equality by comparing their sorted node representations"

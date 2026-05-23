@@ -106,6 +106,14 @@
 (defvar *always-print-ascii-arrows* nil
   "Use the string (eg. \"->\") instead of the single-character arrow (eg. →)")
 
+(defvar *indent-graph-referents* nil
+  "When non-nil, format-cgraph places each nested graph referent on a new
+   line, indented one *graph-referent-indent* step further than its parent.
+   Useful for reading deeply-nested contexts (PROPOSITION, SITUATION, etc.).")
+
+(defvar *graph-referent-indent* 4
+  "Number of spaces added per nesting level when *indent-graph-referents* is set.")
+
 (defvar *print-without-variables* nil)
 
 (defvar *run-tests-on-startup* t
