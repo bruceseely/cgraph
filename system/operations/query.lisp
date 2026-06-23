@@ -82,7 +82,7 @@
   (let ((results (call-next-method))
         (texts (list)))
     (dolist (result results)
-      (push (say (pcg (getf result :graph))) texts))
+      (push (pcg (getf result :graph)) texts))
     (values results texts)))
 
 

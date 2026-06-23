@@ -13,6 +13,8 @@
 (combine-conceptual-graphs s1 s2)
 (pcg *)
 
+
+
 (setf g1 (make-cgraph "[person: Sue]←(agnt)←[eat]→(obj)→[pie]."))
 (setf g2 (make-cgraph "[girl]←(agnt)←[eat]→(manr)→[quickly]."))
 
@@ -63,14 +65,41 @@
                           "[dog: Spot]→(poss)→[cake]")))
   (format t "~&graphs:~%~&~a~%" (graphs *context*))
   (let* ((query1 "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]")
-         (result1 (query query1 *context*)))
+         (result1 (multiple-value-list (query query1 *context*)))
+         (plist (caar result1))
+         (graph (caadr result1))
+         (bindings (getf plist :bindings))
+         (text (say graph)))
     (format t "~&query1: ~s~%"  query1)
-    (format t "~&result1: ~s~%"  result1))
+    (format t "~&result1: ~s~%"  result1)
+    (format t "~&plist: ~s~%"  plist)
+    (format t "~&bindings: ~s~%"  bindings)
+    (format t "~&graph: ~s~%"  graph)
+    (format t "~&text: ~s~%"  text)
+    )
   (let* ((query2 "[ENTITY: *x]→(attr)->[ATTRIBUTE: *y]")
-         (result2 (query query2 *context*)))
+         (result2 (multiple-value-list (query query2 *context*)))
+         (plist (caar result2))
+         (graphs (cadr result2))
+         (bindings (mapcar (lambda (pl)
+                             (getf pl :bindings))
+                           (car result2)))
+         (texts (mapcar (lambda (g)
+                          (say g))
+                        graphs)))
+
     (format t "~&query2: ~s~%"  query2)
-    (format t "~&result2: ~s~%"  result2))
+    (format t "~&result2: ~s~%"  result2)
+    (format t "~&plist: ~s~%"  plist)
+    (format t "~&bindings: ~s~%"  bindings)
+    (format t "~&graphs: ~s~%"  graphs)
+    (format t "~&texts: ~s~%"  texts)
+    )
   nil)
+
+
+(multiple-value-list (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" *context*))
+(say (caadr *))
 
 
 
@@ -104,7 +133,7 @@
     (format t "~%query: ~a" query-string kb)
     (format t "~%bindings: ~a" (getf (car q) :bindings))))
 
-
+(progn
 (setq g1 (make-cgraph "[person: Bob]←(expr)←[desire]→(thme)→[cake]."))
 (setq g2 (make-cgraph "[person: Bob]←(agnt)←[eat]→(obj)->[cake]."))
 (setq g3  (make-cgraph "[person: Bob]←(expr)←[desire]→(goal)→[situation: [dog]←(agnt)←[eat]→(obj)->[cake] ]."))
@@ -119,7 +148,7 @@
            (inst)←[DRIVE]-
                       (agnt)→[PERSON: dave *x]→(attr)→[YOUNG]
                       (dest)→[CITY: Baltimore],
-           (poss)←[PERSON: dave *x]. "))
+           (poss)←[PERSON: dave *x]. ")))
 
 
 (query "[person: *x]←(expr)←[belief]→(stat)→[proposition: [person: *y]←(expr)←[desire]→(goal)→[situation: *z]]" *context* )
@@ -188,9 +217,16 @@
       (agnt)→[BABY: {*}]-
                 (attr)→[BLITHE]
                 (part)→[BELLY:{*}]→(attr)→[FAT]"))
+
   (setq h (find-concept 'milk g))
   (setq z (make-cgraph h))
-  (graph-to-text z))
+  (print (graph-to-text z))
+
+  (setq h (find-concept 'baby g))
+  (setq z (make-cgraph h))
+  (print (graph-to-text z))
+
+  t)
 
 
 

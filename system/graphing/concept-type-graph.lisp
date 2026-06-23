@@ -56,7 +56,8 @@
                                            (landscape nil)
                                            (hide-bottom t)
                                            (expand-sub nil)    ; list of type symbols/objects to expand downward
-                                           (expand-super nil)) ; list of type symbols/objects to expand upward
+                                           (expand-super nil)  ; list of type symbols/objects to expand upward
+                                           (reveal nil))       ; undisplayed types to expose + connect to the display
   (let ((types-visited (make-hash-table))
         (type-id-table (make-hash-table))
         (name (princ-to-string (car type-name-list)))
@@ -82,6 +83,32 @@
         (when ctype
           (dolist (parent (direct-supertypes ctype))
             (type-traversal parent types-visited :parents t :children nil)))))
+
+    ;; Reveal: expose an undisplayed type as if it had been right-clicked in the
+    ;; graph — add the type itself plus its full down-cone (all subtypes), and the
+    ;; ancestral spine connecting it to the existing display. The upward walk stops
+    ;; each branch at the current frontier (snapshotted before any reveal), so only
+    ;; the path(s) through the clicked type are added, not the ancestors' subtrees.
+    (when reveal
+      (let ((frontier (make-hash-table)))
+        (maphash (lambda (k v) (setf (gethash k frontier) v)) types-visited)
+        (dolist (type-name reveal)
+          (let ((ctype (get-concept-type type-name)))
+            (when ctype
+              ;; down-cone: the type and all of its subtypes
+              (type-traversal type-name types-visited :parents nil :children t)
+              ;; up-spine: BFS upward, pruning each branch at the existing frontier
+              (let ((queue (list ctype)))
+                (loop while queue do
+                  (let ((node (pop queue)))
+                    (dolist (parent (direct-supertypes node))
+                      (unless (or (eql parent 'T) (eql parent 'standard-object))
+                        (let ((pct (get-concept-type parent)))
+                          (when (and pct
+                                     (not (gethash pct frontier))
+                                     (not (gethash pct types-visited)))
+                            (setf (gethash pct types-visited) t)
+                            (push pct queue)))))))))))))
 
     ;; it appears that margin specifies inches
     (format stream "digraph \"~(~a~)_concept_type_hierarchy\" {~%" name)

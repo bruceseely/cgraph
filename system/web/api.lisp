@@ -55,8 +55,8 @@
   (setf (hunchentoot:content-type*) "application/javascript; charset=utf-8")
   (read-static-file "viz.js"))
 
-;;; GET /api/dot?types=animal[,dog,...]&expand_sub=animal&expand_super=dog
-(hunchentoot:define-easy-handler (handle-api-dot :uri "/api/dot") (types expand_sub expand_super)
+;;; GET /api/dot?types=animal[,dog,...]&expand_sub=animal&expand_super=dog&reveal=cat
+(hunchentoot:define-easy-handler (handle-api-dot :uri "/api/dot") (types expand_sub expand_super reveal)
   (setf (hunchentoot:content-type*) "text/plain; charset=utf-8")
   (let* ((raw (or types ""))
          ;; Split on commas and/or whitespace, drop empty tokens.
@@ -91,6 +91,10 @@
               (expand-super-names
                (loop for tok in (split-type-string (or expand_super ""))
                      for sym = (intern (string-upcase tok) :cg)
+                     when (get-concept-type sym) collect sym))
+              (reveal-names
+               (loop for tok in (split-type-string (or reveal ""))
+                     for sym = (intern (string-upcase tok) :cg)
                      when (get-concept-type sym) collect sym)))
           (with-output-to-string (s)
             (generate-concept-type-digraph :type-name-list name-list
@@ -99,7 +103,8 @@
                                            :children t
                                            :hide-bottom t
                                            :expand-sub expand-sub-names
-                                           :expand-super expand-super-names))))))
+                                           :expand-super expand-super-names
+                                           :reveal reveal-names))))))
 
 ;;; POST /api/initialize — reinitialize the concept-type system and reload types.
 (hunchentoot:define-easy-handler (handle-api-initialize :uri "/api/initialize") ()
@@ -115,9 +120,9 @@
       (setf (hunchentoot:return-code*) hunchentoot:+http-internal-server-error+)
       (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
 
-;;; POST /api/save?types=...&expand_sub=...
+;;; POST /api/save?types=...&expand_sub=...&reveal=...
 ;;; Writes <name>.dot and <name>.png to *cgraph-data-directory*.
-(hunchentoot:define-easy-handler (handle-api-save :uri "/api/save") (types expand_sub)
+(hunchentoot:define-easy-handler (handle-api-save :uri "/api/save") (types expand_sub reveal)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (unless (eq (hunchentoot:request-method*) :post)
     (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
@@ -143,6 +148,10 @@
             (loop for tok in (split-type-string (or expand_sub ""))
                   for sym = (intern (string-upcase tok) :cg)
                   when (get-concept-type sym) collect sym))
+           (reveal-names
+            (loop for tok in (split-type-string (or reveal ""))
+                  for sym = (intern (string-upcase tok) :cg)
+                  when (get-concept-type sym) collect sym))
            ;; Derive filename the same way graph-concept-types does.
            (graph-name (string-trim "()"
                          (substitute #\- #\Space
@@ -155,7 +164,8 @@
                                              :stream s
                                              :parents t :children t
                                              :hide-bottom t
-                                             :expand-sub expand-sub-names))))
+                                             :expand-sub expand-sub-names
+                                             :reveal reveal-names))))
       (ensure-directories-exist dot-path)
       (with-open-file (out dot-path :direction :output
                            :if-exists :supersede :if-does-not-exist :create)

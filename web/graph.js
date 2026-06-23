@@ -8,7 +8,30 @@ const cgPlaceholder  = document.getElementById('cg-placeholder');
 
 const selected    = new Set();
 const expandedSub = new Set();   // node ids with subtypes force-shown
-let baselineNodeIds = new Set(); // node ids visible before any subtype expansion
+const revealed    = new Set();   // undisplayed types exposed + connected to the display
+let baselineNodeIds = new Set(); // node ids visible before any expansion/reveal
+
+// Any temporary (non-permanent) additions currently active?
+function hasTemp() { return expandedSub.size > 0 || revealed.size > 0; }
+
+// Snapshot the baseline node set just before the first temporary addition,
+// so newly-revealed nodes can be tinted; clear it once none remain.
+function snapshotBaselineIfNeeded() {
+  if (!hasTemp())
+    baselineNodeIds = new Set(
+      [...container.querySelectorAll('g.node')].map(n => n.id).filter(Boolean)
+    );
+}
+function clearBaselineIfEmpty() {
+  if (!hasTemp()) baselineNodeIds.clear();
+}
+
+// Is a type currently drawn in the lattice?
+function isDisplayed(name) {
+  for (const n of container.querySelectorAll('g.node'))
+    if (n.id === name) return true;
+  return false;
+}
 
 // ── Error display ─────────────────────────────────────────────────────────────
 
@@ -62,7 +85,10 @@ function renderSidebar(names) {
       });
       el.addEventListener('contextmenu', e => {
         e.preventDefault();
-        toggleExpand(name);
+        if (revealed.has(name))      revealType(name);   // toggle an active reveal off
+        else if (isDisplayed(name))  toggleExpand(name); // shown: normal subtype expand
+        else if (selected.size > 0)  revealType(name);   // hidden: expose + connect
+        // else: empty lattice — nothing to connect to, ignore
       });
       return el;
     })
@@ -96,18 +122,28 @@ function deselect(name) {
   redraw();
 }
 
-// Toggle subtype expansion for a type (shared by lattice nodes and sidebar items).
+// Toggle subtype expansion for a displayed type (lattice nodes and sidebar items).
 function toggleExpand(name) {
   if (expandedSub.has(name)) {
     expandedSub.delete(name);
   } else {
-    if (expandedSub.size === 0)
-      baselineNodeIds = new Set(
-        [...container.querySelectorAll('g.node')].map(n => n.id).filter(Boolean)
-      );
+    snapshotBaselineIfNeeded();
     expandedSub.add(name);
   }
-  if (expandedSub.size === 0) baselineNodeIds.clear();
+  clearBaselineIfEmpty();
+  redraw();
+}
+
+// Toggle reveal of an undisplayed type: expose it + its subtypes and connect it
+// to the existing display via its ancestral spine (sidebar right-click only).
+function revealType(name) {
+  if (revealed.has(name)) {
+    revealed.delete(name);
+  } else {
+    snapshotBaselineIfNeeded();
+    revealed.add(name);
+  }
+  clearBaselineIfEmpty();
   redraw();
 }
 
@@ -124,6 +160,8 @@ async function redraw() {
     let url = `/api/dot?types=${encodeURIComponent([...selected].join(','))}`;
     if (expandedSub.size > 0)
       url += `&expand_sub=${encodeURIComponent([...expandedSub].join(','))}`;
+    if (revealed.size > 0)
+      url += `&reveal=${encodeURIComponent([...revealed].join(','))}`;
 
     const resp = await fetch(url);
     if (!resp.ok) { showError((await resp.text()) || `Server error: ${resp.status}`); return; }
@@ -142,16 +180,18 @@ async function redraw() {
         shape.setAttribute('stroke-width', '2.5');
       }
 
-      // Expanded nodes: blue fill tint when subtypes are force-shown.
-      if (shape && expandedSub.has(node.id))
+      // Expand/reveal anchor nodes: blue fill tint.
+      if (shape && (expandedSub.has(node.id) || revealed.has(node.id)))
         shape.setAttribute('fill', '#d6eaf8');
 
-      // Newly revealed nodes: light fill for nodes added by expansion.
-      if (shape && baselineNodeIds.size > 0 && !baselineNodeIds.has(node.id) && !expandedSub.has(node.id))
+      // Newly added nodes (by expansion or reveal spine/subtypes): yellow fill.
+      if (shape && baselineNodeIds.size > 0 && !baselineNodeIds.has(node.id) &&
+          !expandedSub.has(node.id) && !revealed.has(node.id))
         shape.setAttribute('fill', '#fef9e7');
 
       // Nodes with a pinned CG entry: subtle green tint.
-      if (shape && cgEntries.has(node.id) && !expandedSub.has(node.id) &&
+      if (shape && cgEntries.has(node.id) &&
+          !expandedSub.has(node.id) && !revealed.has(node.id) &&
           !(baselineNodeIds.size > 0 && !baselineNodeIds.has(node.id)))
         shape.setAttribute('fill', '#eafaf1');
 
@@ -554,11 +594,12 @@ document.getElementById('cg-clear-btn').addEventListener('click', () => {
 
 // ── Container-level mouse handling ────────────────────────────────────────────
 
-// Left-click on background: clear all subtype expansions.
+// Left-click on background: clear all temporary additions (expansions + reveals).
 container.addEventListener('click', e => {
   if (e.target.closest('g.node')) return;
-  if (expandedSub.size > 0) {
+  if (hasTemp()) {
     expandedSub.clear();
+    revealed.clear();
     baselineNodeIds.clear();
     redraw();
   }
@@ -602,6 +643,8 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     let url = `/api/save?types=${encodeURIComponent([...selected].join(','))}`;
     if (expandedSub.size > 0)
       url += `&expand_sub=${encodeURIComponent([...expandedSub].join(','))}`;
+    if (revealed.size > 0)
+      url += `&reveal=${encodeURIComponent([...revealed].join(','))}`;
     const resp = await fetch(url, { method: 'POST' });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
@@ -646,8 +689,9 @@ document.getElementById('init-btn').addEventListener('click', async () => {
     for (const name of [...selected])
       if (!nameSet.has(name)) selected.delete(name);
 
-    // Clear expansions and redraw.
+    // Clear expansions/reveals and redraw.
     expandedSub.clear();
+    revealed.clear();
     baselineNodeIds.clear();
 
     renderSidebar(names);
