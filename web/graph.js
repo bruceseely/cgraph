@@ -60,6 +60,10 @@ function renderSidebar(names) {
         else selectType(name);
         addCgEntry(name);
       });
+      el.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        toggleExpand(name);
+      });
       return el;
     })
   );
@@ -89,6 +93,21 @@ function deselect(name) {
   updateSidebarItem(name);
   renderChips();
   updateSaveBtn();
+  redraw();
+}
+
+// Toggle subtype expansion for a type (shared by lattice nodes and sidebar items).
+function toggleExpand(name) {
+  if (expandedSub.has(name)) {
+    expandedSub.delete(name);
+  } else {
+    if (expandedSub.size === 0)
+      baselineNodeIds = new Set(
+        [...container.querySelectorAll('g.node')].map(n => n.id).filter(Boolean)
+      );
+    expandedSub.add(name);
+  }
+  if (expandedSub.size === 0) baselineNodeIds.clear();
   redraw();
 }
 
@@ -156,17 +175,7 @@ async function redraw() {
       // Right-click: toggle subtype expansion.
       node.addEventListener('contextmenu', e => {
         e.preventDefault();
-        if (expandedSub.has(node.id)) {
-          expandedSub.delete(node.id);
-        } else {
-          if (expandedSub.size === 0)
-            baselineNodeIds = new Set(
-              [...container.querySelectorAll('g.node')].map(n => n.id).filter(Boolean)
-            );
-          expandedSub.add(node.id);
-        }
-        if (expandedSub.size === 0) baselineNodeIds.clear();
-        redraw();
+        toggleExpand(node.id);
       });
     });
 
