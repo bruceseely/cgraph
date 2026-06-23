@@ -118,8 +118,6 @@
          (relation-source-types (source-types relation-type))
          (concept-type (concept-type concept)))
 
-
-
     (cond ((or (some (lambda (type) (is-type concept type)) relation-source-types)
                (some (lambda (type) (supertype-p concept-type type))  relation-source-types)
                (some (lambda (type) (equal concept-type type)) relation-source-types))
@@ -127,16 +125,26 @@
            (add-arc relation concept)
            concept)
           (t
-           (let ((rtype (relation-type relation))
-                 (ctype1 (concept-type concept))
-                 (supertypes (supertypes (concept-type concept))))
-             ;; princ-to-string is used to avoid the #1, #2 shortcuts for symbols
-             (error "Connecting ~a→~a, concept-type ~a is not consistent with the in-arc of the '~a' relation type, ~a.~%~a has supertypes ~a.~%The in-arc of (~a) should be one of ~a."
-                    concept relation
-                    (princ-to-string ctype1) (princ-to-string rtype) (princ-to-string relation-source-types) (princ-to-string ctype1) (princ-to-string (supertypes ctype1))
-                    (princ-to-string rtype) (remove-duplicates (apply #'append (mapcar #'supertypes  relation-source-types)))  ;;(princ-to-string supertypes)
-                    )
-             )))))
+           (error "While connecting ~a→~a, concept-type ~a is not consistent with ~a, the in-arc type of the ~a relation.~
+               ~%Either~
+               ~% - the relation whose in-arc is linked to concept ~a should require an input type that is a supertype of concept-type ~a:~&~a, or~
+               ~% - the concept linked to the in-arc of the ~a relation should have a type that is a subtype of ~a:~&~a."
+                  ;; first line
+                  concept
+                  relation
+                  (princ-to-string (concept-type concept))
+                  (princ-to-string (car relation-source-types))
+                  relation
+                  ;; third line
+                  concept
+                  concept-type
+                  (princ-to-string (remove *CONCEPT-TYPE-TOP* (supertypes concept-type)))
+                  ;; fourth line
+                  relation
+                  relation-source-types
+                  (remove *CONCEPT-TYPE-TOP* (apply #'append (mapcar #'supertypes relation-source-types))))))))
+
+
 
 (defmethod add-arc-into-relation ((relation relation) (concept concept) &optional index)
   (add-arc-into-relation concept relation index))
@@ -146,17 +154,6 @@
   (let* ((relation-type (relation-type relation))
          (relation-dest-type (dest-type relation-type))
          (concept-type (concept-type concept)))
-    ;; (format t "~&relation-dest-type: ~s~%"  relation-dest-type)
-    ;; (format t "~&concept-type: ~s~%"  concept-type)
-
-    ;; (format t "~&(set-arc-from-relation ~s ~s) ~&~s~%~s~%~s~%~s~3%" relation concept
-    ;;         (typep (concept-type concept) 'string)
-    ;;         (supertype-p concept-type relation-dest-type)
-    ;;         (subtype-p concept-type relation-dest-type)
-    ;;         (equal concept-type relation-dest-type)
-    ;;         (or (typep (concept-type concept) 'string) ; for WORD concept
-    ;;            (supertype-p concept-type relation-dest-type)
-    ;;            (equal concept-type relation-dest-type)))
 
     (cond ((or (typep (concept-type concept) 'string) ; for WORD concept
                (supertype-p concept-type relation-dest-type)
@@ -165,22 +162,25 @@
            (add-arc relation concept)
            concept)
           (t
-           (let ((supertypesx (when concept-type (supertypes concept-type)))
-                 (rtype (relation-type relation))
-                 (ctype1 (concept-type concept))
-                 (supertypes (supertypes (get-concept-type relation-dest-type))))
-             (error "Connecting ~a←~a, concept-type ~a is not consistent with the out-arc of the '~a' relation type, ~a.~%~a has supertypes ~a.~%The out-arc of (~a) should be one of ~a."
-                    concept relation
-                    (princ-to-string ctype1) (princ-to-string rtype) (princ-to-string relation-dest-type) (princ-to-string ctype1) (princ-to-string (supertypes ctype1))
-                    (princ-to-string rtype) (princ-to-string (supertypes relation-dest-type))
-                    )
+           (error "While connecting ~a←~a, concept-type ~a is not consistent with ~a, the out-arc type of the ~a relation.~
+               ~%Either~
+               ~%- the relation whose out-arc is linked to concept ~a should require an output type that is one of:~&~a, or~
+               ~%- the concept linked to the out-arc of the ~a relation should have a type that is a subtype of ~a:~&~a,"
+                  ;; first line
+                  concept
+                  relation
+                  (princ-to-string (concept-type concept))
+                  (princ-to-string relation-dest-type)
+                  relation
+                  ;; third line
+                  concept
+                  (princ-to-string (remove *CONCEPT-TYPE-TOP* (supertypes concept-type)))
+                  ;; fourth line
+                  relation
+                  relation-dest-type
+                  (princ-to-string (subtypes relation-dest-type)))))))
 
-             ;; (error "Concept type ~a is not consistent with the ~:@(~a~) relation out-arc type, ~a.   ~% ~a has supertypes ~a~%The out-arc should be one of ~a~%"
-             ;;        (princ-to-string concept-type) (relation-type relation) (princ-to-string relation-dest-type)
-             ;;        (princ-to-string concept-type) (mapcar #'princ-to-string supertypesx)
-             ;;        (mapcar #'princ-to-string supertypes))
 
-             )))))
 
 (defmethod set-arc-from-relation ((concept concept) (relation relation))
   (set-arc-from-relation relation concept))
