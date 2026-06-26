@@ -18,7 +18,11 @@
   :version "0.0.1"
   :author "Bruce Seely <bruce@bseely.com>"
   ;;:licence "Public Domain"
-  ;;:depends-on  <libraries>
+  ;; swank must be present: source files reference swank::eval-in-emacs literally
+  ;; at load time, so without it the load aborts ("package SWANK does not exist").
+  ;; In a live SLIME image swank is already loaded; declaring it makes a plain
+  ;; (ql:quickload :cgraph) self-sufficient too.
+  :depends-on (:swank)
   :components ((:module "default-types"
 	        :components ((:static-file "concept-types.text")
 	                     (:static-file "relation-types.text")))
