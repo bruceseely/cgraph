@@ -137,10 +137,31 @@
   (getf (properties referent) :set))
 
 
+(defun format-measure (measure)
+  "Render a :measure value as @N. Accepts a bare number (3) or the reader's
+(size units) list ((3 \"\") / (3 \"kg\"))."
+  (if (consp measure)
+      (let ((size (first measure)) (units (second measure)))
+        (if (and units (stringp units) (plusp (length units)))
+            (format nil "@~a ~a" size units)
+            (format nil "@~a" size)))
+      (format nil "@~a" measure)))
+
 (defmethod format-referent ((referent referent) &key &allow-other-keys)
   ;;(format t "~&referent: ~s~%"  referent)
   ;;(format t "~&(content referent): ~s~%"  (princ-to-string (content referent)))
-  (cond ((content referent)
+  (cond ((set-p (content referent))
+         ;; A set's cardinality is a :measure on the REFERENT (the set object
+         ;; doesn't carry it). A generic plural with a count is just the count
+         ;; ("three dogs" -> [DOG: @3]); a set with named members keeps the
+         ;; brace form, plus the count when present ([DOG: {Spot, Fido, *}@5]).
+         (let ((set     (content referent))
+               (measure (measure-property referent)))
+           (cond
+             ((and measure (null (members set))) (format-measure measure))
+             (measure (format nil "~a~a" (format-object set) (format-measure measure)))
+             (t (format-object set)))))
+        ((content referent)
          (format-object (content referent)))
         ;; generic
         (t "")))
