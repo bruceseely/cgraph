@@ -122,8 +122,13 @@
 
 
 (defmethod variable-text ((concept concept))
+  ;; A concept that also carries a coreference defining-label is rendered by
+  ;; coref-text (which chooses defining * vs bound ?), so suppress the variable *
+  ;; here to avoid a duplicate marker (e.g. "*j?j" or "*c*c"). Concepts that are
+  ;; pure re-entrancy variables (no coref label) still render their * as before.
   (let ((var (node-variable concept)))
-    (cond (var (format nil "*~(~a~)"  var))
+    (cond ((concept-coref-label concept) "")
+          (var (format nil "*~(~a~)"  var))
           (t ""))))
 
 ;; Default coref-text method - real implementation in coreference.lisp

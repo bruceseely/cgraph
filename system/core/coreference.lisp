@@ -72,11 +72,19 @@
   (coref-label-setp concept))
 
 (defmethod coref-text ((concept concept))
-  "Return the co-reference label text for a concept (e.g., '?c').
-   Returns ?label for both defining (*x-style anchor) and bound (?x-style reference) occurrences."
+  "Return the co-reference label text for a concept (e.g., '*c' or '?c').
+   Standard CGIF: the defining occurrence renders *label (introduces the entity
+   into scope) and each bound occurrence renders ?label (references it) -- BUT
+   only when the label actually has a bound partner (a real coreference link).
+   A lone defining label with nothing referencing it stays ?label (legacy style),
+   so a single '[cat: ?c]' round-trips unchanged and no dangling *anchor is
+   emitted."
   (let ((defining-label (concept-coref-label concept))
         (bound-label (coref-bound-label concept)))
-    (cond (defining-label (format nil "?~(~a~)" defining-label))
+    (cond (defining-label
+           (format nil "~a~(~a~)"
+                   (if (coreference concept) "*" "?")
+                   defining-label))
           (bound-label    (format nil "?~(~a~)" bound-label))
           (t ""))))
 
