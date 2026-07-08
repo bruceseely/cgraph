@@ -84,6 +84,7 @@
 (:label mass :supertypes (measure))
 (:label mat :supertypes (place))
 (:label meal :supertypes (event))
+(:label monday :supertypes (time-period))
 (:label meal-food :supertypes (food))
 (:label measure :supertypes (quality))
 (:label monkey :supertypes (animal))
