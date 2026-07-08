@@ -141,6 +141,7 @@
 (:label think :supertypes (act))
 (:label time-period :supertypes (abstract-object) :canonical-graph "[TIME-PERIOD]- (attr)→[START-TIME] (attr)→[END-TIME]")
 (:label time-stamp :supertypes (temporal-attribute))
+(:label telescope :supertypes (tool))
 (:label tool :supertypes (entity))
 (:label transfer :supertypes (give) :canonical-graph "[TRANSFER]- (agnt)→[ANIMATE] (obj)→[PHYSICAL] (inst)→[PHYSICAL] (rcpt)→[ANIMATE]")
 (:label transport :supertypes (move))
