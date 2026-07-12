@@ -121,4 +121,5 @@
                              (:file "query-test")
 
                              (:file "generation-test")
+                             (:file "pos-roots-lint-test")
                              ))))

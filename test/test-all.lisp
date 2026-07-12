@@ -41,7 +41,8 @@
                       negative-context-test
                       graph-every-test
                       type-definition-test
-                      query-test)))
+                      query-test
+                      pos-roots-lint-test)))
     (dolist (test-name test-names)
       ;;(format t "~&test-name: ~s~%"  test-name)
       (let ((result (test-one test-name verbose)))

@@ -40,16 +40,27 @@
   (handler-case (subtype-p label-symbol root-symbol)
     (error () nil)))
 
+(defparameter *pos-hierarchy-roots*
+  '((act . :verb) (event . :verb) (manner . :adv) (attribute . :adj))
+  "The concept-type roots POS-FROM-HIERARCHY keys on, in precedence order,
+   each paired with the part of speech it implies: a concept type that is a
+   subtype of the root is classified as that POS; the first match wins, and
+   anything matching none falls through to :noun.
+
+   These roots are ASSUMED to exist in the catalog. When one is absent, its
+   whole POS class silently degrades to :noun (SAFE-SUBTYPE-P swallows the
+   lookup error) -- %LINT-MISSING-POS-ROOTS warns about exactly that. Keep this
+   the single source of truth so the check and the classifier can't drift.")
+
 (defun pos-from-hierarchy (concept-type)
-  "Crude POS classification by walking the supertype lattice.
-   Subtypes of ACT/EVENT -> :verb, ATTRIBUTE -> :adj, MANNER -> :adv,
-   anything else under ENTITY -> :noun. Falls back to :noun."
+  "Crude POS classification by walking the supertype lattice, per
+   *POS-HIERARCHY-ROOTS*: subtypes of ACT/EVENT -> :verb, MANNER -> :adv,
+   ATTRIBUTE -> :adj, everything else -> :noun. Falls back to :noun (also when
+   a root type is missing from the catalog -- see the parameter's docstring)."
   (let ((label (label concept-type)))
-    (cond ((or (safe-subtype-p label 'act)
-               (safe-subtype-p label 'event)) :verb)
-          ((safe-subtype-p label 'manner)     :adv)
-          ((safe-subtype-p label 'attribute)  :adj)
-          (t :noun))))
+    (or (loop for (root . pos) in *pos-hierarchy-roots*
+              when (safe-subtype-p label root) return pos)
+        :noun)))
 
 (defun concept-pos (concept)
   "Determine part-of-speech for CONCEPT, honoring lexicon overrides."

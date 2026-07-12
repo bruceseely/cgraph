@@ -17,6 +17,33 @@
 ;;  (report-lexicon-lint)  => prints grouped by severity, returns the list
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun %lint-missing-pos-roots ()
+  "POS-FROM-HIERARCHY keys on the roots in *POS-HIERARCHY-ROOTS* (ACT, EVENT,
+   MANNER, ATTRIBUTE) to classify parts of speech. A user catalog may omit any
+   of them, and SAFE-SUBTYPE-P swallows the resulting lookup error -- so a
+   missing root doesn't crash, it silently degrades: every concept that should
+   be that POS is classified :NOUN instead. Warn once per absent root."
+  (let ((findings nil))
+    (dolist (entry *pos-hierarchy-roots*)
+      (let* ((root (car entry))
+             (pos  (cdr entry))
+             (root-str (string-upcase (string root)))
+             (pos-word (string-downcase (symbol-name pos))))
+        (unless (ignore-errors (get-concept-type root))
+          (push (list :warn
+                      :missing-pos-root
+                      (format nil "Concept type ~A is absent from the catalog, ~
+                                   but POS-FROM-HIERARCHY keys on it to mark ~
+                                   ~As. Those concepts will silently be ~
+                                   classified :NOUN instead. Define ~A, or give ~
+                                   the affected types explicit ~
+                                   (register-lexicon-entry '<label> :pos ~S) ~
+                                   overrides."
+                              root-str pos-word root-str pos)
+                      root)
+                findings))))
+    (nreverse findings)))
+
 (defun %lint-relation-syntax-coverage ()
   "Each relation type must have an entry in *relation-syntax-table*; an
    unmapped relation is silently dropped during generation."
@@ -107,7 +134,8 @@
 (defun lexicon-lint ()
   "Run all lexicon/generation lint checks. Returns a list of findings
    of the form (severity check-name message context)."
-  (append (%lint-relation-syntax-coverage)
+  (append (%lint-missing-pos-roots)
+          (%lint-relation-syntax-coverage)
           (%lint-stale-lexicon-overrides)
           (%lint-person-subtypes-without-gender)
           (%lint-irregular-verb-not-classified-as-verb)))
