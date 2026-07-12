@@ -710,7 +710,11 @@
 
 
 (defun parse-concept-type-def (def)
-  (destructuring-bind (&key label supertypes canonical-graph graph-compatible definition) def
+  ;; &allow-other-keys: tolerate (and ignore) annotation keys like :note that
+  ;; maintainers put in a definition so a comment travels with it when the file
+  ;; is alphabetically sorted. Only the keys named below carry meaning.
+  (destructuring-bind (&key label supertypes canonical-graph graph-compatible definition
+                       &allow-other-keys) def
     ;;(format t "~&~a ~a ~a" label supertypes cgraph) ; debug
     (let ((type-label (intern (string-upcase (string label)) :cg))
           (normalized-supertypes (mapcar (lambda (s) (intern (string-upcase (string s)) :cg))
@@ -1287,7 +1291,9 @@
 
 (defun parse-relation-type-def (def &optional supress-warnings)
   (declare (special *undefined-concept-types*))
-  (destructuring-bind (&key label desc source-types dest-type) def
+  ;; &allow-other-keys: tolerate (and ignore) annotation keys like :note -- see
+  ;; parse-concept-type-def.
+  (destructuring-bind (&key label desc source-types dest-type &allow-other-keys) def
 
     (unless (listp source-types) (setf source-types (list source-types)))
 
