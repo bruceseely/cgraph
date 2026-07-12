@@ -77,6 +77,13 @@ Initialize and run the test suite:
 (cg:test-all t)
 ```
 
+That runs the engine's own suite. cgraph is also a dependency of the
+[`cg-from-parse`](https://github.com/bruceseely/cg-from-parse) conceptual-graph
+extractor, whose `test/run-all-suites.sh` is a **whole-stack gate**: it runs this
+`cg:test-all` suite — pointed at a throwaway temp type catalog, so your
+`~/.cgraph` is never touched — alongside the PARSIFAL parser and the extractor's
+own suites, each in its own process, for one combined pass/fail.
+
 Basic usage:
 
 ```lisp
