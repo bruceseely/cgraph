@@ -1,5 +1,7 @@
 # CGraph
 
+[![whole-stack tests](https://github.com/bruceseely/cgraph/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/bruceseely/cgraph/actions/workflows/tests.yml)
+
 A Common Lisp implementation of John Sowa's **Conceptual Graphs** — a knowledge representation formalism based on semantic networks and first-order logic.
 
 ## What It Does
