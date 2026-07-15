@@ -104,6 +104,8 @@
 (:label pick-up :supertypes (act))
 (:label pie :supertypes (food))
 (:label place :supertypes (inanimate) :canonical-graph "[PLACE]←(loc)←[⊤].")
+(:label here :supertypes (place))   ; deictic place ("... sees the dog here")
+(:label there :supertypes (place))  ; deictic place ("... sees the dog there")
 (:label proposition :supertypes (abstract-object) :graph-compatible t)
 (:label push :supertypes (move))
 (:label quality :supertypes (abstract))
