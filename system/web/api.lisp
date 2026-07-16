@@ -202,6 +202,120 @@
                      collect (string-downcase (symbol-name k)))))
     (json-string-array (sort names #'string<))))
 
+;;; ── Concept-type editor: create + persist ─────────────────────────────────────
+;;; Slice 1 is append-only: create a new type (or persist a runtime-only :create
+;;; type) and add its form to the ontology source file. Editing a type already IN
+;;; the file needs an in-place splice and is deliberately out of scope here.
+
+(defun concept-types-file ()
+  "TRUENAME of the concept-types source file. Resolving the ~/.cgraph symlink up
+front means every write targets the REAL file (the repo it links to), and never
+replaces the link with a plain copy the way a write-then-rename save would."
+  (truename (merge-pathnames "concept-types.lisp" *cgraph-types-directory*)))
+
+(defun concept-type-in-file-p (label file)
+  "True if FILE already carries a (:label LABEL ...) form (case-insensitive). Reads
+under the standard readtable/:cg package so the CG readtable can't skew the plists."
+  (with-open-file (in file :direction :input)
+    (let ((*readtable* (copy-readtable nil))
+          (*package* (find-package :cg)))
+      (loop for def = (read in nil 'eof)
+            until (eq def 'eof)
+            thereis (let ((l (and (consp def) (getf def :label))))
+                      (and l (string-equal (string l) (string label))))))))
+
+(defun append-concept-type-def (label supertypes canonical note file)
+  "Append one (:label ...) form to FILE in place (:append never renames, so a
+symlinked source keeps pointing at the edited file). LABEL/SUPERTYPES are written
+lowercased to match the file's style; CANONICAL and NOTE are added only when
+non-empty (:note is a comment key the loader tolerates and keeps in the file)."
+  (with-open-file (out file :direction :output :if-exists :append
+                            :if-does-not-exist :error)
+    (format out "~&(:label ~(~a~) :supertypes (~{~(~a~)~^ ~})~
+                 ~@[ :canonical-graph ~s~]~@[ :note ~s~])~%"
+            (string label)
+            (mapcar #'string supertypes)
+            (and canonical (plusp (length canonical)) canonical)
+            (and note (plusp (length note)) note))))
+
+(defun rollback-concept-type (label)
+  "Undo a just-created concept type named LABEL: unlink it from the hierarchy AND
+drop it from the catalog. remove-concept-type only unlinks inheritance — it leaves
+the catalog entry, so without the remhash the type would still surface in /api/types."
+  (let ((node (ignore-errors (get-concept-type (intern (string-upcase label) :cg)))))
+    (when node (ignore-errors (remove-concept-type node))))
+  (let ((key (loop for k being the hash-keys of *concept-type-catalog*
+                   when (string-equal (symbol-name k) (string-upcase label)) return k)))
+    (when key (remhash key *concept-type-catalog*))))
+
+(defun validate-canonical-graph (string)
+  "Parse STRING as a conceptual graph against the live catalog; return NIL when it
+is well-formed, else a one-line error message. Covers the three failure modes PCG
+surfaces — unknown concept type, unknown relation type, malformed syntax.
+parse-cgraph already re-signals concept-type and token errors with good text; the
+relation lookup leaks its raw condition, so it is named here. *package* must be :cg:
+reader.lisp interns bracketed type names in *package*, and the catalog is keyed :cg."
+  (handler-case
+      (progn (let ((*package* (find-package :conceptual-graphs)))
+               (with-cg-readtable (pcg string)))
+             nil)
+    (relation-type-lookup-failed () "unknown relation type in the canonical graph")
+    (error (e)
+      (string-trim " " (substitute #\Space #\Newline (princ-to-string e))))))
+
+;;; POST /api/create-type?label=...&supertypes=a,b&canonical=...&note=...
+;;; Create the type live (so it shows at once — the catalog is process-global),
+;;; validate any canonical graph, and append the form to the source file. Refuses a
+;;; type already defined in the file; rejects (and rolls back) an invalid canonical.
+(hunchentoot:define-easy-handler (handle-api-create-type :uri "/api/create-type")
+    (label supertypes canonical note)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (unless (eq (hunchentoot:request-method*) :post)
+    (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
+    (return-from handle-api-create-type "{\"error\":\"POST required\"}"))
+  (handler-case
+      (let* ((label        (and label (string-trim '(#\Space #\Tab) label)))
+             (super-tokens (split-type-string (or supertypes "")))
+             (canonical    (and canonical (string-trim '(#\Space #\Tab #\Newline #\Return)
+                                                       canonical)))
+             (canonical    (and canonical (plusp (length canonical)) canonical))
+             (note         (and note (string-trim '(#\Space #\Tab #\Newline #\Return) note)))
+             (note         (and note (plusp (length note)) note)))
+        (when (or (null label) (zerop (length label)))
+          (error "a type name is required"))
+        (when (null super-tokens)
+          (error "at least one supertype is required"))
+        ;; get-concept-type SIGNALS on an unknown label (it does not return nil),
+        ;; so guard with ignore-errors to give a clean message.
+        (dolist (s super-tokens)
+          (unless (ignore-errors (get-concept-type s))
+            (error "unknown supertype: ~a" s)))
+        (let* ((file        (concept-types-file))
+               (sym         (intern (string-upcase label) :cg))
+               (super-syms  (mapcar (lambda (s) (intern (string-upcase s) :cg)) super-tokens))
+               (pre-existed (ignore-errors (get-concept-type sym))))
+          (when (concept-type-in-file-p label file)
+            (error "~a is already defined in the ontology file; ~
+                    editing existing types is not yet supported" label))
+          ;; live: create the type first (canonical attached only after it validates)
+          ;; so a self-referential canonical — [WANT] in WANT's own graph — resolves.
+          (define-concept-type :label sym :supertypes super-syms :canonical-graph "")
+          (when canonical
+            (let ((verr (validate-canonical-graph canonical)))
+              (when verr
+                ;; roll back a freshly-created type; leave a pre-existing one alone.
+                (unless pre-existed (rollback-concept-type label))
+                (error "invalid canonical graph: ~a" verr))
+              (define-concept-type :label sym :supertypes super-syms
+                                   :canonical-graph canonical)))
+          ;; persist: append the form to the source file.
+          (append-concept-type-def label super-tokens canonical note file)
+          (format nil "{\"ok\":true,\"label\":\"~a\"}"
+                  (json-escape (string-downcase label)))))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+
 ;;; Helper: JSON-escape a string (handles the characters JSON requires escaping).
 (defun json-escape (s)
   (with-output-to-string (out)

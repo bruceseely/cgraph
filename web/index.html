@@ -62,7 +62,7 @@
     .chip:hover { background: #c0392b; }
     .chip-x { font-size: 11px; opacity: 0.8; }
 
-    #save-btn, #init-btn {
+    #save-btn, #init-btn, #new-type-btn {
       align-self: center;
       flex-shrink: 0;
       font-size: 11px;
@@ -72,6 +72,77 @@
       background: #f7f7f7;
       color: #555;
       cursor: pointer;
+    }
+    #new-type-btn { margin-left: 0.4rem; }
+    #new-type-btn:hover { background: #e8e8e8; border-color: #aaa; }
+
+    #new-type-form {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      padding: 0.35rem 0.6rem;
+      background: #fafafa;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 12px;
+    }
+    #new-type-form[hidden] { display: none; }
+    #new-type-form input {
+      font-size: 12px;
+      padding: 0.18rem 0.4rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+    #nt-label     { width: 9rem; }
+    #nt-canonical { flex: 2; min-width: 8rem; }
+    #nt-note      { flex: 1; min-width: 6rem; }
+    /* supertypes: a click-built chip set, not a free-text field */
+    #nt-supers {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      flex: 1;
+      min-width: 12rem;
+      min-height: 1.6rem;
+      padding: 0.1rem 0.3rem;
+      border: 1px dashed #ccc;
+      border-radius: 3px;
+      background: #fff;
+    }
+    #nt-supers-empty { color: #bbb; font-style: italic; }
+    .nt-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 11px;
+      padding: 0.05rem 0.4rem;
+      background: #eef4ff;
+      border: 1px solid #cdd9f0;
+      border-radius: 10px;
+      color: #33507a;
+      cursor: pointer;
+    }
+    .nt-chip:hover { background: #e0e9fb; border-color: #a9bde8; }
+    .nt-chip .x { color: #93a; font-size: 10px; opacity: 0.6; }
+    /* a sidebar type currently chosen as a supertype */
+    .type-item.is-super { background: #eef4ff; box-shadow: inset 3px 0 0 #7a9fe0; }
+    #new-type-form button {
+      font-size: 11px;
+      padding: 0.18rem 0.55rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #f7f7f7;
+      color: #555;
+      cursor: pointer;
+    }
+    #new-type-form button:hover { background: #e8e8e8; border-color: #aaa; }
+    #nt-sep    { color: #999; }
+    #nt-status { font-size: 11px; color: #aaa; }
+    #nt-status.error { color: #c0392b; }
+    #new-type-form input.field-error {
+      border-color: #c0392b;
+      background: #fff6f6;
     }
     #save-btn { margin-left: auto; }
     #save-btn:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
@@ -348,7 +419,21 @@
     <button id="save-btn" title="Save graph to data directory" disabled>Save</button>
     <span id="save-status"></span>
     <button id="init-btn" title="Reinitialize concept types">Initialize</button>
+    <button id="new-type-btn" title="Create a new concept type">New Type</button>
     <button id="options-btn" title="Display options">Options</button>
+  </div>
+
+  <div id="new-type-form" hidden>
+    <input id="nt-label" type="text" placeholder="new type name" autocomplete="off" spellcheck="false">
+    <span id="nt-sep" title="subtype of">⊑</span>
+    <div id="nt-supers" title="click a type in the list or graph to add it; click a chip to remove">
+      <span id="nt-supers-empty">click types to add as supertypes</span>
+    </div>
+    <input id="nt-canonical" type="text" placeholder="canonical graph (optional)" autocomplete="off" spellcheck="false">
+    <input id="nt-note" type="text" placeholder="note (optional)" autocomplete="off" spellcheck="false">
+    <button id="nt-create">Create</button>
+    <button id="nt-cancel">Cancel</button>
+    <span id="nt-status"></span>
   </div>
 
   <div id="error-msg"></div>
