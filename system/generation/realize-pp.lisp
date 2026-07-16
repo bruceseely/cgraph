@@ -54,6 +54,16 @@
 (defun clausal-concept-p (concept)
   (and concept (graph-referent-p concept)))
 
+(defun clausal-situation-p (concept)
+  "True when CONCEPT is a clausal complement wrapped as a SITUATION -- an
+   infinitival that surfaces as 'to <verb>' (e.g. 'wants to go') rather than a
+   PROPOSITION that surfaces as a 'that'-clause ('knows that S'). The wrapper type
+   is the extractor's choice (INF-S -> situation, THAT-S -> proposition), so the
+   realizer defers to it. Unknown SITUATION type (older ontology) -> NIL -> the
+   safe 'that'-clause form."
+  (and (clausal-concept-p concept)
+       (ignore-errors (safe-subtype-p (label (concept-type concept)) 'situation))))
+
 (defun realize-nested-graph (inner-graph state)
   "Generate a clause from the inner graph held as a concept's referent.
    Walk-state is shared so anaphora carries across the nesting boundary.
@@ -62,11 +72,26 @@
   (let ((head (and (typep inner-graph 'graph) (head inner-graph))))
     (realize-graph-clause (graph-nodes inner-graph) state head)))
 
+(defun realize-nested-infinitive (inner-graph state)
+  "Render an embedded SITUATION as a 'to <verb> ...' infinitive, dropping its
+   (controlled, coreferential) subject -- 'the boy wants to go', not 'the boy wants
+   that a boy goes'. Reuses realize-verbal-infinitive on the inner predicate head.
+   Falls back to 'that <clause>' when the inner graph has no realizable predicate."
+  (let* ((head    (and (typep inner-graph 'graph) (head inner-graph)))
+         (buckets (and head (classify-relations head))))
+    (if (and head buckets)
+        (realize-verbal-infinitive head buckets state)
+        (format nil "that ~a" (realize-nested-graph inner-graph state)))))
+
 (defun realize-argument (concept state &key (case :nominative) preposition)
-  "Render CONCEPT as a verb argument. If CONCEPT has a graph referent,
-   emit 'that <inner clause>' (with PREPOSITION suppressed). Otherwise
-   render as an NP and prepend PREPOSITION when supplied."
-  (cond ((clausal-concept-p concept)
+  "Render CONCEPT as a verb argument. A clausal complement emits 'to <verb>' when
+   it is a SITUATION (infinitival) or 'that <inner clause>' otherwise (PREPOSITION
+   suppressed either way). A non-clausal concept renders as an NP, with PREPOSITION
+   prepended when supplied."
+  (cond ((clausal-situation-p concept)
+         (mark-uttered state concept)
+         (realize-nested-infinitive (graph-referent concept) state))
+        ((clausal-concept-p concept)
          (mark-uttered state concept)
          (format nil "that ~a"
                  (realize-nested-graph (graph-referent concept) state)))

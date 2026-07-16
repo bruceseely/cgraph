@@ -40,6 +40,7 @@
     (part  :pp     "of")
     (ploc  :pp     "at")
     (poss  :poss)
+    (prop  :dobj)   ;; generic clausal complement ("that S" / infinitival "to VP")
     (psize :pp      "of size")
     (ptnt  :dobj)
     (rcpt  :iobj   "to")
