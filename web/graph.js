@@ -815,6 +815,8 @@ function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
   setNtHint(isEdit ? `editing ${edit} — click types to change supertypes`
                    : 'click types to add supertypes');
   newTypeForm.hidden = false;
+  autoGrow(ntCanon);           // size to the (possibly long) prefilled content
+  autoGrow(ntNote);
   (isEdit ? ntCanon : ntLabel).focus();
 }
 
@@ -874,6 +876,8 @@ async function refreshTypeList(selectName) {
 async function submitType() {
   const editing = editingLabel !== null;
   const label = editing ? editingLabel : ntLabel.value.trim();
+  // Newlines are preserved: the form-based splice handles multi-line definitions,
+  // so indentation the user adds for readability survives a round-trip.
   const canon = ntCanon.value.trim();
   const note  = ntNote.value.trim();
   ntCanon.classList.remove('field-error');
@@ -908,12 +912,20 @@ async function submitType() {
 ntCreateBtn.addEventListener('click', submitType);
 ntSaveBtn.addEventListener('click', submitType);
 
+// Textareas grow to fit their content, up to the CSS max-height.
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 192) + 'px';   // 192px ≈ 12rem cap
+}
+for (const el of [ntCanon, ntNote]) el.addEventListener('input', () => autoGrow(el));
+
 // Editing the canonical field clears its error ring.
 ntCanon.addEventListener('input', () => ntCanon.classList.remove('field-error'));
 
 for (const el of [ntLabel, ntCanon, ntNote]) {
   el.addEventListener('keydown', e => {
-    if (e.key === 'Enter')       { e.preventDefault(); submitType(); }
-    else if (e.key === 'Escape') { hideForm(); }
+    // Plain Enter submits; Shift+Enter inserts a newline in the textareas.
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitType(); }
+    else if (e.key === 'Escape')          { hideForm(); }
   });
 }

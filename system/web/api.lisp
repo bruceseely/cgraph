@@ -241,33 +241,56 @@ symlinked source keeps pointing at the edited file)."
   (with-open-file (out file :direction :output :if-exists :append :if-does-not-exist :error)
     (format out "~&~a~%" (concept-type-def-string label supertypes canonical note))))
 
-(defun line-defines-concept-type-p (line label)
-  "True if LINE is a (:label LABEL ...) form (case-insensitive). Comment/blank lines
-read as NIL and are skipped. Read under the standard readtable/:cg package."
-  (let ((def (ignore-errors
-               (let ((*readtable* (copy-readtable nil))
-                     (*package* (find-package :conceptual-graphs)))
-                 (read-from-string line nil nil)))))
-    (and (consp def)
-         (let ((l (getf def :label))) (and l (string-equal (string l) (string label)))))))
+(defun %skip-to-form (stream)
+  "Advance STREAM past whitespace and ; line comments; return the file-position of the
+next form's first character (STREAM left positioned there), or NIL at end of stream."
+  (loop
+    (let* ((pos (file-position stream))
+           (c   (read-char stream nil :eof)))
+      (cond ((eq c :eof) (return nil))
+            ((member c '(#\Space #\Tab #\Newline #\Return #\Page #\Linefeed)) nil) ; whitespace
+            ((char= c #\;)                                                          ; comment → skip to EOL
+             (loop for d = (read-char stream nil :eof)
+                   until (or (eq d :eof) (char= d #\Newline))))
+            (t (file-position stream pos) (return pos))))))               ; found a form; rewind onto it
+
+(defun concept-type-form-span (label text)
+  "The (START . END) character span of the (:label LABEL ...) top-level form within
+TEXT — START at its opening paren, END just past its close — or NIL if absent. Reads
+whole FORMS, so it matches a form that spans several lines. Standard readtable/:cg."
+  (with-input-from-string (s text)
+    (let ((*readtable* (copy-readtable nil))
+          (*package* (find-package :conceptual-graphs)))
+      (loop
+        (let ((start (%skip-to-form s)))
+          (when (null start) (return nil))
+          (let ((form (ignore-errors (read s nil 'eof))))
+            (when (or (null form) (eq form 'eof)) (return nil))
+            (when (and (consp form)
+                       (let ((l (getf form :label)))
+                         (and l (string-equal (string l) (string label)))))
+              ;; READ can advance file-position past a trailing delimiter (e.g. the
+              ;; newline after the form); trim END back to just past the form's own
+              ;; closing paren so the separating whitespace stays with the NEXT form.
+              (let* ((fp    (file-position s))
+                     (close (position #\) text :from-end t :end fp)))
+                (return (cons start (if close (1+ close) fp)))))))))))
 
 (defun splice-concept-type-def (label supertypes canonical note file)
-  "Replace the (:label LABEL ...) line in FILE in place, preserving every other line
-(comments, ordering, other types' notes) verbatim. Returns T if a line was replaced,
-NIL if none matched (caller then appends). Writes the truename'd path, so a rewrite
-edits the real file a ~/.cgraph symlink points at rather than the link itself."
-  (let ((lines (uiop:read-file-lines file))
-        (new   (concept-type-def-string label supertypes canonical note))
-        (hit   nil))
-    (setf lines (mapcar (lambda (l)
-                          (if (and (not hit) (line-defines-concept-type-p l label))
-                              (progn (setf hit t) new)
-                              l))
-                        lines))
-    (when hit
-      (with-open-file (out file :direction :output :if-exists :supersede :if-does-not-exist :error)
-        (dolist (l lines) (write-line l out))))
-    hit))
+  "Replace the (:label LABEL ...) form in FILE with the new definition, preserving
+every other byte — comments, ordering, other types and their manual (even multi-line)
+formatting — verbatim. Returns T if replaced, NIL if the form was absent (caller then
+appends). Writes the truename'd path, so a ~/.cgraph symlink stays intact."
+  (let* ((text (uiop:read-file-string file))
+         (span (concept-type-form-span label text)))
+    (when span
+      (let ((out-text (concatenate 'string
+                                   (subseq text 0 (car span))
+                                   (concept-type-def-string label supertypes canonical note)
+                                   (subseq text (cdr span)))))
+        (with-open-file (out file :direction :output :if-exists :supersede :if-does-not-exist :error)
+          (write-string out-text out)))
+      t)))
 
 (defun concept-type-file-note (label file)
   "The :note string stored for LABEL in FILE, or NIL. Notes live only in the file

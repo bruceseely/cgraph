@@ -80,7 +80,7 @@
 
     #new-type-form {
       display: flex;
-      align-items: center;
+      align-items: flex-start;   /* top-justify: tall textareas don't recenter the row */
       flex-wrap: wrap;
       gap: 0.4rem;
       padding: 0.35rem 0.6rem;
@@ -88,16 +88,29 @@
       border-bottom: 1px solid #e0e0e0;
       font-size: 12px;
     }
+    /* nudge single-line controls down to line up with the textareas' first line */
+    #new-type-form > input,
+    #new-type-form > span,
+    #new-type-form > button { margin-top: 1px; }
     #new-type-form[hidden] { display: none; }
-    #new-type-form input {
+    #new-type-form input,
+    #new-type-form textarea {
       font-size: 12px;
       padding: 0.18rem 0.4rem;
       border: 1px solid #ccc;
       border-radius: 3px;
     }
+    #new-type-form textarea {
+      font-family: inherit;
+      line-height: 1.4;
+      resize: vertical;        /* draggable taller; JS also auto-grows to content */
+      overflow-y: auto;
+      min-height: 1.55rem;
+      max-height: 12rem;
+    }
     #nt-label     { width: 9rem; }
-    #nt-canonical { flex: 2; min-width: 8rem; }
-    #nt-note      { flex: 1; min-width: 6rem; }
+    #nt-canonical { flex: 3 1 18rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    #nt-note      { flex: 2 1 10rem; }
     /* supertypes: a click-built chip set, not a free-text field */
     #nt-supers {
       display: flex;
@@ -142,7 +155,8 @@
     #nt-sep    { color: #999; }
     #nt-status { font-size: 11px; color: #aaa; }
     #nt-status.error { color: #c0392b; }
-    #new-type-form input.field-error {
+    #new-type-form input.field-error,
+    #new-type-form textarea.field-error {
       border-color: #c0392b;
       background: #fff6f6;
     }
@@ -443,8 +457,8 @@
     <div id="nt-supers" title="click a type in the list or graph to add it; click a chip to remove">
       <span id="nt-supers-empty">click types to add as supertypes</span>
     </div>
-    <input id="nt-canonical" type="text" placeholder="canonical graph (optional)" autocomplete="off" spellcheck="false">
-    <input id="nt-note" type="text" placeholder="note (optional)" autocomplete="off" spellcheck="false">
+    <textarea id="nt-canonical" rows="1" placeholder="canonical graph (optional)" autocomplete="off" spellcheck="false"></textarea>
+    <textarea id="nt-note" rows="1" placeholder="note (optional)" autocomplete="off" spellcheck="false"></textarea>
     <button id="nt-create">Create</button>
     <button id="nt-save" hidden>Save</button>
     <button id="nt-cancel">Cancel</button>
