@@ -62,7 +62,7 @@
     .chip:hover { background: #c0392b; }
     .chip-x { font-size: 11px; opacity: 0.8; }
 
-    #save-btn, #init-btn, #new-type-btn {
+    #save-btn, #init-btn, #new-type-btn, #edit-type-btn {
       align-self: center;
       flex-shrink: 0;
       font-size: 11px;
@@ -73,8 +73,10 @@
       color: #555;
       cursor: pointer;
     }
-    #new-type-btn { margin-left: 0.4rem; }
-    #new-type-btn:hover { background: #e8e8e8; border-color: #aaa; }
+    #new-type-btn, #edit-type-btn { margin-left: 0.4rem; }
+    #new-type-btn:hover, #edit-type-btn:hover { background: #e8e8e8; border-color: #aaa; }
+    #edit-type-btn.active { background: #e0e9fb; border-color: #a9bde8; color: #33507a; }
+    #nt-label[readonly] { background: #eee; color: #666; cursor: default; }
 
     #new-type-form {
       display: flex;
@@ -210,10 +212,21 @@
     .opt-btn.active { background: #4a90d9; color: #fff; border-color: #4a90d9; }
 
     #error-msg {
-      color: #c00;
-      padding: 0.25rem 0.75rem;
+      padding: 0.4rem 0.75rem;
       font-size: 13px;
       flex-shrink: 0;
+    }
+    /* a temporary banner above the panes: red for errors, blue for prompts, gone when empty */
+    #error-msg:empty { display: none; }
+    #error-msg.is-error {
+      color: #c0392b;
+      background: #fdecea;
+      border-bottom: 1px solid #f5c6cb;
+    }
+    #error-msg.is-info {
+      color: #31708f;
+      background: #eaf4fb;
+      border-bottom: 1px solid #bce8f1;
     }
 
     /* ── body row ── */
@@ -420,6 +433,7 @@
     <span id="save-status"></span>
     <button id="init-btn" title="Reinitialize concept types">Initialize</button>
     <button id="new-type-btn" title="Create a new concept type">New Type</button>
+    <button id="edit-type-btn" title="Edit an existing concept type">Edit Type</button>
     <button id="options-btn" title="Display options">Options</button>
   </div>
 
@@ -432,6 +446,7 @@
     <input id="nt-canonical" type="text" placeholder="canonical graph (optional)" autocomplete="off" spellcheck="false">
     <input id="nt-note" type="text" placeholder="note (optional)" autocomplete="off" spellcheck="false">
     <button id="nt-create">Create</button>
+    <button id="nt-save" hidden>Save</button>
     <button id="nt-cancel">Cancel</button>
     <span id="nt-status"></span>
   </div>

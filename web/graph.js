@@ -35,8 +35,10 @@ function isDisplayed(name) {
 
 // ── Error display ─────────────────────────────────────────────────────────────
 
-function showError(msg) { console.error('[cgraph]', msg); errorMsg.textContent = msg; }
-function clearError()   { errorMsg.textContent = ''; }
+// The banner above the panes: red for errors, blue for prompts, hidden when empty.
+function showError(msg) { console.error('[cgraph]', msg); errorMsg.textContent = msg; errorMsg.className = 'is-error'; }
+function showInfo(msg)  { errorMsg.textContent = msg; errorMsg.className = 'is-info'; }
+function clearError()   { errorMsg.textContent = ''; errorMsg.className = ''; }
 
 // ── Viz initialisation ────────────────────────────────────────────────────────
 
@@ -81,7 +83,9 @@ function renderSidebar(names) {
       el.textContent = name;
       el.dataset.name = name;
       el.addEventListener('click', () => {
-        // While the New Type form is open, a left-click picks a supertype instead
+        // After "Edit Type", the next click chooses which type to edit.
+        if (pickTargetMode) { loadTypeForEdit(name); return; }
+        // While the New/Edit form is open, a left-click picks a supertype instead
         // of selecting the type for graphing.
         if (newTypeFormOpen()) { toggleSupertype(name); return; }
         if (selected.has(name)) deselect(name);
@@ -204,7 +208,9 @@ async function redraw() {
       // Double click: toggle CG entry out.
       let singleClickTimer = null;
       node.addEventListener('click', e => {
-        // While the New Type form is open, a graph-node click picks a supertype.
+        // After "Edit Type", a graph-node click chooses which type to edit.
+        if (pickTargetMode) { loadTypeForEdit(node.id); return; }
+        // While the New/Edit form is open, a graph-node click picks a supertype.
         if (newTypeFormOpen()) { toggleSupertype(node.id); return; }
         if (e.detail >= 2) {
           if (singleClickTimer) { clearTimeout(singleClickTimer); singleClickTimer = null; }
@@ -729,7 +735,7 @@ fetch('/api/types')
   })
   .catch(err => showError(`Could not load type list: ${err.message}`));
 
-// ── New Type editor ────────────────────────────────────────────────────────────
+// ── New / Edit Type editor ──────────────────────────────────────────────────────
 
 const newTypeForm = document.getElementById('new-type-form');
 const ntLabel     = document.getElementById('nt-label');
@@ -738,17 +744,18 @@ const ntSupEmpty  = document.getElementById('nt-supers-empty');
 const ntCanon     = document.getElementById('nt-canonical');
 const ntNote      = document.getElementById('nt-note');
 const ntStatus    = document.getElementById('nt-status');
+const ntCreateBtn = document.getElementById('nt-create');
+const ntSaveBtn   = document.getElementById('nt-save');
+const editTypeBtn = document.getElementById('edit-type-btn');
 
-// Supertypes are chosen by clicking existing types (in the sidebar or the graph),
-// never typed — so a supertype can only ever be a name the catalog already has.
-const superSet = new Set();
+// Supertypes are chosen by clicking existing types (sidebar or graph), never typed —
+// so a supertype can only ever be a name the catalog already has.
+const superSet     = new Set();
+let   editingLabel   = null;   // null = creating a new type; a name = editing that type
+let   pickTargetMode = false;  // after "Edit Type", waiting for a type click to choose one
 
 function newTypeFormOpen() { return !newTypeForm.hidden; }
-
-function setNtStatus(msg, isError) {
-  ntStatus.textContent = msg || '';
-  ntStatus.classList.toggle('error', !!isError);
-}
+function setNtHint(msg) { ntStatus.textContent = msg || ''; }
 
 function renderSuperChips() {
   ntSupers.querySelectorAll('.nt-chip').forEach(c => c.remove());
@@ -773,6 +780,7 @@ function updateSidebarSuper(name) {
 }
 
 function toggleSupertype(name) {
+  if (editingLabel && name === editingLabel) return;   // a type can't be its own supertype
   if (superSet.has(name)) superSet.delete(name);
   else                    superSet.add(name);
   renderSuperChips();
@@ -786,28 +794,74 @@ function clearSuperSet() {
   names.forEach(updateSidebarSuper);
 }
 
-function showNewTypeForm(label = '', supers = []) {
-  ntLabel.value = label;
+// Open the form to create (edit=null) or to edit an existing type.
+function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
+  editingLabel = edit;
+  pickTargetMode = false;
+  editTypeBtn.classList.remove('active');
+  const isEdit = edit !== null;
+  ntLabel.value    = isEdit ? edit : '';
+  ntLabel.readOnly = isEdit;                 // the type being edited can't be renamed here
   clearSuperSet();
   supers.forEach(s => superSet.add(s));
   renderSuperChips();
   superSet.forEach(updateSidebarSuper);
-  ntCanon.value = '';
-  ntNote.value = '';
+  ntCanon.value = canon;
+  ntNote.value  = note;
   ntCanon.classList.remove('field-error');
-  setNtStatus('click types to add supertypes');
+  ntCreateBtn.hidden = isEdit;               // Create ↔ Save
+  ntSaveBtn.hidden   = !isEdit;
+  clearError();
+  setNtHint(isEdit ? `editing ${edit} — click types to change supertypes`
+                   : 'click types to add supertypes');
   newTypeForm.hidden = false;
-  ntLabel.focus();
+  (isEdit ? ntCanon : ntLabel).focus();
 }
-function hideNewTypeForm() {
+
+function hideForm() {
   newTypeForm.hidden = true;
-  clearSuperSet();   // drop the sidebar is-super highlights
+  clearSuperSet();            // drop the sidebar is-super highlights
+  editingLabel = null;
+  ntLabel.readOnly = false;
+  setNtHint('');
+  clearError();
+}
+
+function cancelPickTarget() {
+  pickTargetMode = false;
+  editTypeBtn.classList.remove('active');
+  if (errorMsg.classList.contains('is-info')) clearError();
 }
 
 document.getElementById('new-type-btn').addEventListener('click', () => {
-  if (newTypeForm.hidden) showNewTypeForm(); else hideNewTypeForm();
+  cancelPickTarget();
+  if (newTypeFormOpen() && editingLabel === null) hideForm();   // toggle the create form
+  else openForm();                                              // open/switch to create
 });
-document.getElementById('nt-cancel').addEventListener('click', hideNewTypeForm);
+
+editTypeBtn.addEventListener('click', () => {
+  if (pickTargetMode) { cancelPickTarget(); return; }
+  hideForm();
+  pickTargetMode = true;
+  editTypeBtn.classList.add('active');
+  showInfo('click a type (in the list or graph) to edit');
+});
+
+document.getElementById('nt-cancel').addEventListener('click', hideForm);
+
+async function loadTypeForEdit(name) {
+  pickTargetMode = false;
+  editTypeBtn.classList.remove('active');
+  clearError();
+  try {
+    const resp = await fetch(`/api/type-def?label=${encodeURIComponent(name)}`);
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) { showError(data.error || `could not load ${name}`); return; }
+    openForm({ edit: data.label, supers: data.supertypes || [], canon: data.canonical || '', note: data.note || '' });
+  } catch (err) {
+    showError(err.message);
+  }
+}
 
 async function refreshTypeList(selectName) {
   const resp = await fetch('/api/types');
@@ -817,45 +871,49 @@ async function refreshTypeList(selectName) {
   if (selectName && !selected.has(selectName)) selectType(selectName);
 }
 
-async function submitNewType() {
-  const label = ntLabel.value.trim();
+async function submitType() {
+  const editing = editingLabel !== null;
+  const label = editing ? editingLabel : ntLabel.value.trim();
   const canon = ntCanon.value.trim();
   const note  = ntNote.value.trim();
   ntCanon.classList.remove('field-error');
-  if (!label)         { setNtStatus('name required', true);      ntLabel.focus(); return; }
-  if (!superSet.size) { setNtStatus('click at least one supertype', true); return; }
-  setNtStatus('creating…');
+  if (!label)         { showError('a type name is required'); if (!editing) ntLabel.focus(); return; }
+  if (!superSet.size) { showError('click at least one supertype'); return; }
+  setNtHint(editing ? 'saving…' : 'creating…');
   try {
-    let url = `/api/create-type?label=${encodeURIComponent(label)}`
-            + `&supertypes=${encodeURIComponent([...superSet].join(','))}`;
-    if (canon) url += `&canonical=${encodeURIComponent(canon)}`;
-    if (note)  url += `&note=${encodeURIComponent(note)}`;
+    const path = editing ? 'edit-type' : 'create-type';
+    // canonical + note are always sent — an empty value clears them on an edit.
+    const url = `/api/${path}?label=${encodeURIComponent(label)}`
+              + `&supertypes=${encodeURIComponent([...superSet].join(','))}`
+              + `&canonical=${encodeURIComponent(canon)}`
+              + `&note=${encodeURIComponent(note)}`;
     const resp = await fetch(url, { method: 'POST' });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       const msg = data.error || `failed: ${resp.status}`;
-      setNtStatus(msg, true);
-      // A defective canonical graph is reported inline AND rings the field it came
-      // from, so it's clear which input to fix (the create was rejected, not saved).
+      setNtHint('');
+      showError(msg);   // errors surface in the banner above the panes
+      // A defective canonical graph also rings the field it came from.
       if (/canonical/i.test(msg)) { ntCanon.classList.add('field-error'); ntCanon.focus(); }
       return;
     }
-    hideNewTypeForm();
-    clearError();
+    hideForm();
     await refreshTypeList(data.label);
   } catch (err) {
-    setNtStatus(err.message, true);
+    setNtHint('');
+    showError(err.message);
   }
 }
 
-document.getElementById('nt-create').addEventListener('click', submitNewType);
+ntCreateBtn.addEventListener('click', submitType);
+ntSaveBtn.addEventListener('click', submitType);
 
 // Editing the canonical field clears its error ring.
 ntCanon.addEventListener('input', () => ntCanon.classList.remove('field-error'));
 
 for (const el of [ntLabel, ntCanon, ntNote]) {
   el.addEventListener('keydown', e => {
-    if (e.key === 'Enter')       { e.preventDefault(); submitNewType(); }
-    else if (e.key === 'Escape') { hideNewTypeForm(); }
+    if (e.key === 'Enter')       { e.preventDefault(); submitType(); }
+    else if (e.key === 'Escape') { hideForm(); }
   });
 }
