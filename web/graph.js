@@ -605,6 +605,34 @@ document.getElementById('cg-clear-btn').addEventListener('click', () => {
   });
 }());
 
+// ── Sidebar resizer ───────────────────────────────────────────────────────────
+
+(function () {
+  const resizer = document.getElementById('sidebar-resizer');
+  const sidebar = document.getElementById('sidebar');
+
+  resizer.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX     = e.clientX;
+    const startWidth = sidebar.getBoundingClientRect().width;
+    resizer.classList.add('dragging');
+
+    const onMove = e => {
+      const newWidth = Math.max(120, Math.min(600, startWidth + (e.clientX - startX)));
+      sidebar.style.width = newWidth + 'px';
+    };
+
+    const onUp = () => {
+      resizer.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}());
+
 // ── Container-level mouse handling ────────────────────────────────────────────
 
 // Left-click on background: clear all temporary additions (expansions + reveals).
@@ -815,8 +843,7 @@ function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
   setNtHint(isEdit ? `editing ${edit} — click types to change supertypes`
                    : 'click types to add supertypes');
   newTypeForm.hidden = false;
-  autoGrow(ntCanon);           // size to the (possibly long) prefilled content
-  autoGrow(ntNote);
+  syncEditorFields();          // size both textareas to the prefilled content
   (isEdit ? ntCanon : ntLabel).focus();
 }
 
@@ -903,6 +930,11 @@ async function submitType() {
     }
     hideForm();
     await refreshTypeList(data.label);
+    // An edit changes the live lattice (e.g. a dropped supertype); the displayed
+    // graph is fetched fresh from /api/dot, so redraw to reflect the new shape.
+    // (A create is picked up by refreshTypeList's selectType; an edit of an
+    // already-selected type needs an explicit redraw.)
+    if (editing) redraw();
   } catch (err) {
     setNtHint('');
     showError(err.message);
@@ -912,12 +944,97 @@ async function submitType() {
 ntCreateBtn.addEventListener('click', submitType);
 ntSaveBtn.addEventListener('click', submitType);
 
-// Textareas grow to fit their content, up to the CSS max-height.
-function autoGrow(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 192) + 'px';   // 192px ≈ 12rem cap
+// The editor fields form one partitioned bar, so the two textareas share a
+// single height: the taller of the two contents (capped at the CSS max-height).
+// The single-line cells (name, supertypes) stretch to match via align-items.
+function syncFieldHeights() {
+  for (const el of [ntCanon, ntNote]) el.style.height = 'auto';
+  const h = Math.min(Math.max(ntCanon.scrollHeight, ntNote.scrollHeight), 192);  // 192px ≈ 12rem cap
+  for (const el of [ntCanon, ntNote]) el.style.height = h + 'px';
 }
-for (const el of [ntCanon, ntNote]) el.addEventListener('input', () => autoGrow(el));
+
+// Width of a vertical scrollbar, measured once. The canonical field caps its
+// height and scrolls, and that scrollbar steals horizontal space — so we reserve
+// it here, otherwise the widest line wraps.
+let scrollbarPx = null;
+function scrollbarWidth() {
+  if (scrollbarPx == null) {
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;top:-9999px;width:100px;height:100px;overflow:scroll;';
+    document.body.appendChild(probe);
+    scrollbarPx = probe.offsetWidth - probe.clientWidth;
+    document.body.removeChild(probe);
+  }
+  return scrollbarPx;
+}
+
+// Size the canonical field's WIDTH to just past its widest line, so it takes only
+// as much horizontal room as its (reformatted) graph needs. We measure with a hidden
+// span in the field's OWN computed font (the field is monospace — see the CSS) rather
+// than reading textarea.scrollWidth, which is unreliable. An empty field measures the
+// placeholder, so a type with no canonical graph still gets a sensible default width.
+let canonMeasure = null;
+function sizeCanonicalWidth() {
+  const cs = getComputedStyle(ntCanon);
+  if (!canonMeasure) {
+    canonMeasure = document.createElement('span');
+    canonMeasure.style.cssText =
+      'position:absolute;visibility:hidden;white-space:pre;top:-9999px;left:-9999px;';
+    document.body.appendChild(canonMeasure);
+  }
+  for (const p of ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing'])
+    canonMeasure.style[p] = cs[p];
+  const lines = (ntCanon.value || ntCanon.placeholder || '').split('\n');
+  let textW = 0;                             // widest line, measured one line at a time
+  for (const line of lines) {
+    canonMeasure.textContent = line;
+    textW = Math.max(textW, canonMeasure.getBoundingClientRect().width);
+  }
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const padY = parseFloat(cs.paddingTop)  + parseFloat(cs.paddingBottom);
+  const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.4;
+  // Reserve scrollbar width only when the graph is tall enough to scroll even
+  // unwrapped — fixing the width removes the wrap that would otherwise make it tall.
+  const willScroll = (lines.length * lineHeight + padY) > 192;   // 192px ≈ 12rem max-height cap
+  const want  = Math.ceil(textW) + padX + 8 + (willScroll ? scrollbarWidth() : 0);  // +8 slack ⇒ no wrap
+  const floor = 8 * 16;                      // never narrower than ~8rem
+  const cap   = Math.round(window.innerWidth * 0.85);  // leave a little room for the other cells
+  ntCanon.style.flex  = '0 0 auto';          // hold the width; don't stretch or shrink
+  ntCanon.style.width = Math.max(floor, Math.min(want, cap)) + 'px';
+
+  // Verify against the real layout and grow until the graph no longer wraps (or we
+  // hit the cap). The measurement above can fall a few px short of what a given
+  // browser actually needs (Firefox vs Chrome font metrics, sub-pixel rounding);
+  // observing the rendered line count and correcting is robust to that.
+  const declared = lines.length;
+  let guard = 0;
+  while (guard++ < 80 &&
+         parseFloat(ntCanon.style.width) < cap &&
+         renderedCanonLines(lineHeight, padY) > declared) {
+    const next = Math.min(cap, parseFloat(ntCanon.style.width) + Math.ceil(lineHeight));
+    ntCanon.style.width = next + 'px';
+  }
+}
+
+// True number of content lines the canonical field renders at its current width,
+// measured with the scrollbar suppressed so it can't steal width and skew the count.
+function renderedCanonLines(lineHeight, padY) {
+  const prevOverflow = ntCanon.style.overflow;
+  const prevHeight   = ntCanon.style.height;
+  ntCanon.style.overflow = 'hidden';
+  ntCanon.style.height   = '0px';
+  const contentH = ntCanon.scrollHeight;
+  ntCanon.style.overflow = prevOverflow;
+  ntCanon.style.height   = prevHeight;
+  return Math.round((contentH - padY) / lineHeight);
+}
+
+// Width first (it affects wrapping), then the shared height.
+function syncEditorFields() {
+  sizeCanonicalWidth();
+  syncFieldHeights();
+}
+for (const el of [ntCanon, ntNote]) el.addEventListener('input', syncEditorFields);
 
 // Editing the canonical field clears its error ring.
 ntCanon.addEventListener('input', () => ntCanon.classList.remove('field-error'));

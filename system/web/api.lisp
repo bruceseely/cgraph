@@ -41,18 +41,27 @@
     (write-char #\] out)))
 
 ;;; GET / — serve index.html
+;;; Tell the browser never to cache the static assets — during active development
+;;; a cached graph.js/index.html silently runs old code against new markup.
+(defun no-store ()
+  (setf (hunchentoot:header-out :cache-control) "no-store, must-revalidate"
+        (hunchentoot:header-out :pragma) "no-cache"))
+
 (hunchentoot:define-easy-handler (handle-index :uri "/") ()
   (setf (hunchentoot:content-type*) "text/html; charset=utf-8")
+  (no-store)
   (read-static-file "index.html"))
 
 ;;; GET /graph.js — serve graph.js
 (hunchentoot:define-easy-handler (handle-graph-js :uri "/graph.js") ()
   (setf (hunchentoot:content-type*) "application/javascript; charset=utf-8")
+  (no-store)
   (read-static-file "graph.js"))
 
 ;;; GET /viz.js — serve vendored @viz-js/viz ES module
 (hunchentoot:define-easy-handler (handle-viz-js :uri "/viz.js") ()
   (setf (hunchentoot:content-type*) "application/javascript; charset=utf-8")
+  (no-store)
   (read-static-file "viz.js"))
 
 ;;; GET /api/dot?types=animal[,dog,...]&expand_sub=animal&expand_super=dog&reveal=cat
@@ -315,6 +324,21 @@ the catalog entry, so without the remhash the type would still surface in /api/t
                    when (string-equal (symbol-name k) (string-upcase label)) return k)))
     (when key (remhash key *concept-type-catalog*))))
 
+(defun collapse-graph-whitespace (string)
+  "Flatten a (possibly multi-line, indented) canonical graph to a single line:
+every run of whitespace — spaces, tabs, and the RETURN/NEWLINE characters the editor
+adds for readability — becomes one space. Canonical graphs are stored and parsed
+without line breaks, so this runs on save. Collapsing runs (never to zero) keeps
+tokens separated, so it can't merge adjacent tokens."
+  (with-output-to-string (out)
+    (let ((in-ws nil))
+      (loop for c across string do
+        (cond ((member c '(#\Space #\Tab #\Newline #\Return))
+               (unless in-ws (write-char #\Space out))
+               (setf in-ws t))
+              (t (write-char c out)
+                 (setf in-ws nil)))))))
+
 (defun validate-canonical-graph (string)
   "Parse STRING as a conceptual graph against the live catalog; return NIL when it
 is well-formed, else a one-line error message. Covers the three failure modes PCG
@@ -343,8 +367,9 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
   (handler-case
       (let* ((label        (and label (string-trim '(#\Space #\Tab) label)))
              (super-tokens (split-type-string (or supertypes "")))
-             (canonical    (and canonical (string-trim '(#\Space #\Tab #\Newline #\Return)
-                                                       canonical)))
+             ;; collapse to one line: the stored/parsed form never has line breaks.
+             (canonical    (and canonical (collapse-graph-whitespace canonical)))
+             (canonical    (and canonical (string-trim '(#\Space) canonical)))
              (canonical    (and canonical (plusp (length canonical)) canonical))
              (note         (and note (string-trim '(#\Space #\Tab #\Newline #\Return) note)))
              (note         (and note (plusp (length note)) note)))
@@ -396,7 +421,14 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
         (let ((supers (loop for s in (direct-supertypes node)
                             unless (or (eq s *concept-type-top*) (eq s *concept-type-bottom*))
                               collect (string-downcase (symbol-name (label s)))))
-              (canon (or (canonical-graph-string node) ""))
+              ;; format for the editor: parse the one-line stored string and re-emit
+              ;; it with line breaks + indentation. Fall back to the raw string if it
+              ;; can't be parsed, so the type still opens to edit. (Saved back, the
+              ;; line breaks are collapsed out again — see collapse-graph-whitespace.)
+              (canon (let ((raw (or (canonical-graph-string node) "")))
+                       (if (plusp (length raw))
+                           (or (ignore-errors (formatted-canonical-graph-string label)) raw)
+                           "")))
               (note  (or (concept-type-file-note label (concept-types-file)) "")))
           (format nil "{\"label\":\"~a\",\"supertypes\":~a,\"canonical\":\"~a\",\"note\":\"~a\"}"
                   (json-escape (string-downcase label))
@@ -421,7 +453,10 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
   (handler-case
       (let* ((label        (and label (string-trim '(#\Space #\Tab) label)))
              (super-tokens (split-type-string (or supertypes "")))
-             (canonical    (and canonical (string-trim '(#\Space #\Tab #\Newline #\Return) canonical)))
+             ;; the editor shows the canonical formatted (multi-line); strip those
+             ;; line breaks back out so the stored/parsed form stays single-line.
+             (canonical    (and canonical (collapse-graph-whitespace canonical)))
+             (canonical    (and canonical (string-trim '(#\Space) canonical)))
              (canonical    (and canonical (plusp (length canonical)) canonical))
              (note         (and note (string-trim '(#\Space #\Tab #\Newline #\Return) note)))
              (note         (and note (plusp (length note)) note)))

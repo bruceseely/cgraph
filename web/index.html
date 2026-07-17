@@ -25,6 +25,9 @@
       gap: 0.5rem;
       padding: 0.5rem 0.75rem;
       background: #fff;
+      /* thick dark top rule so the app is clearly separate from browser chrome
+         (bookmarks bar) sitting directly above it */
+      border-top: 4px solid #333;
       border-bottom: 1px solid #ddd;
       flex-wrap: wrap;
       min-height: 2.5rem;
@@ -97,33 +100,55 @@
     #new-type-form textarea {
       font-size: 12px;
       padding: 0.18rem 0.4rem;
-      border: 1px solid #ccc;
-      border-radius: 3px;
+      border: none;            /* the #nt-fields container draws the single frame */
+      border-radius: 0;
+      background: transparent;
     }
     #new-type-form textarea {
       font-family: inherit;
       line-height: 1.4;
-      resize: vertical;        /* draggable taller; JS also auto-grows to content */
+      resize: none;            /* heights are coupled to the tallest field (see JS) */
       overflow-y: auto;
       min-height: 1.55rem;
       max-height: 12rem;
     }
-    #nt-label     { width: 9rem; }
-    #nt-canonical { flex: 3 1 18rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+    /* ── the editor fields as one partitioned bar ── */
+    /* name | supertypes | canonical | note: a single framed row, all cells the
+       same height (align-items: stretch), divided by vertical rules, no per-field
+       borders — so it reads as one pane with partitions. */
+    #nt-fields {
+      display: flex;
+      align-items: stretch;
+      flex: 1 1 100%;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #fff;
+      overflow: hidden;        /* keep cell corners inside the rounded frame */
+    }
+    /* divider between panes — the extra #id keeps specificity above the
+       per-field `border: none` rule, so textarea cells get their line too */
+    #new-type-form #nt-fields > * + * { border-left: 1px solid #ccc; }
+    #nt-fields > * { min-width: 0; }                       /* let cells shrink to fit */
+    #nt-sep { align-self: flex-start; margin: 0.12rem 0.15rem 0 0; } /* ⊑ leads the supertypes, not its own cell */
+    #nt-label     { width: 9rem; flex-shrink: 0; }
+    /* the #new-type-form prefix outranks `#new-type-form textarea { font-family: inherit }`,
+       so the canonical graph actually renders monospace (columns line up; JS width
+       measurement is reliable) */
+    #new-type-form #nt-canonical { flex: 3 1 18rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     #nt-note      { flex: 2 1 10rem; }
     /* supertypes: a click-built chip set, not a free-text field */
     #nt-supers {
       display: flex;
-      align-items: center;
+      align-items: flex-start;    /* chips at top when the bar grows tall */
+      align-content: flex-start;
       flex-wrap: wrap;
       gap: 0.25rem;
-      flex: 1;
-      min-width: 12rem;
+      flex: 0 1 auto;             /* size to the chips; don't grow into unused space */
+      min-width: 7rem;
       min-height: 1.6rem;
-      padding: 0.1rem 0.3rem;
-      border: 1px dashed #ccc;
-      border-radius: 3px;
-      background: #fff;
+      padding: 0.28rem 0.4rem;     /* line the chips up with the textareas' first line */
+      background: transparent;     /* a cell of the shared bar, not its own box */
     }
     #nt-supers-empty { color: #bbb; font-style: italic; }
     .nt-chip {
@@ -257,9 +282,19 @@
       display: flex;
       flex-direction: column;
       background: #fff;
-      border-right: 1px solid #ddd;
+      border-right: none;
       overflow: hidden;
     }
+
+    /* ── resizer between sidebar and graph area ── */
+    #sidebar-resizer {
+      width: 5px;
+      flex-shrink: 0;
+      background: #ddd;
+      cursor: col-resize;
+      transition: background 0.15s;
+    }
+    #sidebar-resizer:hover, #sidebar-resizer.dragging { background: #aaa; }
 
     #sidebar-header {
       padding: 0.5rem 0.75rem 0.3rem;
@@ -452,15 +487,17 @@
   </div>
 
   <div id="new-type-form" hidden>
-    <input id="nt-label" type="text" placeholder="new type name" autocomplete="off" spellcheck="false">
-    <span id="nt-sep" title="subtype of">⊑</span>
-    <div id="nt-supers" title="click a type in the list or graph to add it; click a chip to remove">
-      <span id="nt-supers-empty">click types to add as supertypes</span>
+    <div id="nt-fields">
+      <input id="nt-label" type="text" placeholder="new type name" autocomplete="off" spellcheck="false">
+      <div id="nt-supers" title="click a type in the list or graph to add it; click a chip to remove">
+        <span id="nt-sep" title="subtype of">⊑</span>
+        <span id="nt-supers-empty">click types to add as supertypes</span>
+      </div>
+      <textarea id="nt-canonical" rows="1" placeholder="canonical graph (optional)" autocomplete="off" spellcheck="false"></textarea>
+      <textarea id="nt-note" rows="1" placeholder="note (optional)" autocomplete="off" spellcheck="false"></textarea>
     </div>
-    <textarea id="nt-canonical" rows="1" placeholder="canonical graph (optional)" autocomplete="off" spellcheck="false"></textarea>
-    <textarea id="nt-note" rows="1" placeholder="note (optional)" autocomplete="off" spellcheck="false"></textarea>
     <button id="nt-create">Create</button>
-    <button id="nt-save" hidden>Save</button>
+    <button id="nt-save" hidden>Save Type Definition</button>
     <button id="nt-cancel">Cancel</button>
     <span id="nt-status"></span>
   </div>
@@ -473,6 +510,8 @@
       <div id="sidebar-header">Concept Types</div>
       <div id="type-list"></div>
     </div>
+
+    <div id="sidebar-resizer"></div>
 
     <div id="graph-area">
       <div id="graph-container">
