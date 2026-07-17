@@ -85,9 +85,9 @@ function renderSidebar(names) {
       el.addEventListener('click', () => {
         // After "Edit Type", the next click chooses which type to edit.
         if (pickTargetMode) { loadTypeForEdit(name); return; }
-        // While the New/Edit form is open, a left-click picks a supertype instead
-        // of selecting the type for graphing.
-        if (newTypeFormOpen()) { toggleSupertype(name); return; }
+        // After "+" in the supertypes cell, the next click adds ONE supertype;
+        // otherwise clicks explore the graph normally, even while the form is open.
+        if (pickSuperMode) { addSupertypeAndExit(name); return; }
         if (selected.has(name)) deselect(name);
         else selectType(name);
         addCgEntry(name);
@@ -210,8 +210,9 @@ async function redraw() {
       node.addEventListener('click', e => {
         // After "Edit Type", a graph-node click chooses which type to edit.
         if (pickTargetMode) { loadTypeForEdit(node.id); return; }
-        // While the New/Edit form is open, a graph-node click picks a supertype.
-        if (newTypeFormOpen()) { toggleSupertype(node.id); return; }
+        // After "+" in the supertypes cell, a graph-node click adds ONE supertype;
+        // otherwise clicks explore/select normally, even while the form is open.
+        if (pickSuperMode) { addSupertypeAndExit(node.id); return; }
         if (e.detail >= 2) {
           if (singleClickTimer) { clearTimeout(singleClickTimer); singleClickTimer = null; }
           if (cgEntries.has(node.id)) removeCgEntry(node.id);
@@ -769,6 +770,7 @@ const newTypeForm = document.getElementById('new-type-form');
 const ntLabel     = document.getElementById('nt-label');
 const ntSupers    = document.getElementById('nt-supers');
 const ntSupEmpty  = document.getElementById('nt-supers-empty');
+const ntAddSuper  = document.getElementById('nt-add-super');
 const ntCanon     = document.getElementById('nt-canonical');
 const ntNote      = document.getElementById('nt-note');
 const ntStatus    = document.getElementById('nt-status');
@@ -781,6 +783,7 @@ const editTypeBtn = document.getElementById('edit-type-btn');
 const superSet     = new Set();
 let   editingLabel   = null;   // null = creating a new type; a name = editing that type
 let   pickTargetMode = false;  // after "Edit Type", waiting for a type click to choose one
+let   pickSuperMode  = false;  // after "+" in the supertypes cell, waiting for ONE type click
 
 function newTypeFormOpen() { return !newTypeForm.hidden; }
 function setNtHint(msg) { ntStatus.textContent = msg || ''; }
@@ -797,7 +800,7 @@ function renderSuperChips() {
     x.textContent = '✕';
     chip.append(name, x);
     chip.addEventListener('click', () => toggleSupertype(name));
-    ntSupers.appendChild(chip);
+    ntSupers.insertBefore(chip, ntAddSuper);   // keep the "+" button last
   }
 }
 
@@ -815,6 +818,39 @@ function toggleSupertype(name) {
   updateSidebarSuper(name);
 }
 
+// The "+" button arms a one-shot mode: the NEXT type click (list or graph) is added
+// as a supertype, then normal graph-exploration behaviour resumes. Click "+" again
+// before each additional supertype. Mirrors the "Edit Type" one-shot pick.
+function enterPickSuper() {
+  pickSuperMode = true;
+  ntAddSuper.classList.add('active');
+  showInfo('click one type (in the list or graph) to add as a supertype');
+}
+
+function exitPickSuper() {
+  pickSuperMode = false;
+  ntAddSuper.classList.remove('active');
+  if (errorMsg.classList.contains('is-info')) clearError();
+}
+
+function addSupertypeAndExit(name) {
+  exitPickSuper();
+  if (editingLabel && name === editingLabel) {   // a type can't be its own supertype
+    showError(`${name} can't be its own supertype`);
+    return;
+  }
+  if (!superSet.has(name)) {
+    superSet.add(name);
+    renderSuperChips();
+    updateSidebarSuper(name);
+  }
+}
+
+ntAddSuper.addEventListener('click', () => {
+  if (pickSuperMode) exitPickSuper();   // second click cancels
+  else               enterPickSuper();
+});
+
 function clearSuperSet() {
   const names = [...superSet];
   superSet.clear();
@@ -826,6 +862,7 @@ function clearSuperSet() {
 function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
   editingLabel = edit;
   pickTargetMode = false;
+  exitPickSuper();                           // start out of supertype-pick mode
   editTypeBtn.classList.remove('active');
   const isEdit = edit !== null;
   ntLabel.value    = isEdit ? edit : '';
@@ -840,8 +877,8 @@ function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
   ntCreateBtn.hidden = isEdit;               // Create ↔ Save
   ntSaveBtn.hidden   = !isEdit;
   clearError();
-  setNtHint(isEdit ? `editing ${edit} — click types to change supertypes`
-                   : 'click types to add supertypes');
+  setNtHint(isEdit ? `editing ${edit} — “+” adds a supertype; explore the graph freely`
+                   : '“+” adds a supertype; explore the graph freely');
   newTypeForm.hidden = false;
   syncEditorFields();          // size both textareas to the prefilled content
   (isEdit ? ntCanon : ntLabel).focus();
@@ -849,6 +886,7 @@ function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
 
 function hideForm() {
   newTypeForm.hidden = true;
+  exitPickSuper();            // leave supertype-pick mode if it was armed
   clearSuperSet();            // drop the sidebar is-super highlights
   editingLabel = null;
   ntLabel.readOnly = false;

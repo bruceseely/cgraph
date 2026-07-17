@@ -165,6 +165,21 @@
     }
     .nt-chip:hover { background: #e0e9fb; border-color: #a9bde8; }
     .nt-chip .x { color: #93a; font-size: 10px; opacity: 0.6; }
+    /* the "+" adds a supertype: click it, then click one type. A pill button in the
+       cell; the generic #new-type-form button rule is overridden here. */
+    #nt-add-super {
+      align-self: flex-start;
+      font-size: 12px;
+      line-height: 1;
+      padding: 0.1rem 0.4rem;
+      border: 1px solid #cdd9f0;
+      border-radius: 10px;
+      background: #eef4ff;
+      color: #33507a;
+      cursor: pointer;
+    }
+    #nt-add-super:hover { background: #e0e9fb; border-color: #a9bde8; }
+    #nt-add-super.active { background: #4a90d9; color: #fff; border-color: #4a90d9; }
     /* a sidebar type currently chosen as a supertype */
     .type-item.is-super { background: #eef4ff; box-shadow: inset 3px 0 0 #7a9fe0; }
     #new-type-form button {
@@ -489,9 +504,10 @@
   <div id="new-type-form" hidden>
     <div id="nt-fields">
       <input id="nt-label" type="text" placeholder="new type name" autocomplete="off" spellcheck="false">
-      <div id="nt-supers" title="click a type in the list or graph to add it; click a chip to remove">
+      <div id="nt-supers" title="click a chip to remove it; click + then a type to add one">
         <span id="nt-sep" title="subtype of">⊑</span>
-        <span id="nt-supers-empty">click types to add as supertypes</span>
+        <span id="nt-supers-empty">click + then a type</span>
+        <button id="nt-add-super" type="button" title="add a supertype: click, then click one type in the list or graph">+</button>
       </div>
       <textarea id="nt-canonical" rows="1" placeholder="canonical graph (optional)" autocomplete="off" spellcheck="false"></textarea>
       <textarea id="nt-note" rows="1" placeholder="note (optional)" autocomplete="off" spellcheck="false"></textarea>
