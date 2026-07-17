@@ -135,6 +135,39 @@
 (defvar *text-result* "")
 
 (defvar *segment-pool* (list))
+
+(defvar *segment-plan* nil
+  "When bound to a hash-table mapping each segment to its ordered list of
+   child (continuation) segments, FORMAT-SEGMENTS reads continuations from
+   it instead of consuming *SEGMENT-POOL* depth-first.  Built by
+   PLAN-SEGMENT-CHILDREN.")
+
+(defun plan-segment-children (first-segment segments)
+  "Breadth-first walk of the segment graph rooted at FIRST-SEGMENT.
+   Segments are the nodes of a higher-level graph, joined where they share
+   an endpoint concept.  Returns a hash-table mapping each segment to its
+   ordered list of child (continuation) segments.  Ender segments are
+   reversed in place exactly as NEXT-SEGMENTS does.
+
+   Walking the segment graph breadth-first (rather than the recursive
+   depth-first descent NEXT-SEGMENTS drives when called inline) means each
+   shared concept is claimed by the shallowest segment that reaches it, so a
+   coreferent node is rendered in place (as a variable) instead of dragging
+   another node's whole subtree into a sibling's branch."
+  (let ((plan (make-hash-table :test #'eq))
+        (pool (remove first-segment (sort (copy-list segments) #'segment-lessp)))
+        (queue (list first-segment)))
+    (loop while queue do
+      (let ((current (pop queue)))
+        ;; NEXT-SEGMENTS removes CURRENT from its working copy, so CURRENT
+        ;; having already been claimed (and thus absent from POOL) is fine.
+        (multiple-value-bind (connected remaining)
+            (next-segments current pool)
+          (setf pool remaining)
+          (setf (gethash current plan) connected)
+          (setf queue (append queue connected)))))
+    plan))
+
 (defun setit (pool)
   (setf *segment-pool* pool))
 (defun addit (seg)
@@ -162,7 +195,8 @@
              (setf text-line (strcat text-line text))))
 
 
-      (remit current-segment)
+      (unless *segment-plan*
+        (remit current-segment))
       ;; (setf *segment-pool* (sort (copy-list (remove current-segment *segment-pool* :test #'nodes-eq))
       ;;                            #'segment-lessp))
 
@@ -170,8 +204,12 @@
 
 
       (multiple-value-bind (connected-segments pool)
-          (next-segments current-segment *segment-pool*)
-        (setit pool)
+          (if *segment-plan*
+              ;; Children were decided breadth-first up front; POOL is unused.
+              (values (gethash current-segment *segment-plan*) *segment-pool*)
+              (next-segments current-segment *segment-pool*))
+        (unless *segment-plan*
+          (setit pool))
 
         ;; figure out variables
         (if (> (length (arcs (segment-last-node current-segment)))
@@ -294,6 +332,10 @@
          (agenda (make-agenda first-segment))
          (*text-result* "")
          (*segment-pool* (sort (copy-list segments) #'segment-lessp))
+         ;; Decide each segment's children breadth-first over the segment
+         ;; graph; the renderer below then lays that tree out depth-first,
+         ;; one segment per line.
+         (*segment-plan* (plan-segment-children first-segment segments))
          (base-text (format-segments first-segment initial-indent indent-delta :initial t))
          (graph-text (string-trim (list #\, #\- #\space #\newline) base-text)))
     graph-text))

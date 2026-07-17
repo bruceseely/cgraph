@@ -58,9 +58,9 @@
 
 (defparameter graph-string050
   "[DRIVE]-
-      (agnt)→[PERSON:bob]→(poss)→[CHEVY-VEHICLE:*x]→(attr)→[OLD]
+      (agnt)→[PERSON:bob]→(poss)→[CHEVY-VEHICLE:*x]
       (dest)→[CITY:St.Louis]
-      (inst)→[CHEVY-VEHICLE:*x].")
+      (inst)→[CHEVY-VEHICLE:*x]→(attr)→[OLD].")
 
 
 (defparameter graph-string060
@@ -168,25 +168,25 @@
 
 (defparameter graph-string430
   "[DRIVE]-
-      (agnt)→[PERSON:Bob]→(poss)→[CHEVY-VEHICLE:*x]→(attr)→[OLD]
+      (agnt)→[PERSON:Bob]→(poss)→[CHEVY-VEHICLE:*x]
       (dest)→[CITY:St.Louis]
-      (inst)→[CHEVY-VEHICLE:*x].")
+      (inst)→[CHEVY-VEHICLE:*x]→(attr)→[OLD].")
 
 
 
 (defparameter graph-string440
   "[DRIVE]-
-      (agnt)→[PERSON:Bob]→(poss)→[CHEVY-VEHICLE:*x]→(attr)→[OLD]
+      (agnt)→[PERSON:Bob]→(poss)→[CHEVY-VEHICLE:*x]
       (dest)→[CITY:St.Louis]
-      (inst)→[CHEVY-VEHICLE:*x].")
+      (inst)→[CHEVY-VEHICLE:*x]→(attr)→[OLD].")
 
 
 
 (defparameter graph-string450
   "[drive]-
-      (agnt)→[PERSON:Bob]→(poss)→[CHEVY-VEHICLE:*x]→(attr)→[OLD]
+      (agnt)→[PERSON:Bob]→(poss)→[CHEVY-VEHICLE:*x]
       (dest)→[CITY:St.Louis]
-      (inst)→[CHEVY-VEHICLE:*x].")
+      (inst)→[CHEVY-VEHICLE:*x]→(attr)→[OLD].")
 
 
 
