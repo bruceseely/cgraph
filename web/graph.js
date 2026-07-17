@@ -949,8 +949,25 @@ ntSaveBtn.addEventListener('click', submitType);
 // The single-line cells (name, supertypes) stretch to match via align-items.
 function syncFieldHeights() {
   for (const el of [ntCanon, ntNote]) el.style.height = 'auto';
-  const h = Math.min(Math.max(ntCanon.scrollHeight, ntNote.scrollHeight), 192);  // 192px ≈ 12rem cap
+  // +2px so the last line clears the bottom edge — at a fractional device-pixel-ratio
+  // the content height can round a hair short and clip the final line into a scrollbar.
+  const h = Math.min(Math.max(ntCanon.scrollHeight, ntNote.scrollHeight) + 2, 192);  // 192px ≈ 12rem cap
   for (const el of [ntCanon, ntNote]) el.style.height = h + 'px';
+}
+
+// Width of a vertical scrollbar, measured once — reserved in the canonical field's
+// width so a tall graph's scrollbar (or a pixel of sub-pixel rounding) can't push the
+// widest line into a horizontal scrollbar.
+let scrollbarPx = null;
+function scrollbarWidth() {
+  if (scrollbarPx == null) {
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;top:-9999px;width:100px;height:100px;overflow:scroll;';
+    document.body.appendChild(probe);
+    scrollbarPx = probe.offsetWidth - probe.clientWidth;
+    document.body.removeChild(probe);
+  }
+  return scrollbarPx;
 }
 
 // Size the canonical field's WIDTH to just past its widest line, so it takes only
@@ -997,9 +1014,13 @@ function sizeCanonicalWidth() {
   // graph that fits shows no vertical scrollbar to skew the width fit below.
   ntCanon.style.height = Math.min(lines.length * lineHeight + padY, 192) + 'px';  // 192px ≈ 12rem cap
 
-  // Start from the measured estimate, then grow while the content still overflows
-  // horizontally — this also covers a vertical scrollbar (tall graph) stealing width.
-  let width = Math.max(floor, Math.min(Math.ceil(textW) + padX + 8, cap));
+  // Be lenient on width: measured line + padding + a comfortable margin (~1 line's
+  // worth) + a reserved vertical-scrollbar width. Landing a pixel short pops a
+  // horizontal scrollbar, and that scrollbar also steals the bottom line's vertical
+  // space — so a generous margin avoids BOTH the too-narrow look and the one-line
+  // vertical overflow. The grow-loop below is a backstop if even that falls short.
+  const margin = Math.ceil(lineHeight) + scrollbarWidth();
+  let width = Math.max(floor, Math.min(Math.ceil(textW) + padX + margin, cap));
   ntCanon.style.width = width + 'px';
   let guard = 0;
   while (guard++ < 200 && width < cap && ntCanon.scrollWidth > ntCanon.clientWidth + 1) {
