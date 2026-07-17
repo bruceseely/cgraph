@@ -953,28 +953,25 @@ function syncFieldHeights() {
   for (const el of [ntCanon, ntNote]) el.style.height = h + 'px';
 }
 
-// Width of a vertical scrollbar, measured once. The canonical field caps its
-// height and scrolls, and that scrollbar steals horizontal space — so we reserve
-// it here, otherwise the widest line wraps.
-let scrollbarPx = null;
-function scrollbarWidth() {
-  if (scrollbarPx == null) {
-    const probe = document.createElement('div');
-    probe.style.cssText = 'position:absolute;top:-9999px;width:100px;height:100px;overflow:scroll;';
-    document.body.appendChild(probe);
-    scrollbarPx = probe.offsetWidth - probe.clientWidth;
-    document.body.removeChild(probe);
-  }
-  return scrollbarPx;
-}
-
 // Size the canonical field's WIDTH to just past its widest line, so it takes only
-// as much horizontal room as its (reformatted) graph needs. We measure with a hidden
-// span in the field's OWN computed font (the field is monospace — see the CSS) rather
-// than reading textarea.scrollWidth, which is unreliable. An empty field measures the
-// placeholder, so a type with no canonical graph still gets a sensible default width.
+// as much horizontal room as its (reformatted) graph needs.
+//
+// The field is set to wrap="off": the canonical graph has meaningful hard line
+// breaks and must NEVER soft-wrap. This also sidesteps a Firefox quirk where a
+// soft-wrapped textarea keeps a stale wrap after its width changes (until some later
+// reflow forces a re-layout). With wrap off the lines are fixed; a too-narrow field
+// would scroll horizontally, so we grow the width until nothing overflows.
+//
+// A hidden span in the field's own computed font gives a fast width estimate; the
+// grow-loop then fits exactly using the field's OWN rendering (scrollWidth vs
+// clientWidth), which is robust across browsers and device-pixel-ratios — including
+// the sub-pixel rounding that a fractional dpr (e.g. page zoom) introduces. An empty
+// field measures the placeholder, so a type with no canonical graph still gets a
+// sensible default width.
 let canonMeasure = null;
 function sizeCanonicalWidth() {
+  ntCanon.setAttribute('wrap', 'off');       // preserve hard line breaks; never soft-wrap
+  ntCanon.style.flex = '0 0 auto';           // hold the width; don't stretch or shrink
   const cs = getComputedStyle(ntCanon);
   if (!canonMeasure) {
     canonMeasure = document.createElement('span');
@@ -993,40 +990,22 @@ function sizeCanonicalWidth() {
   const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
   const padY = parseFloat(cs.paddingTop)  + parseFloat(cs.paddingBottom);
   const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.4;
-  // Reserve scrollbar width only when the graph is tall enough to scroll even
-  // unwrapped — fixing the width removes the wrap that would otherwise make it tall.
-  const willScroll = (lines.length * lineHeight + padY) > 192;   // 192px ≈ 12rem max-height cap
-  const want  = Math.ceil(textW) + padX + 8 + (willScroll ? scrollbarWidth() : 0);  // +8 slack ⇒ no wrap
   const floor = 8 * 16;                      // never narrower than ~8rem
   const cap   = Math.round(window.innerWidth * 0.85);  // leave a little room for the other cells
-  ntCanon.style.flex  = '0 0 auto';          // hold the width; don't stretch or shrink
-  ntCanon.style.width = Math.max(floor, Math.min(want, cap)) + 'px';
 
-  // Verify against the real layout and grow until the graph no longer wraps (or we
-  // hit the cap). The measurement above can fall a few px short of what a given
-  // browser actually needs (Firefox vs Chrome font metrics, sub-pixel rounding);
-  // observing the rendered line count and correcting is robust to that.
-  const declared = lines.length;
+  // Fit the height first (with wrap off it's stable and independent of width) so a
+  // graph that fits shows no vertical scrollbar to skew the width fit below.
+  ntCanon.style.height = Math.min(lines.length * lineHeight + padY, 192) + 'px';  // 192px ≈ 12rem cap
+
+  // Start from the measured estimate, then grow while the content still overflows
+  // horizontally — this also covers a vertical scrollbar (tall graph) stealing width.
+  let width = Math.max(floor, Math.min(Math.ceil(textW) + padX + 8, cap));
+  ntCanon.style.width = width + 'px';
   let guard = 0;
-  while (guard++ < 80 &&
-         parseFloat(ntCanon.style.width) < cap &&
-         renderedCanonLines(lineHeight, padY) > declared) {
-    const next = Math.min(cap, parseFloat(ntCanon.style.width) + Math.ceil(lineHeight));
-    ntCanon.style.width = next + 'px';
+  while (guard++ < 200 && width < cap && ntCanon.scrollWidth > ntCanon.clientWidth + 1) {
+    width = Math.min(cap, width + 6);
+    ntCanon.style.width = width + 'px';
   }
-}
-
-// True number of content lines the canonical field renders at its current width,
-// measured with the scrollbar suppressed so it can't steal width and skew the count.
-function renderedCanonLines(lineHeight, padY) {
-  const prevOverflow = ntCanon.style.overflow;
-  const prevHeight   = ntCanon.style.height;
-  ntCanon.style.overflow = 'hidden';
-  ntCanon.style.height   = '0px';
-  const contentH = ntCanon.scrollHeight;
-  ntCanon.style.overflow = prevOverflow;
-  ntCanon.style.height   = prevHeight;
-  return Math.round((contentH - padY) / lineHeight);
 }
 
 // Width first (it affects wrapping), then the shared height.
