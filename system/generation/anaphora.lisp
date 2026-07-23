@@ -147,7 +147,7 @@
        (pronoun-for concept :case case :state state)
        t))
 
-(defun same-individual-p (c1 c2)
+(defmethod same-individual-p ((c1 concept) (c2 concept))
   "True when concepts C1 and C2 refer to the same identified individual:
    eq instance, sharing a coref-bound label, or both having a referent
    whose content carries the same individual id. Used by shared-subject
