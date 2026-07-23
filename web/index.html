@@ -120,7 +120,7 @@
     #nt-fields {
       display: flex;
       align-items: stretch;
-      flex: 1 1 100%;
+      flex: 1 1 auto;          /* grow to fill, but leave the buttons room on the same row */
       border: 1px solid #ccc;
       border-radius: 3px;
       background: #fff;
@@ -193,7 +193,7 @@
     }
     #new-type-form button:hover { background: #e8e8e8; border-color: #aaa; }
     #nt-sep    { color: #999; }
-    #nt-status { font-size: 11px; color: #aaa; }
+    #nt-status { flex-basis: 100%; font-size: 11px; color: #aaa; }  /* comment on its own line below the fields+buttons row */
     #nt-status.error { color: #c0392b; }
     #new-type-form input.field-error,
     #new-type-form textarea.field-error {
