@@ -7,6 +7,13 @@
 
 
 (declaim (sb-ext:disable-package-locks set))
+;; cgraph rebinds/redefines several CL-standard symbols (SET, TYPE, CONJUGATE,
+;; ...) as part of the conceptual-graph vocabulary. Unlock the COMMON-LISP
+;; package here, in the system definition, so (ql:quickload :cgraph) works in
+;; any SBCL image -- rather than relying on the user having
+;; (sb-ext:unlock-package :common-lisp) in their own init (a silent onboarding
+;; blocker for new users).
+#+sbcl (sb-ext:unlock-package :common-lisp)
 (in-package :asdf-user)
 
 ;;; (asdf:system-relative-pathname "cgraph" "concept-types.text")
