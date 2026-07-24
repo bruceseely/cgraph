@@ -14,9 +14,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defparameter *lexicon-overrides* (make-hash-table :test 'equal)
-  "Per-concept-type overrides. Key: upcased label string.
-   Value: plist with possible keys :pos :lemma :plural :past :past-participle
-   :present-3sg :gerund :mass-p :proper-p.")
+  "Per-concept-type overrides on the derivational defaults. Key: upcased label
+   string. Value: a plist. See notes/lexicon-overrides.md for the full reference.
+   Canonical keys:
+     Word form:  :lemma :plural :past :past-participle :present-3sg :gerund
+                 :particle
+     Noun class: :pos :mass-p :proper-p :gender (:masc/:fem) :human-p :animate-p
+     Verb frame: :raising :rcpt-direct :obj-prep :adv-form")
 
 (defun register-lexicon-entry (type-label &rest plist)
   "Add or replace a lexicon override for TYPE-LABEL."
