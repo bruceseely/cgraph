@@ -24,6 +24,7 @@
     (dest  :pp     "to")
     (dur   :pp     "for")
     (elem  :pp     "of")
+    (exch  :pp     "for")   ;; consideration: "paid $5 for the book"
     (expr  :subject)
     (from  :pp     "from")
     (goal  :dobj)
