@@ -246,7 +246,9 @@
 ;;; an :adv-form override that realize-adv consults first.
 
 (register-lexicon-entry 'manner :adv-form "somehow")
-(register-lexicon-entry 'time   :adv-form "sometime")
+;; keyed on the TIME-PERIOD concept, not the `time' relation (which is not a
+;; concept type) -- completes the somehow/sometime/somewhere trio.
+(register-lexicon-entry 'time-period :adv-form "sometime")
 (register-lexicon-entry 'place  :adv-form "somewhere")
 
 ;;; --- Verb-form overrides for state-noun types ------------------------------
