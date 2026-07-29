@@ -1,7 +1,29 @@
 ;;; Support Functions that don't involve Spike.
 
 
-(in-package #:cl)
+(defpackage :cgraph-support
+  (:use #:cl)
+  (:nicknames :sup)
+  (:documentation
+   "Hand-loaded REPL tools: RAPROPOS and assorted debugging helpers.
+Interned here rather than in COMMON-LISP so that redefining something in
+this file can never shadow a CL builtin, and so the names need no export
+into CL to be reachable -- SUP:RAPROPOS works from any package.")
+  (:export #:rapropos
+	   #:zzz
+	   #:var-vals
+	   #:describe-hashtable
+	   #:describe-to-file
+	   #:parse-time
+	   #:subclasses
+	   #:cleanup-dir
+	   #:xmat
+	   #:print-signature
+	   #:extract-arg-types
+	   #:in-repo
+	   #:my-location))
+
+(in-package #:cgraph-support)
 
 
 ;;(format t "~5&Loading support-functions.lisp~%")
@@ -36,8 +58,7 @@
 ;;;                                          accum))))))
 
 
-(defun ensure-period (string)
-  (format nil "~a." (string-right-trim "." string)))
+;;; ensure-period lives in system/operations/cg-env.lisp, in :CG
 
 
 
@@ -112,65 +133,125 @@
 
 
 ;;; SBCL uses cl-ppcre for regular expressions
-(defmethod rapropos ((regexp string) &optional (package nil)
-					       (external-only nil)
-					       (case-insensitive t)
-					       (strict-package-inclusion nil)
-					       (functions-only nil)
-                                               (collapse-defs-p nil))
-  "regular-expression apropos"
-  ;; The package argument to apropos returns symbols ACCESSIBLE in the package
-  ;; strict-package-inclusion limits results to symbols owned by the package
+
+;;; These work from the symbols APROPOS-LIST returns rather than from the text
+;;; APROPOS prints.  Scraping the printed form was ACL-specific: it looked for a
+;;; "[type]" field SBCL doesn't emit, and it read the package off a prefix SBCL
+;;; omits for symbols in *PACKAGE*.
+
+(defun rapropos-qualified-name (symbol)
+  "PKG:NAME for an external symbol, PKG::NAME for an internal one,
+:NAME for a keyword, #:NAME for an uninterned symbol."
+  (let ((package (symbol-package symbol))
+	(name (symbol-name symbol)))
+    (cond ((null package) (format nil "#:~a" name))
+	  ((eq package (find-package :keyword)) (format nil ":~a" name))
+	  (t (multiple-value-bind (found status) (find-symbol name package)
+	       (declare (ignore found))
+	       (format nil "~a~a~a" (package-name package)
+		       (if (eq status :external) ":" "::")
+		       name))))))
+
+(defun rapropos-sort-key (symbol)
+  "Sort key grouping by owning package, then by name.  The separating space
+sorts below any name character, so packages stay in blocks and internal and
+external symbols interleave alphabetically within one."
+  (format nil "~a ~a"
+	  (if (symbol-package symbol) (package-name (symbol-package symbol)) "")
+	  (symbol-name symbol)))
+
+(defun rapropos-abbreviate (object &optional (limit 100))
+  "Printed representation of OBJECT, on one line and no longer than LIMIT.
+Bound tightly because a variable's value may be large or circular -- the CG
+structures are both."
+  (let* ((*print-circle* t)
+	 (*print-pretty* nil)
+	 (*print-length* 6)
+	 (*print-level* 3)
+	 (text (or (ignore-errors (substitute #\space #\newline (prin1-to-string object)))
+		   "#<error printing value>")))
+    (if (> (length text) limit)
+	(concatenate 'string (subseq text 0 limit) "...")
+	text)))
+
+(defun rapropos-function-p (symbol)
+  "True when SYMBOL names something callable."
+  (and (or (fboundp symbol) (special-operator-p symbol)) t))
+
+(defun rapropos-definitions (symbol)
+  "List of strings describing what SYMBOL names -- one per definition,
+since a symbol can name several things at once."
+  (let ((definitions nil))
+    (cond ((special-operator-p symbol) (push "[special-operator]" definitions))
+	  ((macro-function symbol) (push "[macro]" definitions))
+	  ((fboundp symbol)
+	   (push (if (typep (fdefinition symbol) 'generic-function)
+		     "[generic-function]"
+		     "[function]")
+		 definitions)))
+    (when (fboundp (list 'setf symbol))
+      (push "[setf-function]" definitions))
+    (when (boundp symbol)
+      (push (format nil "~a = ~a"
+		    (if (constantp symbol) "[constant]" "[variable]")
+		    (rapropos-abbreviate (symbol-value symbol)))
+	    definitions))
+    (when (find-class symbol nil)
+      (push "[class]" definitions))
+    (nreverse definitions)))
+
+(defmethod rapropos ((regexp string) &optional package
+				     &key
+				       (external-only nil)
+				       (case-insensitive t)
+				       ((:strict strict-package-inclusion) nil)
+				       (functions-only nil)
+				       ((:collapse-defs collapse-defs-p) nil))
+  "regular-expression apropos.
+
+REGEXP is matched against the symbol name without its package prefix, so
+anchor it when you mean a whole name.  PACKAGE limits the search to the
+symbols ACCESSIBLE there, which includes everything inherited; :STRICT
+further limits it to the symbols that package OWNS -- usually what you
+want, since :CG inherits all of CL, CL-USER and UIOP.
+
+  (rapropos \"^\\\\*.*\\\\*$\" :cg :strict t)    ; CG's own special variables
+  (rapropos \"CONCEPT\" :cg :functions-only t)  ; only what you can call
+  (rapropos \"^FORMAT-\" nil :case-insensitive nil)
+
+PACKAGE stays positional, so pass NIL explicitly when searching the whole
+image with keywords.  :COLLAPSE-DEFS puts a symbol's definitions on one
+line when it has more than one."
   (let ((re (cl-ppcre:create-scanner regexp :case-insensitive-mode case-insensitive))
-	text matched lines)
-    ;; collect matching specs
-    (with-input-from-string (stream (with-output-to-string (*standard-output*)
-				      (apropos "" package external-only)))
-      (do ((line (read-line stream nil nil) (read-line stream nil nil)))
-	  ((null line))
-	(when (not (equal line ""))
-	  (cond ((eq (aref line 0) #\space) ; continuing to read a spec
-		 (when matched
-		   ;; add the current line to the current spec
-		   (setf text (if collapse-defs-p
-				  (format nil "~a ~a" text (string-trim '(#\space #\tab #\newline #\return #\linefeed) line))
-				  (format nil "~a~a~a" text #\newline line)))))
-		(t                      ; start checking a new spec
-		 (let* ((sindex (position #\space line))
-			;; name
-			(full-name (subseq line 0 sindex))
-			(cindex1 (position #\: full-name))
-			(cindex2 (position #\: full-name :from-end t))
-			(pkg (when cindex1 (subseq full-name 0 cindex1)))
-			(name (if cindex2 (subseq full-name (1+ cindex2)) full-name))
-			;; type
-			(lbindex (when sindex (position #\[ line :start sindex)))
-			(rbindex (when sindex (position #\] line :start sindex)))
-			(type (when (and lbindex rbindex)
-				(subseq line (1+ lbindex) rbindex)))
-			;; match
-			(re-match-p (cl-ppcre:scan re name))
-			(function-p (if functions-only (or (equal type "generic-function")
-							   (equal type "function")
-							   (equal type "macro")) t))
-			(package-p (or (null package)
-				       (not strict-package-inclusion)
-				       (eq (find-package package)
-					   (find-package pkg))))
-			(match-p (and re-match-p function-p package-p)))
-		   ;; save the previously extracted spec
-		   (when matched
-		     (push text lines))
-		   ;; remember whether to save this spec
-		   (setf matched match-p)
-		   ;; start a new spec
-		   (when match-p
-		     (setf text line))))))))
-    ;; output saved specs
-    (format t "~%")
-    (dolist (l (reverse lines))
-      (format t "~&~a" l)))
+	(home (when (and package strict-package-inclusion) (find-package package)))
+	(seen (make-hash-table :test #'eq))
+	(hits nil))
+    ;; collect matching symbols; apropos-list can repeat one that is
+    ;; accessible from several packages
+    (dolist (symbol (apropos-list "" package external-only))
+      (unless (gethash symbol seen)
+	(setf (gethash symbol seen) t)
+	(when (and (cl-ppcre:scan re (symbol-name symbol))
+		   (or (null home) (eq home (symbol-package symbol)))
+		   (or (not functions-only) (rapropos-function-p symbol)))
+	  (push symbol hits))))
+    (setf hits (sort hits #'string< :key #'rapropos-sort-key))
+    ;; output
+    (format t "~&")
+    (dolist (symbol hits)
+      (let ((name (rapropos-qualified-name symbol))
+	    (definitions (rapropos-definitions symbol)))
+	(cond ((null (rest definitions)) ; 0 or 1 definition: one line
+	       (format t "~&~a~@[ ~a~]~%" name (first definitions)))
+	      (collapse-defs-p
+	       (format t "~&~a ~{~a~^ ~}~%" name definitions))
+	      (t
+	       (format t "~&~a~%" name)
+	       (dolist (definition definitions)
+		 (format t "  ~a~%" definition))))))
+    (format t "~&~d symbol~:p~%" (length hits)))
   (values))
+
 
 ;; (defmethod rapropos ((regexp string) &optional (package nil)
 ;; 				     &key

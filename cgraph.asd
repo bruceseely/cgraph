@@ -92,7 +92,7 @@
                (:module "support"
                 :serial t
 	        :depends-on ("system")
-	        :components (;;(:file "support-functions")
+	        :components (;; support-functions is the "cgraph/support" system, below
                              (:file "debug")
                              ;;(:file "path")
                              ))
@@ -130,3 +130,17 @@
                              (:file "generation-test")
                              (:file "pos-roots-lint-test")
                              ))))
+
+
+;;; REPL and debugging tools -- SUP:RAPROPOS and friends, in package
+;;; :cgraph-support (nickname :sup).  Kept as a secondary system so the main
+;;; system needn't depend on cl-ppcre, which nothing else here uses.  It
+;;; deliberately depends on nothing from :cgraph, so it can move to a
+;;; repository of its own later without untangling anything.
+;;; setup-cgraph loads it; on its own: (asdf:load-system "cgraph/support")
+(defsystem "cgraph/support"
+  :description "Lisp REPL and debugging tools, in package :cgraph-support (:sup)"
+  :author "Bruce Seely <bruce@bseely.com>"
+  :depends-on (:cl-ppcre)
+  :components ((:module "support"
+                :components ((:file "support-functions")))))

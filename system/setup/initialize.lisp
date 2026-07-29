@@ -160,6 +160,14 @@
     (setf *initial-types-directory* *cgraph-types-directory*)
     (initialize-types :external-types-directory external-types-directory))
 
+  ;; REPL tools: SUP:RAPROPOS and friends.  A secondary system, so the main
+  ;; one needn't depend on cl-ppcre.  They are a convenience, never a
+  ;; prerequisite -- a missing dependency must not abort setup.
+  (handler-case (asdf:load-system "cgraph/support")
+    (error (condition)
+      (format t "~&;; cgraph/support not loaded (SUP:RAPROPOS unavailable): ~a~%"
+	      condition)))
+
   ;; Set default package for SLIME worker threads (when SLIME is loaded)
   (when (find-package :swank)
     (let ((bindings-var (find-symbol "*DEFAULT-WORKER-THREAD-BINDINGS*" :swank)))
