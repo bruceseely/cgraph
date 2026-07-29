@@ -29,7 +29,7 @@
     (from  :pp     "from")
     (goal  :dobj)
     (governs   :pp "governs")
-    (has-part :pos)
+    (has-part :poss)
     (hgt   :pp     "of height")
     (inst  :pp     "with")
     (life-stage :pp  "in")  ;; "during"?
@@ -60,6 +60,100 @@
 ;;; Order in which roles are emitted in an English clause.
 (defparameter *role-emission-order*
   '(:subject :verb :dobj :iobj :pp :adv :pred-cmp))
+
+;;; The roles *RELATION-SYNTAX-TABLE* may assign, and what depends on each
+;;; being reachable. This is the relation-side counterpart of
+;;; *GENERATION-HIERARCHY-ROOTS*: there the risk is a missing concept-type
+;;; root, here it is a role that no live relation maps to.
+;;;
+;;; Note this cannot be derived from *ROLE-EMISSION-ORDER*, which lists only
+;;; the clause-level slots -- :adj, :poss and :nmod are emitted inside NPs and
+;;; never appear there, and :verb is the predicate slot rather than a role a
+;;; relation may be assigned.
+(defparameter *generation-syntax-roles*
+  '((:subject
+     :severity :error
+     :consequence "no relation introduces a clause subject, so ~
+                   FIND-SUBJECT-RELATION never fires and COPULA-REQUIRED-P is ~
+                   always true -- every graph renders as a copular clause"
+     :remedy "map your agentive relations (AGNT, EXPR or their equivalents in ~
+              your catalog) to :subject")
+    (:dobj
+     :severity :warn
+     :consequence "transitive verbs lose their object -- 'the dog eats' where ~
+                   'the dog eats a cake' was meant"
+     :remedy "map OBJ, PTNT, THME or their equivalents to :dobj")
+    (:pp
+     :severity :info
+     :consequence "no relation surfaces as a prepositional phrase, so the ~
+                   locative/temporal/instrumental adjuncts are all dropped"
+     :remedy "map LOC, TIME, INST or their equivalents to :pp")
+    (:adj
+     :severity :info
+     :consequence "attributive adjectives are never emitted ('the pie' rather ~
+                   than 'the red pie')"
+     :remedy "map ATTR or its equivalent to :adj")
+    (:adv
+     :severity :info
+     :consequence "manner adverbs are never emitted"
+     :remedy "map MANR or its equivalent to :adv")
+    (:poss
+     :severity :info
+     :consequence "possessives are never emitted, and HAVE-CLAUSE-P never ~
+                   fires, so 'X has Y' graphs lose their verb"
+     :remedy "map POSS or its equivalent to :poss")
+    (:iobj
+     :severity :info
+     :consequence "ditransitive recipients are never emitted ('gives a pie' ~
+                   rather than 'gives a pie to Mary')"
+     :remedy "map RCPT or its equivalent to :iobj")
+    (:nmod
+     :severity :info
+     :consequence "noun-modifier relations are never emitted as post-modifiers"
+     :remedy "map CHRC or its equivalent to :nmod")
+    (:pred-cmp
+     :implemented nil
+     :consequence "the role is listed in *ROLE-EMISSION-ORDER* but no realizer ~
+                   consumes it, so any relation mapped to it is silently dropped"
+     :remedy "use :dobj for clausal complements (as PROP does), or implement ~
+              the role in realize-clause.lisp"))
+  "Every role *RELATION-SYNTAX-TABLE* may assign, as
+   (ROLE &key SEVERITY CONSEQUENCE REMEDY IMPLEMENTED).
+
+   SEVERITY/CONSEQUENCE/REMEDY describe what happens when the catalog and the
+   syntax table between them leave the role unreachable -- no surviving entry
+   maps a relation that actually exists to it. IMPLEMENTED defaults to T;
+   NIL marks a role that is declared here but that no realizer reads, so
+   mapping a relation to it drops the relation.
+
+   CONSEQUENCE and REMEDY are FORMAT control strings (so they may carry ~ line
+   folds). Consumed by the relation checks in lexicon-lint.lisp; keep this the
+   single source of truth so the checks and the realizer can't drift.")
+
+(defun syntax-role-entry (role)
+  (assoc role *generation-syntax-roles*))
+
+(defun known-syntax-role-p (role)
+  (and (syntax-role-entry role) t))
+
+(defun implemented-syntax-role-p (role)
+  (let ((entry (syntax-role-entry role)))
+    (and entry (getf (rest entry) :implemented t) t)))
+
+;;; Relation labels the generation code names literally, rather than reaching
+;;; them through *RELATION-SYNTAX-TABLE*. Same failure shape as a missing
+;;; hierarchy root: the STRING-EQUAL simply never matches and the special-case
+;;; path goes dead, with no error.
+(defparameter *generation-relation-labels*
+  '((time
+     :severity :info
+     :consequence "REALIZE-PP's deictic-adverb path goes dead, so a TIME arc ~
+                   to 'yesterday'/'tomorrow' is rendered as a prepositional ~
+                   phrase ('at yesterday') rather than a bare adverb"
+     :remedy "define the TIME relation, or accept the prepositional form"))
+  "Relation labels hard-coded in the realizer, as
+   (LABEL &key SEVERITY CONSEQUENCE REMEDY). Same shape and same purpose as
+   *GENERATION-HIERARCHY-ROOTS*, for relations rather than concept types.")
 
 ;;; :pp roles that, when found on a clause's subject NP, are clause-level
 ;;; adjuncts ("the dog sits at the place") rather than NP post-modifiers

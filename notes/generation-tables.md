@@ -22,11 +22,18 @@ usually don't.**
 A relation that is not in `*relation-syntax-table*` is silently dropped during
 generation. This is the one hard rule.
 
+Everything about relations fails the same way — the relation vanishes from the
+output and nothing is signalled — so it is worth knowing the four distinct ways
+it can happen. `lexicon-lint` checks all four; see "Relation table failures"
+near the end of this document.
+
 **Required:**
 
 - `*relation-syntax-table*` (`syntax-roles.lisp`)
   Add `(label role &optional preposition)`. 
-  Roles: `:subject :dobj :iobj :pp :adj :adv :poss :nmod :pred-cmp`.
+  Roles: `:subject :dobj :iobj :pp :adj :adv :poss :nmod`.
+  (`:pred-cmp` is declared but no realizer reads it — mapping a relation to
+  it silently drops the relation. Use `:dobj` for clausal complements.)
 
   **Pick the role by asking what role the relation's argument plays in English:**
   
@@ -181,7 +188,8 @@ any — would have prevented it:
 
 | Symptom                                          | Likely fix                              |
 |--------------------------------------------------|------------------------------------------|
-| Relation completely missing from output          | `*relation-syntax-table*` entry         |
+| Relation completely missing from output          | run `(report-lexicon-lint)` — four different table faults produce this, see below |
+| Every sentence comes out as "X is Y"             | nothing maps to `:subject`              |
 | Relation in the wrong position in the clause     | `*pp-relation-priority*` ordering       |
 | Wrong preposition on an NP modifier              | `*np-pp-prepositions*` entry            |
 | "a food" instead of "food"                       | `:mass-p t` on the type                 |
@@ -269,8 +277,9 @@ It catches:
 
 - **any absent root from the table above** (`:missing-generation-root`) — the
   finding names the consequence and the remedy for that specific root
-- **relation types with no `*relation-syntax-table*` entry**
-  (`:relation-not-mapped`, `:error`) — these are dropped from output entirely
+- **all four relation-table failure directions** — see "Relation table
+  failures" below, plus `:pp-table-role-mismatch` and
+  `:missing-generation-relation`
 - stale lexicon overrides naming types that no longer exist
 - `PERSON` subtypes lacking a `:gender` override — or, when `PERSON` itself is
   absent, a `:person-check-skipped` note saying the check could not run. That
@@ -312,3 +321,73 @@ nouns, particle verbs, communication verbs, `BELIEF`→"believe", …) are keyed
 on label *strings* and register harmlessly whether or not the type is defined;
 the ones that don't match your catalog surface as `:stale-lexicon-override`
 warnings, which are informational, not breakage.
+
+---
+
+## Relation table failures
+
+The concept side degrades because a *type* is missing. The relation side
+degrades because the *table* between the catalog and the realizer is wrong,
+and there are four independent ways for that to happen. All four produce the
+same symptom — the relation is absent from the generated text, with nothing
+signalled — which is why they need separate checks to tell apart.
+
+Think of it as a square with the catalog, the syntax table, the set of roles,
+and the realizer at its corners:
+
+| Direction            | Failure                                                    | Check                              | Severity |
+|----------------------|------------------------------------------------------------|------------------------------------|----------|
+| catalog → table      | you defined a relation nothing maps                         | `:relation-not-mapped`             | `:error` |
+| role → table         | no relation in *your* catalog maps to a role                | `:syntax-role-uncovered`           | varies   |
+| table → realizer     | the mapped role is one no realizer reads                    | `:unknown-syntax-role`             | `:error` |
+| table → catalog      | the entry names a relation you never defined                | `:stale-relation-entry`            | `:info`  |
+
+The asymmetry in severity is deliberate. A relation you defined with no entry
+loses output, so it's an error. An entry for a relation you never defined is
+dead weight that can never fire, so it's informational — the shipped tables
+cover more relations than most catalogs define, and a handful of these is
+normal.
+
+### Role coverage
+
+A role is only reachable if some relation **in your catalog** maps to it. An
+entry for a relation you never defined provides no coverage — the check tests
+liveness, not mere presence in the table.
+
+`*generation-syntax-roles*` (`syntax-roles.lisp`) records what each role's
+absence costs. `:subject` is the severe one, and it's an `:error`: with nothing
+mapped to it, `find-subject-relation` never fires, `copula-required-p` is
+always true, and **every** graph renders as a copular clause. `:dobj` is a
+`:warn` (transitive verbs lose their objects). The rest are `:info` — a
+catalog with no manner relation legitimately has no adverbs.
+
+### Roles the realizer doesn't read
+
+Two ways to map a relation to a role that does nothing:
+
+- **A typo.** `:pos` instead of `:poss` looks plausible and is silently inert:
+  every consumer compares the role against the keywords it handles, nothing
+  matches, and the relation drops out.
+- **A declared-but-unimplemented role.** `:pred-cmp` appears in the documented
+  role list and in `*role-emission-order*`, but no realizer consumes it. Map a
+  relation to it and the relation disappears. Use `:dobj` for clausal
+  complements — that's what `prop` does.
+
+Both are `:error`, because the consequence is identical to having no entry.
+
+### PP support-table consistency
+
+`*pp-relation-priority*`, `*np-pp-prepositions*` and
+`*clause-level-pp-relations*` are all consulted behind a `:pp` role test. An
+entry naming a relation whose role is something else can never fire —
+`:pp-table-role-mismatch`, `:warn`. Relations that are absent from the catalog
+or unmapped are skipped here, since the checks above already report them.
+
+### Relation labels hard-coded in the realizer
+
+Almost all relation handling is table-driven, so there is only one:
+`*generation-relation-labels*` records `time`, which `realize-pp.lisp` names
+literally for the deictic-adverb path ("yesterday" as a bare adverb rather than
+"at yesterday"). Without a `TIME` relation the `string-equal` never matches and
+that path goes quietly dead — `:missing-generation-relation`, `:info`, since
+the prepositional form is still grammatical.
