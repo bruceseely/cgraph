@@ -22,8 +22,50 @@
      Noun class: :pos :mass-p :proper-p :gender (:masc/:fem) :human-p :animate-p
      Verb frame: :raising :rcpt-direct :obj-prep :adv-form")
 
+(defparameter *lexicon-override-keys*
+  '((:lemma       :reader "BASE-LEMMA")
+    (:plural      :reader "REALIZE-NP")
+    (:particle    :reader "REALIZE-CLAUSE")
+    (:pos         :reader "CONCEPT-POS")
+    (:mass-p      :reader "MASS-NOUN-P")
+    (:proper-p    :reader "PROPER-NAME-P")
+    (:gender      :reader "PRONOUN-FOR (anaphora.lisp)")
+    (:human-p     :reader "HUMAN-P")
+    (:animate-p   :reader "ANIMATE-CONCEPT-P")
+    (:raising     :reader "GRAPH-TO-TEXT dispatch")
+    (:rcpt-direct :reader "REALIZE-CLAUSE")
+    (:obj-prep    :reader "REALIZE-CLAUSE")
+    (:adv-form    :reader "REALIZE-ADV (realize-pp.lisp)")
+    ;; Declared but inert. The morphology functions take a bare lemma string
+    ;; rather than a concept, so they have no way to reach a per-type override;
+    ;; they consult *IRREGULAR-VERBS* instead. Registering one of these keys
+    ;; does nothing at all, silently.
+    (:past
+     :implemented nil
+     :alternative "add a row to *IRREGULAR-VERBS*, which PAST-TENSE consults")
+    (:past-participle
+     :implemented nil
+     :alternative "add a row to *IRREGULAR-VERBS*, which PAST-PARTICIPLE consults")
+    (:present-3sg
+     :implemented nil
+     :alternative "add a row to *IRREGULAR-VERBS*, which PRESENT-3SG consults")
+    (:gerund
+     :implemented nil
+     :alternative "none -- PRESENT-PARTICIPLE is purely rule-driven, with no ~
+                   table to override it"))
+  "Every key REGISTER-LEXICON-ENTRY accepts, as (KEY &key READER IMPLEMENTED
+   ALTERNATIVE). READER names what consumes the key, for the reader's benefit.
+   IMPLEMENTED defaults to T; NIL marks a key that nothing reads, so setting it
+   is silently ignored -- ALTERNATIVE then says what to do instead.
+
+   REGISTER-LEXICON-ENTRY takes an unchecked &REST plist, so a misspelled key
+   is accepted and ignored just as quietly. %LINT-LEXICON-OVERRIDE-KEYS exists
+   to catch both cases; keep this the single source of truth so it and the
+   readers can't drift.")
+
 (defun register-lexicon-entry (type-label &rest plist)
-  "Add or replace a lexicon override for TYPE-LABEL."
+  "Add or replace a lexicon override for TYPE-LABEL. Keys are not validated
+   here -- see *LEXICON-OVERRIDE-KEYS* and the lint check that reads it."
   (let ((key (string-upcase (string type-label))))
     (setf (gethash key *lexicon-overrides*) plist)))
 
@@ -271,6 +313,33 @@
     ("deer"  "deer")
     ("series" "series")
     ("species" "species")))
+
+(defparameter *string-keyed-generation-tables*
+  ;; (SYMBOL ARITY COLUMN-NAMES CONSULTED-BY). *UNIT-WORDS* lives in
+  ;; morphology.lisp, which loads after this file -- the symbol is quoted and
+  ;; only dereferenced at lint time, so load order doesn't matter.
+  '((*irregular-verbs* 4
+     ("lemma" "past" "past participle" "present-3sg")
+     "PAST-TENSE, PAST-PARTICIPLE and PRESENT-3SG")
+    (*irregular-plurals* 2
+     ("lemma" "plural")
+     "PLURALIZE")
+    (*unit-words* 3
+     ("abbreviation" "singular" "plural")
+     "EXPAND-UNITS"))
+  "The generation tables keyed on surface strings rather than on type labels.
+
+   These are looked up by lemma, independently of the type lattice, which is
+   what makes them different in kind from *LEXICON-OVERRIDES*: they are general
+   English data, not bindings to your ontology. So there is deliberately NO
+   staleness check for them -- a row for a word your catalog never mentions is
+   the normal case, not a defect, and reporting those would bury the report.
+
+   What can go wrong is internal: a row of the wrong arity silently yields NIL
+   for the missing column and the caller falls back to the regular rule, a
+   duplicate lemma is shadowed by the earlier row because lookup is by ASSOC,
+   and a row that merely restates what the rules already derive is dead weight.
+   Those are what the lint checks.")
 
 (defun irregular-verb-form (lemma form)
   "FORM is one of :past :past-participle :present-3sg. Returns NIL if not irregular."

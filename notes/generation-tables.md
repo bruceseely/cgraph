@@ -156,10 +156,16 @@ lemma or name regardless of which type produced it:
 
 - `*irregular-verbs*`        — keyed on verb lemma
 - `*irregular-plurals*`      — keyed on noun lemma
+- `*unit-words*`             — keyed on unit abbreviation
 - `*given-name-genders*`     — keyed on downcased given-name string
 
 You can extend `*given-name-genders*` at runtime with
 `(register-name-gender 'priya :fem)`.
+
+Because they're general English data rather than bindings to your ontology,
+**a row for a word your catalog never mentions is normal, not a defect** —
+there is deliberately no staleness check for them. What the lint does check is
+internal consistency; see "String-keyed table failures" below.
 
 ---
 
@@ -195,6 +201,8 @@ any — would have prevented it:
 | "a food" instead of "food"                       | `:mass-p t` on the type                 |
 | "childs" instead of "children"                   | `*irregular-plurals*` row               |
 | "eated" instead of "ate"                         | `*irregular-verbs*` row                 |
+| a `:past`/`:gerund` override has no effect       | those keys are inert — add an `*irregular-verbs*` row |
+| "bes"/"gos" despite an `*irregular-verbs*` row   | the row is short — `(fourth row)` is `NIL` |
 | Wrong pronoun gender on a name                   | `register-name-gender`                  |
 | "it" for a person of unknown gender              | `:human-p t` on the type (→ "they")     |
 | "believing" as the main verb of a BELIEF clause  | `:lemma "believe"` on BELIEF            |
@@ -280,13 +288,14 @@ It catches:
 - **all four relation-table failure directions** — see "Relation table
   failures" below, plus `:pp-table-role-mismatch` and
   `:missing-generation-relation`
-- stale lexicon overrides naming types that no longer exist
+- stale lexicon overrides naming types that no longer exist, and override
+  **keys** that are misspelled or inert (see "Override keys" below)
+- **malformed, duplicated or redundant rows** in the string-keyed tables
 - `PERSON` subtypes lacking a `:gender` override — or, when `PERSON` itself is
   absent, a `:person-check-skipped` note saying the check could not run. That
   distinction matters: this check walks down from `PERSON`, so without it the
   check has nothing to look at, and quiet output would otherwise read as a
   clean bill of health in precisely the case where pronouns are most broken
-- types listed in `*irregular-verbs*` that don't classify as `:verb`
 
 Startup output is filtered by `*run-lexicon-lint-on-startup*`; the default
 `:all` shows everything, `:errors-warnings` hides the `:info` tier (including
@@ -391,3 +400,72 @@ literally for the deictic-adverb path ("yesterday" as a bare adverb rather than
 "at yesterday"). Without a `TIME` relation the `string-equal` never matches and
 that path goes quietly dead — `:missing-generation-relation`, `:info`, since
 the prepositional form is still grammatical.
+
+---
+
+## String-keyed table failures
+
+`*irregular-verbs*`, `*irregular-plurals*` and `*unit-words*` are looked up by
+surface string, so none of the catalog-facing checks apply to them. Their
+failure modes are internal, and all four are silent:
+
+| Failure | What happens | Check | Severity |
+|---|---|---|---|
+| wrong arity | the missing column reads as `NIL`, and the caller's `(or irregular regular)` falls through to the rule | `:malformed-table-row` | `:error` |
+| non-string cell | `string-equal` may still match, then the value reaches `concatenate` and signals *there* | `:malformed-table-row` | `:error` |
+| duplicate lemma | `assoc` returns the first row; later ones are unreachable | `:duplicate-table-key` | `:warn` |
+| redundant row | restates what the regular rules already derive | `:redundant-irregular-row` | `:info` |
+
+The arity case is the nasty one. Drop the `"is"` from the `be` row and nothing
+complains — you just start generating "bes", because `present-3sg` gets `NIL`
+from `(fourth row)` and falls back to the regular `-s` rule.
+
+The redundancy check derives the comparison by calling the real morphology with
+the tables rebound to `NIL`, rather than restating the `-y`/`-ied` rules, so it
+can't drift from the rules it's checking. Three shipped rows are redundant
+today — `believe`, `own`, `love` — harmless, but worth knowing before you read
+the table as a list of English irregulars.
+
+`*string-keyed-generation-tables*` (`lexicon.lisp`) is the spec these checks
+read: table symbol, arity, column names, and what consults it.
+
+### Override keys
+
+`register-lexicon-entry` takes an unchecked `&rest` plist, so a misspelled key
+is stored and ignored in silence:
+
+```lisp
+(register-lexicon-entry 'rice :massp t)   ; typo — does nothing, says nothing
+```
+
+`*lexicon-override-keys*` (`lexicon.lisp`) lists every key and what reads it;
+`:unknown-lexicon-key` is an `:error`.
+
+Four documented keys are **declared but inert** — `:past`,
+`:past-participle`, `:present-3sg`, and `:gerund`. The morphology functions
+take a bare lemma string rather than a concept, so they have no way to reach a
+per-type override; they consult `*irregular-verbs*` instead. Setting one of
+these does nothing at all. They lint as `:unimplemented-lexicon-key`, `:error`,
+with the alternative named in the message. To give a type irregular verb forms,
+add a row to `*irregular-verbs*`. There is no override path for `:gerund` —
+`present-participle` is purely rule-driven.
+
+### A check that used to be here
+
+An earlier check flagged concept types whose label appears in
+`*irregular-verbs*` but whose POS isn't `:verb`, on the theory that the
+irregular forms could never be reached. **That premise is false**, and the
+check has been removed rather than repaired.
+
+The morphology is reached by *lemma string* from the clause realizer, for
+whatever concept `find-main-predicate` selects — and that selection is
+structural (it follows the subject relation), not POS-driven. `KNOW` is
+classified `:noun` and still generates "Ivan is known to eat a pie"; "known"
+can only have come from the table, since the rule would give "knowed". So the
+check fired on every state-noun predicate — `KNOW`, `BELIEF`, `THOUGHT` — which
+is exactly the intended design, and its advice (move the type under `ACT`, or
+force `:pos :verb`) would have turned a noun like `SET` into a verb.
+
+Worth remembering when reading the rest of this document: **`concept-pos`
+governs how a concept is realized as an NP, adjective or adverb — not whether
+the main predicate gets conjugated.**

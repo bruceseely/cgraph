@@ -283,31 +283,171 @@
          person-type))
     (nreverse findings)))
 
-(defun %lint-irregular-verb-not-classified-as-verb ()
-  "A concept type whose label appears in *irregular-verbs* but whose
-   POS-from-hierarchy isn't :verb means the type is misplaced in the
-   lattice — the irregular forms will never be looked up because the
-   generator won't treat it as a verb."
+;;; --- Lexicon-override and string-keyed-table checks ------------------------
+;;;
+;;; There was once a check here that flagged a concept type whose label appears
+;;; in *IRREGULAR-VERBS* but whose POS isn't :VERB, on the theory that the
+;;; irregular forms could never be reached. That premise is false. The
+;;; morphology functions are called with a bare LEMMA STRING by the clause
+;;; realizer for whatever concept FIND-MAIN-PREDICATE selects, and that choice
+;;; is structural (it follows the subject relation), not POS-driven. KNOW is
+;;; POS :NOUN and still generates "Ivan is known to eat a pie" -- "known" comes
+;;; from the table, since the rule would give "knowed". The check fired on every
+;;; state-noun predicate (KNOW, BELIEF, THOUGHT), which is the intended design,
+;;; and its advice -- move the type under ACT/EVENT, or force :pos :verb --
+;;; would have turned a noun like SET into a verb. Removed rather than repaired:
+;;; there is no POS-based premise that is both sound and useful here.
+;;;
+;;; What IS checkable about these tables is internal consistency, below.
+
+(defun %lint-lexicon-override-keys ()
+  "REGISTER-LEXICON-ENTRY takes an unchecked &REST plist, so a key that is
+   misspelled -- or one that is documented but that no code reads -- is stored
+   and then ignored without complaint. Both cases mean the user asked for
+   something and silently didn't get it, so both are errors."
   (let ((findings nil))
-    (dolist (label (all-concept-types))
-      (let* ((type (ignore-errors (get-concept-type label)))
-             (lemma (and type (string-downcase (string label))))
-             (irregular (and lemma (assoc lemma *irregular-verbs*
-                                          :test #'string-equal)))
-             (pos (and type
-                       (or (lexicon-prop type :pos)
-                           (pos-from-hierarchy type)))))
-        (when (and irregular (not (eq pos :verb)))
-          (push (list :info
-                      :irregular-verb-misclassified
-                      (format nil "Type ~A is listed in ~
-                                   *irregular-verbs* but its POS is ~A. ~
-                                   Either move the type under ACT/EVENT, ~
-                                   or add (register-lexicon-entry '~(~A~) ~
-                                   :pos :verb)."
-                              label pos label)
-                      label)
-                findings))))
+    (loop for type-key being the hash-keys of *lexicon-overrides*
+            using (hash-value plist)
+          do (loop for key in plist by #'cddr
+                   do (let ((entry (assoc key *lexicon-override-keys*)))
+                        (cond
+                          ((null entry)
+                           (push (list :error
+                                       :unknown-lexicon-key
+                                       (format nil "~A has a lexicon override ~
+                                                    for ~S, which is not a key ~
+                                                    any code reads, so it is ~
+                                                    silently ignored. Known ~
+                                                    keys: ~{~S~^ ~}."
+                                               type-key key
+                                               (mapcar #'first
+                                                       *lexicon-override-keys*))
+                                       type-key)
+                                 findings))
+                          ((not (getf (rest entry) :implemented t))
+                           (push (list :error
+                                       :unimplemented-lexicon-key
+                                       (format nil "~A has a lexicon override ~
+                                                    for ~S. The key is ~
+                                                    documented but nothing ~
+                                                    reads it, so the override ~
+                                                    is silently ignored. ~
+                                                    Instead: ~A."
+                                               type-key key
+                                               (format nil
+                                                       (getf (rest entry)
+                                                             :alternative)))
+                                       type-key)
+                                 findings))))))
+    (nreverse findings)))
+
+(defun %string-table-rows (spec)
+  "(SYMBOL ARITY COLUMNS CONSULTED-BY) -> the table's current rows."
+  (symbol-value (first spec)))
+
+(defun %lint-malformed-string-table-rows ()
+  "A row of the wrong arity fails silently in the worst way: the accessor for
+   the missing column returns NIL, the caller's (OR irregular regular) falls
+   through to the rule, and you get 'bes' for a BE row that forgot its
+   present-3sg. Non-string cells are worse -- they reach CONCATENATE and
+   signal, far from the table that caused it."
+  (let ((findings nil))
+    (dolist (spec *string-keyed-generation-tables*)
+      (destructuring-bind (symbol arity columns consulted-by) spec
+        (dolist (row (%string-table-rows spec))
+          (cond
+            ((not (listp row))
+             (push (list :error :malformed-table-row
+                         (format nil "~A contains ~S, which is not a row."
+                                 symbol row)
+                         symbol)
+                   findings))
+            ((/= (length row) arity)
+             (push (list :error :malformed-table-row
+                         (format nil "~A row ~S has ~D element~:P, not ~D ~
+                                      (~{~A~^, ~}). The missing column reads ~
+                                      as NIL and ~A silently falls back to the ~
+                                      regular rule."
+                                 symbol row (length row) arity columns
+                                 consulted-by)
+                         (first row))
+                   findings))
+            ((notevery #'stringp row)
+             (push (list :error :malformed-table-row
+                         (format nil "~A row ~S has a non-string cell. Lookup ~
+                                      is by STRING-EQUAL so it may still match, ~
+                                      but the value is passed to CONCATENATE ~
+                                      and will signal there instead of here."
+                                 symbol row)
+                         (first row))
+                   findings))))))
+    (nreverse findings)))
+
+(defun %lint-duplicate-string-table-keys ()
+  "Lookup is by ASSOC, which returns the first match, so a second row for the
+   same lemma is unreachable. Silent, and easy to create by adding a word that
+   is already present far up a long alphabetical-ish list."
+  (let ((findings nil))
+    (dolist (spec *string-keyed-generation-tables*)
+      (let ((symbol (first spec))
+            (seen (make-hash-table :test 'equalp)))
+        (dolist (row (%string-table-rows spec))
+          (when (and (consp row) (stringp (first row)))
+            (let* ((key (first row))
+                   (previous (gethash key seen)))
+              (cond (previous
+                     (push (list :warn
+                                 :duplicate-table-key
+                                 (format nil "~A has more than one row for ~
+                                              ~S. ASSOC returns the first ~
+                                              (~S), so ~S is unreachable."
+                                         symbol key previous row)
+                                 key)
+                           findings))
+                    (t (setf (gethash key seen) row))))))))
+    (nreverse findings)))
+
+(defun %regular-forms-for (symbol row)
+  "What the rule-driven morphology would produce for ROW's lemma, with the
+   irregular tables rebound to NIL so the rules can't consult themselves.
+   Deriving this rather than restating the rules keeps the check from drifting
+   away from the morphology it is checking. NIL for tables with no rule-driven
+   counterpart."
+  (let ((lemma (first row)))
+    (case symbol
+      (*irregular-verbs*
+       (let ((*irregular-verbs* nil))
+         (list (past-tense lemma) (past-participle lemma) (present-3sg lemma))))
+      (*irregular-plurals*
+       (let ((*irregular-plurals* nil))
+         (list (pluralize lemma))))
+      (t nil))))
+
+(defun %lint-redundant-irregular-rows ()
+  "A row whose forms are exactly what the regular rules already derive costs a
+   lookup and implies an irregularity that isn't there. Harmless, so :info --
+   but worth knowing before you trust the table as a list of English
+   irregulars."
+  (let ((findings nil))
+    (dolist (spec *string-keyed-generation-tables*)
+      (let ((symbol (first spec))
+            (arity (second spec)))
+        (dolist (row (%string-table-rows spec))
+          (when (and (consp row)
+                     (= (length row) arity)
+                     (every #'stringp row))
+            (let ((regular (%regular-forms-for symbol row)))
+              (when (and regular
+                         (every #'string-equal regular (rest row))
+                         (= (length regular) (length (rest row))))
+                (push (list :info
+                            :redundant-irregular-row
+                            (format nil "~A row ~S restates what the regular ~
+                                         rules already derive, so it never ~
+                                         changes any output. Safe to remove."
+                                    symbol row)
+                            (first row))
+                      findings)))))))
     (nreverse findings)))
 
 (defun lexicon-lint ()
@@ -321,8 +461,11 @@
           (%lint-pp-table-consistency)
           (%lint-stale-relation-entries)
           (%lint-stale-lexicon-overrides)
+          (%lint-lexicon-override-keys)
           (%lint-person-subtypes-without-gender)
-          (%lint-irregular-verb-not-classified-as-verb)))
+          (%lint-malformed-string-table-rows)
+          (%lint-duplicate-string-table-keys)
+          (%lint-redundant-irregular-rows)))
 
 (defun %severity-rank (sev)
   (case sev (:error 0) (:warn 1) (:info 2) (t 3)))
