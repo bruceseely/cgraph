@@ -119,12 +119,16 @@ removing one breaks defaults across the lattice:
 - `act`, `event`        → drive `:verb` POS classification
 - `manner`              → drives `:adv` POS classification
 - `attribute`           → drives `:adj` POS classification
-- `entity`              → fallback `:noun`
 - `animate`             → drives `animate-concept-p`
 - `person`              → drives `human-p` and pronoun gender defaults
+- `situation`           → drives infinitive vs. `that`-clause complements
 
-If you reorganize the upper lattice, audit `lexicon.lisp` and `anaphora.lisp`
-for these symbols.
+(There is no `entity` root: anything matching none of the above falls through
+to `:noun` unconditionally.)
+
+If you reorganize the upper lattice, audit `lexicon.lisp`, `anaphora.lisp`,
+`walker.lisp`, and `realize-pp.lisp` for these symbols — and see
+"Types the generation code expects" below for what breaks if one is absent.
 
 ---
 
@@ -190,4 +194,121 @@ any — would have prevented it:
 | "mannerly" instead of "somehow"                  | `:adv-form` on the type                 |
 
 If none of these apply, the bug is in dispatch (`graph-to-text` in
-`generate.lisp`) or the realizer, not a table.≠
+`generate.lisp`) or the realizer, not a table.
+
+---
+
+## Types the generation code expects
+
+Everything above assumes the shipped upper ontology. You are free to supply
+your own type definitions, and cgraph will not stop you — but the generation
+subsystem hard-codes a small number of type labels, and a catalog that omits
+one of them produces **silently wrong English rather than an error.**
+
+Note this is *only* about the generation subsystem. A missing type is not a
+problem for the lattice, projection, query, or the web UI. And a type used
+*inside a graph* that isn't defined is a different, non-silent case: the
+reader rejects it at parse time (`reader.lisp`), long before generation.
+
+### Why it degrades instead of failing
+
+`subtype-p` signals an error for an unknown label, but every generation call
+site wraps the call:
+
+- `safe-subtype-p` (`lexicon.lisp`) — `handler-case ... (error () nil)`
+- `act-or-event-concept-p` (`walker.lisp`) — `handler-case` per root
+- `clausal-situation-p` (`realize-pp.lisp`) — `ignore-errors`
+
+So a missing root makes its predicate return NIL, and the caller takes its
+default branch. Nothing crashes. `test/generation-roots-lint-test.lisp` pins
+this down: with `ACT` and `EVENT` removed from the catalog,
+`pos-from-hierarchy` classifies `GIVE` as `:noun` and signals nothing.
+
+This is deliberate — a partial ontology should still generate *something* —
+but it means **the absence of an error is not evidence that generation is
+working.**
+
+### The expected labels
+
+The authoritative list is `*generation-hierarchy-roots*` (`lexicon.lisp`),
+which pairs each root with what breaks when it's absent and how to work
+around it. The lint check reads that table, so this list and the check
+cannot drift apart:
+
+| Label       | Consulted by                                      | If absent, generation…                                                                   | Lint    |
+|-------------|---------------------------------------------------|------------------------------------------------------------------------------------------|---------|
+| `act`       | `*pos-hierarchy-roots*`; `act-or-event-concept-p` | classifies every verb as `:noun`, **and** loses a main-predicate fallback — see below     | `:warn` |
+| `event`     | same as `act`                                      | same as `act`                                                                              | `:warn` |
+| `manner`    | `*pos-hierarchy-roots*`                            | renders adverbs as nouns                                                                   | `:warn` |
+| `attribute` | `*pos-hierarchy-roots*`                            | renders adjectives as nouns                                                                | `:warn` |
+| `person`    | `human-p` (`anaphora.lisp`)                        | never says "he"/"she"/"they" for a person — falls back to "it"                              | `:warn` |
+| `animate`   | `animate-concept-p` (`anaphora.lisp`)              | treats every referent as inanimate for pronoun and POSS purposes                            | `:warn` |
+| `situation` | `clausal-situation-p` (`realize-pp.lisp`)          | renders every clausal complement as a `that`-clause, never an infinitive ("wants to go")   | `:info` |
+
+`SITUATION` is `:info` rather than `:warn` because its fallback is always
+grammatical — just sometimes stilted. The rest change whether the output is
+*correct*.
+
+`ACT` / `EVENT` are the most damaging, because they are load-bearing twice
+over. Beyond POS, `act-or-event-concept-p` feeds `find-main-predicate`,
+`copula-required-p`, and `have-clause-p` in `walker.lisp` — so their absence
+degrades *sentence structure*, not just word class. A graph that should render
+as a verbal clause may come out as a copular or possessive one.
+
+`SITUATION`'s fallback is the mildest: the `that`-clause form is always
+grammatical, just sometimes stilted. That fallback is intentional and
+documented in `clausal-situation-p`'s docstring.
+
+### What the startup lint catches
+
+`report-lexicon-lint` runs at startup under `*run-lexicon-lint-on-startup*`
+(`definitions.lisp`; called from `initialize.lisp`). Run it by hand any time
+with `(report-lexicon-lint)`.
+
+It catches:
+
+- **any absent root from the table above** (`:missing-generation-root`) — the
+  finding names the consequence and the remedy for that specific root
+- **relation types with no `*relation-syntax-table*` entry**
+  (`:relation-not-mapped`, `:error`) — these are dropped from output entirely
+- stale lexicon overrides naming types that no longer exist
+- `PERSON` subtypes lacking a `:gender` override — or, when `PERSON` itself is
+  absent, a `:person-check-skipped` note saying the check could not run. That
+  distinction matters: this check walks down from `PERSON`, so without it the
+  check has nothing to look at, and quiet output would otherwise read as a
+  clean bill of health in precisely the case where pronouns are most broken
+- types listed in `*irregular-verbs*` that don't classify as `:verb`
+
+Startup output is filtered by `*run-lexicon-lint-on-startup*`; the default
+`:all` shows everything, `:errors-warnings` hides the `:info` tier (including
+`SITUATION` and the skipped-check note), and `:errors-only` shows just
+unmapped relations. If you are debugging an ontology, run `(report-lexicon-lint)`
+by hand — it always reports at `:info`.
+
+### If you're bringing your own ontology
+
+To generate English you want, at minimum, the seven labels above present and
+positioned so that the intended types actually fall under them — a defined
+`ACT` that nothing is a subtype of is no better than a missing one.
+
+If you can't or don't want to adopt those labels, the escape hatch is explicit
+per-type overrides, which bypass the lattice walk entirely:
+
+```lisp
+(register-lexicon-entry 'run    :pos :verb)     ; instead of relying on ACT
+(register-lexicon-entry 'doctor :human-p t)     ; instead of relying on PERSON
+(register-lexicon-entry 'cat    :animate-p t)   ; instead of relying on ANIMATE
+```
+
+That is viable for a small catalog and unpleasant for a large one — the
+override has to be repeated for every affected type, whereas one correctly
+placed root covers the whole subtree. Prefer fixing the lattice; reach for
+overrides when a type genuinely doesn't fit under any root. (`SITUATION` has
+no override escape hatch — either define it or accept `that`-clauses.)
+
+Nothing else in `system/generation/` requires a particular type to exist. The
+shipped `register-lexicon-entry` calls at the bottom of `lexicon.lisp` (mass
+nouns, particle verbs, communication verbs, `BELIEF`→"believe", …) are keyed
+on label *strings* and register harmlessly whether or not the type is defined;
+the ones that don't match your catalog surface as `:stale-lexicon-override`
+warnings, which are informational, not breakage.

@@ -17,31 +17,31 @@
 ;;  (report-lexicon-lint)  => prints grouped by severity, returns the list
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun %lint-missing-pos-roots ()
-  "POS-FROM-HIERARCHY keys on the roots in *POS-HIERARCHY-ROOTS* (ACT, EVENT,
-   MANNER, ATTRIBUTE) to classify parts of speech. A user catalog may omit any
-   of them, and SAFE-SUBTYPE-P swallows the resulting lookup error -- so a
-   missing root doesn't crash, it silently degrades: every concept that should
-   be that POS is classified :NOUN instead. Warn once per absent root."
+(defun %lint-missing-generation-roots ()
+  "Generation consults a handful of type labels through SAFE-SUBTYPE-P --
+   the POS roots (ACT, EVENT, MANNER, ATTRIBUTE) plus PERSON, ANIMATE and
+   SITUATION. A user catalog may omit any of them, and the guarded lookup
+   swallows the resulting error -- so a missing root doesn't crash, it
+   silently degrades. Report once per absent root, using the consequence
+   and remedy recorded alongside it in *GENERATION-HIERARCHY-ROOTS*."
   (let ((findings nil))
-    (dolist (entry *pos-hierarchy-roots*)
-      (let* ((root (car entry))
-             (pos  (cdr entry))
-             (root-str (string-upcase (string root)))
-             (pos-word (string-downcase (symbol-name pos))))
+    (dolist (entry *generation-hierarchy-roots*)
+      (destructuring-bind (root &key severity consequence remedy also) entry
         (unless (ignore-errors (get-concept-type root))
-          (push (list :warn
-                      :missing-pos-root
-                      (format nil "Concept type ~A is absent from the catalog, ~
-                                   but POS-FROM-HIERARCHY keys on it to mark ~
-                                   ~As. Those concepts will silently be ~
-                                   classified :NOUN instead. Define ~A, or give ~
-                                   the affected types explicit ~
-                                   (register-lexicon-entry '<label> :pos ~S) ~
-                                   overrides."
-                              root-str pos-word root-str pos)
-                      root)
-                findings))))
+          ;; The three texts are FORMAT control strings carrying ~ line folds;
+          ;; resolve each on its own before splicing, so an absent :also can't
+          ;; shift the argument list under the remaining directives.
+          (let ((consequence-text (format nil consequence))
+                (also-text        (and also (format nil also)))
+                (remedy-text      (format nil remedy)))
+            (push (list severity
+                        :missing-generation-root
+                        (format nil "Concept type ~:@(~A~) is absent from the ~
+                                     catalog, but generation consults it: ~A.~
+                                     ~@[ ~A.~] To fix: ~A."
+                                root consequence-text also-text remedy-text)
+                        root)
+                  findings)))))
     (nreverse findings)))
 
 (defun %lint-relation-syntax-coverage ()
@@ -81,27 +81,43 @@
 (defun %lint-person-subtypes-without-gender ()
   "Subtypes of PERSON without a :gender override fall through to
    :unknown gender and singular-they pronouns. May be intentional
-   (gender-neutral role) or an oversight (FATHER, KING, ...)."
+   (gender-neutral role) or an oversight (FATHER, KING, ...).
+
+   The walk is rooted at PERSON, so a catalog without PERSON gives this
+   check nothing to look at. Report that explicitly rather than returning
+   quietly: the case where the check can't run is exactly the case where
+   pronoun generation is most broken, and silence there would read as a
+   clean bill of health."
   (let ((findings nil)
         (person-type (ignore-errors (get-concept-type 'person))))
-    (when person-type
-      (walk-concept-types-down
-       (lambda (node)
-         (let ((label (label node)))
-           (unless (or (eq node person-type)
-                       (lexicon-prop label :gender))
-             (push (list :info
-                         :person-without-gender
-                         (format nil "Person subtype ~A has no :gender ~
-                                      override; pronouns will use ~
-                                      singular-they. Add ~
-                                      (register-lexicon-entry '~(~A~) ~
-                                      :gender :masc/:fem :human-p t) ~
-                                      if the type is inherently gendered."
-                                 label label)
-                         label)
-                   findings))))
-       person-type))
+    (if (null person-type)
+        (push (list :info
+                    :person-check-skipped
+                    (format nil "Concept type PERSON is absent, so the ~
+                                 person-subtype gender check could not run -- ~
+                                 the absence of gender findings below means ~
+                                 'could not look', not 'nothing to report'. ~
+                                 See the :missing-generation-root finding ~
+                                 for PERSON.")
+                    'person)
+              findings)
+        (walk-concept-types-down
+         (lambda (node)
+           (let ((label (label node)))
+             (unless (or (eq node person-type)
+                         (lexicon-prop label :gender))
+               (push (list :info
+                           :person-without-gender
+                           (format nil "Person subtype ~A has no :gender ~
+                                        override; pronouns will use ~
+                                        singular-they. Add ~
+                                        (register-lexicon-entry '~(~A~) ~
+                                        :gender :masc/:fem :human-p t) ~
+                                        if the type is inherently gendered."
+                                   label label)
+                           label)
+                     findings))))
+         person-type))
     (nreverse findings)))
 
 (defun %lint-irregular-verb-not-classified-as-verb ()
@@ -134,7 +150,7 @@
 (defun lexicon-lint ()
   "Run all lexicon/generation lint checks. Returns a list of findings
    of the form (severity check-name message context)."
-  (append (%lint-missing-pos-roots)
+  (append (%lint-missing-generation-roots)
           (%lint-relation-syntax-coverage)
           (%lint-stale-lexicon-overrides)
           (%lint-person-subtypes-without-gender)

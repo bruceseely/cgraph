@@ -128,7 +128,7 @@
                              (:file "query-test")
 
                              (:file "generation-test")
-                             (:file "pos-roots-lint-test")
+                             (:file "generation-roots-lint-test")
                              ))))
 
 

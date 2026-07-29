@@ -53,8 +53,9 @@
 
    These roots are ASSUMED to exist in the catalog. When one is absent, its
    whole POS class silently degrades to :noun (SAFE-SUBTYPE-P swallows the
-   lookup error) -- %LINT-MISSING-POS-ROOTS warns about exactly that. Keep this
-   the single source of truth so the check and the classifier can't drift.")
+   lookup error) -- %LINT-MISSING-GENERATION-ROOTS warns about exactly that.
+   Keep this the single source of truth so the check and the classifier
+   can't drift.")
 
 (defun pos-from-hierarchy (concept-type)
   "Crude POS classification by walking the supertype lattice, per
@@ -65,6 +66,62 @@
     (or (loop for (root . pos) in *pos-hierarchy-roots*
               when (safe-subtype-p label root) return pos)
         :noun)))
+
+(defparameter *generation-hierarchy-roots*
+  (append
+   ;; The POS roots, derived from *POS-HIERARCHY-ROOTS* so the two lists
+   ;; cannot drift: adding a POS root automatically gets it linted.
+   (loop for (root . pos) in *pos-hierarchy-roots*
+         collect (list* root
+                        :severity :warn
+                        :consequence
+                        (format nil "concepts that should be ~(~A~)s are ~
+                                     silently classified :NOUN instead" pos)
+                        :remedy
+                        (format nil "define ~:@(~A~), or give the affected ~
+                                     types explicit ~
+                                     (register-lexicon-entry '<label> :pos ~S) ~
+                                     overrides"
+                                root pos)
+                        (when (member root '(act event))
+                          (list :also
+                                "ACT-OR-EVENT-CONCEPT-P also feeds ~
+                                 FIND-MAIN-PREDICATE, COPULA-REQUIRED-P and ~
+                                 HAVE-CLAUSE-P, so clause structure degrades ~
+                                 too -- a graph that should render as a verbal ~
+                                 clause may come out copular or possessive"))))
+   ;; Roots consulted outside the POS classifier. Same failure shape: the
+   ;; SAFE-SUBTYPE-P call returns NIL and the caller takes its default branch.
+   '((person
+      :severity :warn
+      :consequence "HUMAN-P is never true from the lattice, so people take ~
+                    'it' rather than he/she/they"
+      :remedy "define PERSON, or mark the affected types ~
+               (register-lexicon-entry '<label> :human-p t)")
+     (animate
+      :severity :warn
+      :consequence "ANIMATE-CONCEPT-P is never true from the lattice, so every ~
+                    referent is treated as inanimate for pronoun and POSS choice"
+      :remedy "define ANIMATE, or mark the affected types ~
+               (register-lexicon-entry '<label> :animate-p t)")
+     (situation
+      :severity :info
+      :consequence "CLAUSAL-SITUATION-P is never true, so every clausal ~
+                    complement surfaces as a 'that'-clause and never as an ~
+                    infinitive ('wants that he goes', not 'wants to go')"
+      :remedy "define SITUATION -- there is no per-type override for this one")))
+  "Every concept-type label the generation subsystem consults through
+   SAFE-SUBTYPE-P, paired with what breaks when the catalog omits it.
+
+   Entries are (ROOT &key SEVERITY CONSEQUENCE REMEDY ALSO). CONSEQUENCE,
+   REMEDY and ALSO are FORMAT control strings (so they may use ~ line folds);
+   they are consumed by %LINT-MISSING-GENERATION-ROOTS.
+
+   A user is free to supply any type definitions they like, and none of these
+   roots is required for the lattice, projection, query or the web UI -- they
+   matter only when generating English. Because every call site guards the
+   lookup, an absent root never signals: it silently degrades. That is what
+   this table, and the lint check driven by it, exist to make visible.")
 
 (defun concept-pos (concept)
   "Determine part-of-speech for CONCEPT, honoring lexicon overrides."
