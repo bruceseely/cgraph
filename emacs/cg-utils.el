@@ -266,154 +266,75 @@ and a relation type share the same name."
 
 
 ;;; CGraph customization options
-;;; To add a new option: add a defcustom below and a corresponding entry in cgraph--options.
+;;;
+;;; The sync machinery is system-agnostic and lives in clopt.el, in
+;;; ~/repo/elisp-extensions (on load-path from dot-emacs) rather than here, so
+;;; that other Lisp systems can use it without depending on cgraph.  This file
+;;; only declares cgraph's own options.  To add one, write a single
+;;; clopt-defcustom form below -- the Emacs/CL symbol pairing is registered
+;;; from the form itself, so there is no second list to keep in step.
+;;;
+;;; Nothing here is required by the Lisp side: the options are ordinary
+;;; DEFVARs in initializations.lisp, and cgraph runs unchanged with no Emacs
+;;; and no SLIME.
+
+(require 'clopt)
 
 (defgroup cgraph nil
   "Options for the CGraph conceptual graphs system."
   :group 'tools)
 
-
-(defun cgraph--push-to-cl (cl-var value)
-  "Set CL-VAR to VALUE in the running Common Lisp image, if connected."
-  (when (and (fboundp 'slime-connected-p) (slime-connected-p))
-    (slime-eval `(cl:setf ,cl-var ,value))))
-
-(defun cgraph--sync-docstring (emacs-sym cl-sym)
-  "Fetch the CL docstring for CL-SYM and prepend it to EMACS-SYM's documentation."
-  (let* ((cl-doc (slime-eval `(cl:documentation ',cl-sym 'cl:variable)))
-         (mirrors (format "Mirrors %s in Common Lisp." cl-sym))
-         (full-doc (if (and cl-doc (not (string-empty-p cl-doc)))
-                       (concat cl-doc "\n\n" mirrors)
-                     mirrors)))
-    (put emacs-sym 'variable-documentation full-doc)))
-
-(defun cgraph-read-options-from-cl ()
-  "Sync cgraph option values between Emacs and CL on SLIME connect.
-
-For each option:
-- If the user has explicitly customized it in Emacs (either in-session via
-  Customize or persistently via 'Save for Future Sessions'), the Emacs value
-  is treated as the source of truth and pushed to CL — overriding the CL
-  default and any value set in initializations.lisp.
-- Otherwise CL is the source of truth and its value is read into Emacs.
-
-This lets Customize 'Save for Future Sessions' persist across sessions
-without breaking the initializations.lisp use case for users who prefer
-to set options in CL.
-
-Bails silently if no SLIME connection exists or the connected Lisp does
-not yet have the :conceptual-graphs package loaded — this avoids a
-protocol-corrupting failure when slime-connected-hook fires against a
-fresh SBCL where cgraph hasn't been loaded yet (eg. after ,quit + C-x l)."
-  (interactive)
-  (when (and (fboundp 'slime-connected-p)
-             (slime-connected-p)
-             (slime-eval '(cl:if (cl:find-package "CONCEPTUAL-GRAPHS") t nil)))
-    (dolist (entry cgraph--options)
-      (let* ((emacs-sym (car entry))
-             (cl-sym    (cdr entry))
-             (customized (or (get emacs-sym 'customized-value)
-                             (get emacs-sym 'saved-value))))
-        (cond (customized
-               (cgraph--push-to-cl cl-sym (symbol-value emacs-sym)))
-              (t
-               ;; Read CL value directly so non-boolean options
-               ;; (keywords, etc.) roundtrip. Booleans stay T/NIL.
-               (let ((cl-val (slime-eval cl-sym)))
-                 (set-default emacs-sym cl-val))))
-        (cgraph--sync-docstring emacs-sym cl-sym)))))
-
-(defun cgraph-sync-options-to-cl ()
-  "Push all Emacs cgraph option values to CL, overriding initializations.lisp."
-  (interactive)
-  (dolist (entry cgraph--options)
-    (cgraph--push-to-cl (cdr entry) (symbol-value (car entry)))))
-
-
-;;; Alist of (emacs-sym . cl-sym) — drives sync and docstring updates.
-(defconst cgraph--options
-  '((cgraph-always-format-nodes             . conceptual-graphs::*always-format-nodes*)
-    (cgraph-always-show-node-ref            . conceptual-graphs::*always-show-node-ref*)
-    (cgraph-allow-dynamic-individual-creation . conceptual-graphs::*allow-dynamic-individual-creation*)
-    (cgraph-always-print-ascii-arrows       . conceptual-graphs::*always-print-ascii-arrows*)
-    (cgraph-indent-graph-referents          . conceptual-graphs::*indent-graph-referents*)
-    (cgraph-anaphora-cross-coref            . conceptual-graphs::*anaphora-cross-coref*)
-    (cgraph-run-tests-on-startup            . conceptual-graphs::*run-tests-on-startup*)
-    (cgraph-run-lexicon-lint-on-startup     . conceptual-graphs::*run-lexicon-lint-on-startup*)
-    )
-  "Mapping from cgraph Emacs option symbols to their Common Lisp counterparts.")
-
-(defcustom cgraph-always-format-nodes nil
+(clopt-defcustom cgraph cgraph-always-format-nodes
+    conceptual-graphs::*always-format-nodes* nil
   "Mirrors conceptual-graphs::*always-format-nodes* in Common Lisp."
   :type 'boolean
-  :group 'cgraph
-  :initialize 'custom-initialize-default
-  :set (lambda (sym val)
-         (set-default sym val)
-         (cgraph--push-to-cl 'conceptual-graphs::*always-format-nodes* val)))
+  :group 'cgraph)
 
-(defcustom cgraph-always-show-node-ref nil
+(clopt-defcustom cgraph cgraph-always-show-node-ref
+    conceptual-graphs::*always-show-node-ref* nil
   "Mirrors conceptual-graphs::*always-show-node-ref* in Common Lisp."
   :type 'boolean
-  :group 'cgraph
-  :initialize 'custom-initialize-default
-  :set (lambda (sym val)
-         (set-default sym val)
-         (cgraph--push-to-cl 'conceptual-graphs::*always-show-node-ref* val)))
+  :group 'cgraph)
 
-(defcustom cgraph-allow-dynamic-individual-creation nil
+(clopt-defcustom cgraph cgraph-allow-dynamic-individual-creation
+    conceptual-graphs::*allow-dynamic-individual-creation* nil
   "Mirrors conceptual-graphs::*allow-dynamic-individual-creation* in Common Lisp."
   :type 'boolean
-  :group 'cgraph
-  :initialize 'custom-initialize-default
-  :set (lambda (sym val)
-         (set-default sym val)
-         (cgraph--push-to-cl 'conceptual-graphs::*allow-dynamic-individual-creation* val)))
+  :group 'cgraph)
 
-(defcustom cgraph-always-print-ascii-arrows nil
+(clopt-defcustom cgraph cgraph-always-print-ascii-arrows
+    conceptual-graphs::*always-print-ascii-arrows* nil
   "Mirrors conceptual-graphs::*always-print-ascii-arrows* in Common Lisp."
   :type 'boolean
-  :group 'cgraph
-  :initialize 'custom-initialize-default
-  :set (lambda (sym val)
-         (set-default sym val)
-         (cgraph--push-to-cl 'conceptual-graphs::*always-print-ascii-arrows* val)))
+  :group 'cgraph)
 
-(defcustom cgraph-indent-graph-referents nil
+(clopt-defcustom cgraph cgraph-indent-graph-referents
+    conceptual-graphs::*indent-graph-referents* nil
   "Mirrors conceptual-graphs::*indent-graph-referents* in Common Lisp."
   :type 'boolean
-  :group 'cgraph
-  :initialize 'custom-initialize-default
-  :set (lambda (sym val)
-         (set-default sym val)
-         (cgraph--push-to-cl 'conceptual-graphs::*indent-graph-referents* val)))
+  :group 'cgraph)
 
-(defcustom cgraph-anaphora-cross-coref nil
+(clopt-defcustom cgraph cgraph-anaphora-cross-coref
+    conceptual-graphs::*anaphora-cross-coref* nil
   "Mirrors conceptual-graphs::*anaphora-cross-coref* in Common Lisp.
 When non-nil, generation treats coref'd concepts as the same referent
-for pronoun selection — a second mention becomes 'he' instead of
+for pronoun selection - a second mention becomes 'he' instead of
 repeating the proper noun. Off by default to avoid pronoun ambiguity
 in nested mental-attitude contexts."
   :type 'boolean
-  :group 'cgraph
-  :initialize 'custom-initialize-default
-  :set (lambda (sym val)
-         (set-default sym val)
-         (cgraph--push-to-cl 'conceptual-graphs::*anaphora-cross-coref* val)))
+  :group 'cgraph)
 
-(defcustom cgraph-run-tests-on-startup t
+(clopt-defcustom cgraph cgraph-run-tests-on-startup
+    conceptual-graphs::*run-tests-on-startup* t
   "Mirrors conceptual-graphs::*run-tests-on-startup* in Common Lisp.
 When non-nil, start-cgraph runs the test suite at startup. Useful
 while making modifications; disable during regular use to skip the
 test report."
   :type 'boolean
-  :group 'cgraph
-  :initialize 'custom-initialize-default
-  :set (lambda (sym val)
-         (set-default sym val)
-         (cgraph--push-to-cl 'conceptual-graphs::*run-tests-on-startup* val)))
+  :group 'cgraph)
 
-(defcustom cgraph-run-lexicon-lint-on-startup :all
+(clopt-defcustom cgraph cgraph-run-lexicon-lint-on-startup
+    conceptual-graphs::*run-lexicon-lint-on-startup* :all
   "Mirrors conceptual-graphs::*run-lexicon-lint-on-startup* in Common Lisp.
 Controls whether and how report-lexicon-lint runs at startup.
   Off                  - don't run.
@@ -427,11 +348,22 @@ modifying types or relations."
                  (const :tag "Errors only"           :errors-only)
                  (const :tag "Errors and warnings"   :errors-warnings)
                  (const :tag "All"                   :all))
-  :group 'cgraph
-  :initialize 'custom-initialize-default
-  :set (lambda (sym val)
-         (set-default sym val)
-         (cgraph--push-to-cl 'conceptual-graphs::*run-lexicon-lint-on-startup* val)))
+  :group 'cgraph)
+
+
+;;; Kept as named entry points: initialize.lisp calls
+;;; (cgraph-read-options-from-cl) through eval-in-emacs, and both are handy
+;;; interactively.  They scope the generic functions to cgraph's options.
+
+(defun cgraph-read-options-from-cl ()
+  "Reconcile cgraph's options with the connected Lisp.  See `clopt-read-from-cl'."
+  (interactive)
+  (clopt-read-from-cl 'cgraph))
+
+(defun cgraph-sync-options-to-cl ()
+  "Push all Emacs cgraph option values to CL, overriding initializations.lisp."
+  (interactive)
+  (clopt-sync-to-cl 'cgraph))
 
 
 (add-hook 'slime-connected-hook #'cgraph-read-options-from-cl)

@@ -1,4 +1,10 @@
 
+;;; Remove the global-set-key and use the slime-mode-map bindings
+
+;;; add this
+;;; (global-set-key [(super e)] 'slime-eval-last-expression-in-repl)
+;;; slime-eval-last-expression-in was c-c c-j
+;;; s-e was isearch-yank-kill
 
 (initialize-context *context*)
 (graphs *context*)
@@ -43,6 +49,8 @@
 
 (graphs *context*)
 (initialize-context *context*)
+
+
 
 (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" *context*)
 (query "[PERSON: *x]→(attr)->[ATTRIBUTE: *Y]" *context*)

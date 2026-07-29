@@ -25,12 +25,11 @@ generation. This is the one hard rule.
 **Required:**
 
 - `*relation-syntax-table*` (`syntax-roles.lisp`)
-  Add `(label role &optional preposition)`. Roles: `:subject :dobj :iobj :pp
-  :adj :adv :poss :nmod :pred-cmp`.
+  Add `(label role &optional preposition)`. 
+  Roles: `:subject :dobj :iobj :pp :adj :adv :poss :nmod :pred-cmp`.
 
-  **Pick the role by asking what role the relation's argument plays in
-  English:**
-
+  **Pick the role by asking what role the relation's argument plays in English:**
+  
   | Role         | Example use                          | Surface form                       |
   |--------------|--------------------------------------|------------------------------------|
   | `:subject`   | AGNT, EXPR — who does the action     | "**Bob** eats a pie"               |
@@ -40,14 +39,14 @@ generation. This is the one hard rule.
   | `:adj`       | ATTR, CHRC — descriptive property    | "the **red** pie"                  |
   | `:adv`       | MANR — manner of action              | "Bob eats a pie **quickly**"       |
   | `:poss`      | POSS — ownership                     | "**Bob's** pie" / "Bob has a pie"  |
-
+  
   Examples:
   ```lisp
-  (cause :pp "because of")        ; [EAT]->(cause)->[HUNGER] => "...because of hunger"
-  (orig  :pp "from")              ; [LETTER]->(orig)->[BOB] => "...from Bob"
-  (recip :iobj "to")              ; [GIFT]->(recip)->[MARY] => "...to Mary"
+  (cause :pp "because of")  ; [EAT]->(cause)->[HUNGER] => "...because of hunger"
+  (orig  :pp "from")        ; [LETTER]->(orig)->[BOB] => "...from Bob"
+  (recip :iobj "to")        ; [GIFT]->(recip)->[MARY] => "...to Mary"
   ```
-
+  
   If you don't know which role, render a sample graph with
   `(graph-to-text g)` and see what's missing — the symptom usually picks the
   role for you.
@@ -55,13 +54,12 @@ generation. This is the one hard rule.
 **Recommended (most spatial / temporal / partitive relations):**
 
 - `*pp-relation-priority*` (`syntax-roles.lisp`)
-  Position in this list controls ordering of PPs within a clause. Earlier =
-  emitted first.
-
+  Position in this list controls ordering of PPs within a clause. Earlier = emitted first.
+  
   Example: `loc` comes before `time` so we generate "Bob eats **in the
   kitchen at noon**" rather than "Bob eats at noon in the kitchen." If your
   new relation is spatial, put it near `loc`; if temporal, near `time`.
-
+  
 - `*np-pp-prepositions*` (`syntax-roles.lisp`)
   Only needed when the relation can attach to an NP head (post-modifier).
   Source-side and dest-side prepositions are usually different.
@@ -192,4 +190,4 @@ any — would have prevented it:
 | "mannerly" instead of "somehow"                  | `:adv-form` on the type                 |
 
 If none of these apply, the bug is in dispatch (`graph-to-text` in
-`generate.lisp`) or the realizer, not a table.
+`generate.lisp`) or the realizer, not a table.≠
