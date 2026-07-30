@@ -474,8 +474,32 @@
           (%lint-duplicate-string-table-keys)
           (%lint-redundant-irregular-rows)))
 
+(defparameter *lint-severities* '(:error :warn :info)
+  "Lint severities, most severe first. Position in this list is the rank.")
+
 (defun %severity-rank (sev)
-  (case sev (:error 0) (:warn 1) (:info 2) (t 3)))
+  "Rank of SEV within *LINT-SEVERITIES*, signalling on anything else.
+
+   Strict on purpose. This used to fall through to a (t 3) catch-all, which
+   meant a caller passing an unrecognized keyword got a filter that silently
+   matched everything -- the report looked like it had run and filtered, and
+   had not. Easy to hit, because the *RUN-LEXICON-LINT-ON-STARTUP* option
+   names read like severities but are a different vocabulary."
+  (or (position sev *lint-severities*)
+      (error "~S is not a lint severity. Expected one of ~{~S~^, ~}.~%~
+              (The *RUN-LEXICON-LINT-ON-STARTUP* option names -- :ERRORS-ONLY, ~
+              :ERRORS-WARNINGS, :ALL -- are a different vocabulary; ~
+              INITIALIZE-CGRAPH maps those to these.)"
+             sev *lint-severities*)))
+
+(defun %finding-rank (finding)
+  "Sort and filter key for a finding. Lenient where %SEVERITY-RANK is strict,
+   and in the direction that keeps the fault visible: finding severities come
+   from user-editable tables, so a typo there should not take down the whole
+   report, and should not quietly hide the finding either. An unrecognized
+   severity ranks above :ERROR -- it sorts first and survives every filter,
+   printing under a header naming the bogus keyword."
+  (or (position (first finding) *lint-severities*) -1))
 
 (defun %cheat-sheet-pathname ()
   "Absolute path to the generation-tables cheat sheet shipped with cgraph,
@@ -487,8 +511,11 @@
 
 (defun report-lexicon-lint (&key (stream *standard-output*) (min-severity :info))
   "Run lexicon-lint and pretty-print findings grouped by severity.
-   MIN-SEVERITY filters by level: :INFO (default) shows all findings;
-   :WARN shows errors and warnings; :ERROR shows only errors.
+   MIN-SEVERITY filters by level and must be one of :ERROR, :WARN or :INFO --
+   anything else signals rather than quietly disabling the filter. :INFO
+   (the default) shows all findings; :WARN shows errors and warnings; :ERROR
+   shows only errors. Note these are not the *RUN-LEXICON-LINT-ON-STARTUP*
+   option names; INITIALIZE-CGRAPH translates those into these.
    When the filter hides every finding, the report stays silent (no
    'no findings' header), so it can be used in startup contexts where
    silence-means-OK is desired. Without a filter (:INFO), an empty
@@ -496,11 +523,12 @@
    When findings exist, appends a clickable file:// link to the cheat
    sheet. Returns the raw (unfiltered) findings list."
   (let* ((all-findings (lexicon-lint))
+         ;; Validate the caller's argument before doing any work, so a bad
+         ;; MIN-SEVERITY fails at the call rather than half-way through a report.
          (max-rank (%severity-rank min-severity))
-         (findings (remove-if (lambda (f) (> (%severity-rank (first f)) max-rank))
+         (findings (remove-if (lambda (f) (> (%finding-rank f) max-rank))
                               all-findings))
-         (sorted (stable-sort (copy-list findings) #'<
-                              :key (lambda (f) (%severity-rank (first f)))))
+         (sorted (stable-sort (copy-list findings) #'< :key #'%finding-rank))
          (errors (count :error findings :key #'first))
          (warns  (count :warn  findings :key #'first))
          (infos  (count :info  findings :key #'first)))
