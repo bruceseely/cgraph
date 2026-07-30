@@ -298,10 +298,17 @@ It catches:
   clean bill of health in precisely the case where pronouns are most broken
 
 Startup output is filtered by `*run-lexicon-lint-on-startup*`; the default
-`:all` shows everything, `:errors-warnings` hides the `:info` tier (including
-`SITUATION` and the skipped-check note), and `:errors-only` shows just
-unmapped relations. If you are debugging an ontology, run `(report-lexicon-lint)`
-by hand — it always reports at `:info`.
+`:all` shows everything, `:errors-warnings` hides the `:info` tier (stale
+overrides and relation entries, redundant rows, `SITUATION`, the skipped-check
+note), and `:errors-only` shows just what actually loses output. If you are
+debugging an ontology, run `(report-lexicon-lint)` by hand — it always reports
+at `:info`.
+
+The general rule behind the tiers: **`:error` means output is being lost,
+`:warn` means something is probably a mistake, `:info` means dead weight that
+can never fire.** Entries naming things your catalog doesn't define are always
+`:info` — they're the expected state for a catalog smaller than the shipped
+vocabulary, and at `:warn` they buried everything else.
 
 ### If you're bringing your own ontology
 
@@ -329,7 +336,8 @@ shipped `register-lexicon-entry` calls at the bottom of `lexicon.lisp` (mass
 nouns, particle verbs, communication verbs, `BELIEF`→"believe", …) are keyed
 on label *strings* and register harmlessly whether or not the type is defined;
 the ones that don't match your catalog surface as `:stale-lexicon-override`
-warnings, which are informational, not breakage.
+notes at `:info` — dead weight that can never fire, not breakage, and usually
+the normal state of affairs for a catalog smaller than the shipped vocabulary.
 
 ---
 

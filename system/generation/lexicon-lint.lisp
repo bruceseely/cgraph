@@ -225,12 +225,19 @@
 
 (defun %lint-stale-lexicon-overrides ()
   "Lexicon override keys that don't correspond to any concept type in
-   the current catalog — usually a type was renamed or removed."
+   the current catalog — usually a type was renamed or removed.
+
+   :INFO, matching :STALE-RELATION-ENTRY on the relation side, and for the
+   same reason: an override for a type you never defined is dead weight that
+   can never fire, whereas the reverse direction loses output. The shipped
+   registrations at the bottom of lexicon.lisp cover far more vocabulary than
+   most catalogs define, so these are the normal case rather than a defect —
+   at :WARN they buried everything else in the report."
   (let ((findings nil))
     (loop for key being the hash-keys of *lexicon-overrides*
           for sym = (ignore-errors (intern key :conceptual-graphs))
           unless (and sym (ignore-errors (get-concept-type sym)))
-            do (push (list :warn
+            do (push (list :info
                            :stale-lexicon-override
                            (format nil "Lexicon override registered for ~A, ~
                                         but no concept type with that label ~
