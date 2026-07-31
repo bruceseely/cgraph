@@ -10,7 +10,7 @@
 (:label expr  :source-types state             :dest-type animate         :desc "experiencer - links [STATE] to [ANIMATE], where animate is experiencing the state")
 (:label from  :source-types entity            :dest-type entity          :desc "from - provides an ordering between two concepts, indicates an initial concept")
 (:label goal  :source-types state             :dest-type situation       :desc "goal - the situation a mental state is directed toward")
-(:label has-part  :source-types individual    :dest-type individual      :desc "life stage")
+(:label has-part  :source-types individual    :dest-type individual      :desc "has part - links [INDIVIDUAL] to another [INDIVIDUAL] that is one of its parts")
 (:label hgt   :source-types physical          :dest-type distance        :desc "height - links [PHYSICAL] to [DISTANCE], where distance is the height of the physical object")
 (:label init  :source-types act               :dest-type animate)
 (:label inst  :source-types event             :dest-type entity          :desc "instrument - links [ENTITY] to [EVENT], where entity is causally involved in the act")

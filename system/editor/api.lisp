@@ -166,6 +166,87 @@
       (editor-operation-error (e) (json-error e))
       (error (e) (json-error e)))))
 
+;;; --- Contextual type lists -------------------------------------------------
+;;; Filtering is computed from the lattice, not guessed. Which of the three
+;;; states we are in depends on what the editor pane holds.
+
+(defun relation-long-name (relation-type)
+  "The relation's long name, which by convention leads its :DESC -- \"agent -
+   links [ACT] to...\" or just \"characteristic\". Empty string when absent."
+  (let* ((d (or (desc relation-type) ""))
+         (dash (search " -" d)))
+    (string-trim " " (if dash (subseq d 0 dash) d))))
+
+(defun json-relation-choices (entries)
+  "ENTRIES is a list of (RELATION-TYPE . DIRECTION). A relation offered in both
+   directions is marked, because that is exactly when the editor pane's arrows
+   become clickable."
+  (let ((both (loop for (rel . nil) in entries
+                    when (> (count (label rel) entries
+                                   :key (lambda (e) (label (car e))))
+                            1)
+                      collect (label rel))))
+    (with-output-to-string (out)
+      (write-char #\[ out)
+      (loop for ((rel . direction) . rest) on entries do
+        (format out "{\"label\":\"~(~a~)\",\"name\":\"~a\",\"direction\":\"~(~a~)\",\"both\":~:[false~;true~]}"
+                (json-escape (string (label rel)))
+                (json-escape (relation-long-name rel))
+                direction
+                (member (label rel) both))
+        (when rest (write-char #\, out)))
+      (write-char #\] out))))
+
+(defun json-concept-choices (concept-types)
+  (json-string-array (mapcar (lambda (c) (string-downcase (string (label c))))
+                             concept-types)))
+
+(defun all-concept-type-objects ()
+  (loop for k being the hash-keys of *concept-type-catalog*
+        using (hash-value v)
+        unless (bottom-concept-type-p v) collect v))
+
+;;; GET /api/editor/choices?session=N[&focus=REF][&relation=LABEL]
+;;;     [&direction=forward|reverse][&target=REF]
+;;;
+;;; focus + target    -> relations legal between them, both directions labelled
+;;; focus + relation  -> concept types legal at the far end
+;;; focus only        -> every relation the focus could hang off, either way
+;;; nothing           -> everything
+(hunchentoot:define-easy-handler (handle-editor-choices :uri "/api/editor/choices")
+    (session focus relation direction target)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (with-editor-session (s session)
+    (handler-case
+        (with-cg-thread-bindings
+          (let* ((focus-node (when (and focus (plusp (length focus)))
+                               (editor-concept s focus)))
+                 (target-node (when (and target (plusp (length target)))
+                                (editor-concept s target)))
+                 (dir (if (string-equal (or direction "forward") "reverse")
+                          :reverse :forward))
+                 (relations
+                   (cond ((and focus-node target-node)
+                          (rel-uses-between (label (concept-type focus-node))
+                                            (label (concept-type target-node))))
+                         (focus-node
+                          (rel-uses-for (label (concept-type focus-node))))
+                         (t nil)))
+                 (concepts
+                   (cond ((and focus-node relation (plusp (length relation))
+                               (not target-node))
+                          (rel-far-end-types
+                           (intern (string-upcase relation) :conceptual-graphs)
+                           dir))
+                         (t (all-concept-type-objects)))))
+            (format nil "{\"ok\":true,\"concepts\":~a,\"relations\":~a}"
+                    (json-concept-choices
+                     (sort (copy-list concepts) #'alpha-lessp :key #'label))
+                    (json-relation-choices relations))))
+      (editor-operation-error (e) (json-error e))
+      (error (e) (json-error e)))))
+
 ;;; POST /api/editor/finish?session=N&action=commit|cancel
 (hunchentoot:define-easy-handler (handle-editor-finish :uri "/api/editor/finish")
     (session action)

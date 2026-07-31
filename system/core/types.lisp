@@ -1161,6 +1161,79 @@
                  (mapcar #'(lambda (z) (string (label z))) (rel-use source dest))))))
 
 
+;;; --- Direction-labelled lattice queries -------------------------------------
+;;;
+;;; REL-USE answers "which relations run from this type to that one". The graph
+;;; editor needs the same question asked from one concept's point of view, in
+;;; both directions at once, because its editor pane has a focus concept and an
+;;; arc that may point either way. DIRECTION is always relative to the FOCUS:
+;;;
+;;;   :FORWARD   focus is the relation's source     [focus]->(rel)->[other]
+;;;   :REVERSE   focus is the relation's dest       [focus]<-(rel)<-[other]
+;;;
+;;; A relation legal both ways appears twice, once per direction -- which is
+;;; exactly the symmetric case the editor lets you flip between.
+
+(defun %source-type-list (relation-type)
+  "SOURCE-TYPES normally holds a list, but its initform is a bare concept-type,
+   so accept either."
+  (let ((types (source-types relation-type)))
+    (if (listp types) types (list types))))
+
+(defun %type-may-be-source-p (concept-type relation-type)
+  (and (find concept-type (%source-type-list relation-type) :test #'subtype-p) t))
+
+(defun %type-may-be-dest-p (concept-type relation-type)
+  (and (subtype-p concept-type (dest-type relation-type)) t))
+
+(defun rel-uses-for (concept)
+  "Relation types CONCEPT's type can take part in, from CONCEPT's point of
+   view. Returns a list of (RELATION-TYPE . DIRECTION).
+
+   Used when only the focus concept is populated: it is every relation the
+   focus could hang off, either way round."
+  (let ((ctype (get-concept-type concept))
+        (collected (list)))
+    (dolist (label (all-relation-types))
+      (let ((rel (ignore-errors (get-relation-type label))))
+        (when rel
+          (when (%type-may-be-source-p ctype rel) (push (cons rel :forward) collected))
+          (when (%type-may-be-dest-p ctype rel)   (push (cons rel :reverse) collected)))))
+    (sort collected #'alpha-lessp :key (lambda (e) (label (car e))))))
+
+(defun rel-uses-between (focus other)
+  "Relation types consistent with FOCUS and OTHER in EITHER direction, as a
+   list of (RELATION-TYPE . DIRECTION) relative to FOCUS.
+
+   Used when both concepts are populated. This is REL-USE called both ways
+   round and labelled, so the caller can tell a relation that is legal only
+   one way from one that offers a genuine choice."
+  (let ((collected (list)))
+    (dolist (rel (rel-use focus other)) (push (cons rel :forward) collected))
+    (dolist (rel (rel-use other focus)) (push (cons rel :reverse) collected))
+    (sort collected #'alpha-lessp :key (lambda (e) (label (car e))))))
+
+(defun rel-far-end-types (relation direction)
+  "Concept types legal at the far end of RELATION, given the focus sits at
+   DIRECTION. :FORWARD means the focus is the source, so the far end is the
+   destination; :REVERSE means the far end is a source.
+
+   Used when the focus and a relation are populated and the concept list needs
+   narrowing to what could legally go on the other end. Excludes bottom, which
+   is a subtype of everything and never a useful choice."
+  (let* ((rel (get-relation-type relation))
+         (roots (ecase direction
+                  (:forward (list (dest-type rel)))
+                  (:reverse (%source-type-list rel)))))
+    (sort (remove-duplicates
+           (loop for root in roots
+                 for node = (ignore-errors (get-concept-type root))
+                 when node
+                   append (remove-if #'bottom-concept-type-p (subtypes node)))
+           :test #'eq)
+          #'alpha-lessp :key #'label)))
+
+
 
 
 

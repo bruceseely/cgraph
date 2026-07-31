@@ -6,6 +6,7 @@
   <title>CGraph Editor</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: Helvetica, Arial, sans-serif;
@@ -16,6 +17,8 @@
       height: 100vh;
       overflow: hidden;
     }
+
+    /* ── top bar ── */
     #bar {
       display: flex;
       align-items: center;
@@ -26,11 +29,13 @@
       border-bottom: 1px solid #ddd;
       flex-shrink: 0;
     }
-    #bar .label { color: #888; }
+    #bar .title { font-weight: bold; color: #555; }
+    #bar .muted { color: #999; font-size: 12px; }
     #bar .spacer { margin-left: auto; }
+
     button {
       font-size: 11px;
-      padding: 0.18rem 0.55rem;
+      padding: 0.2rem 0.6rem;
       border: 1px solid #ccc;
       border-radius: 3px;
       background: #f7f7f7;
@@ -38,64 +43,217 @@
       cursor: pointer;
     }
     button:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
-    button:disabled { color: #bbb; cursor: default; }
+    button:disabled { color: #ccc; cursor: default; }
     #update { border-color: #a9bde8; background: #e0e9fb; color: #33507a; }
 
-    main { flex: 1 1 auto; overflow: auto; padding: 0.75rem; }
+    /* ── frame: left stack | right type columns ── */
+    #frame { display: flex; flex: 1 1 auto; min-height: 0; }
+    #left  { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+    #right { display: flex; width: 24rem; flex-shrink: 0; border-left: 1px solid #ddd; }
 
-    /* The skeleton's stand-in for the graph pane. Monospace because linear
-       notation is column-aligned by the formatter. */
-    pre#graph {
-      margin: 0 0 0.75rem 0;
-      padding: 0.6rem;
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 3px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 13px;
-      line-height: 1.45;
-      white-space: pre;
-      overflow-x: auto;
-      min-height: 4rem;
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-bottom: 1px solid #ddd;
     }
-    .skeleton-note {
+    .pane-head {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
       color: #999;
-      font-size: 12px;
-      margin: 0 0 0.5rem 0;
+      padding: 0.3rem 0.6rem;
+      background: #fafafa;
+      border-bottom: 1px solid #eee;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
     }
-    #scratch {
-      width: 100%;
+    .pane-head .spacer { margin-left: auto; }
+    .pane-body { overflow: auto; padding: 0.5rem 0.6rem; background: #fff; }
+
+    /* ── graph pane ── */
+    #graph-pane { flex: 1 1 45%; }
+    #graph {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 13px;
-      padding: 0.4rem;
-      border: 1px solid #ccc;
-      border-radius: 3px;
+      line-height: 1.5;
+      white-space: pre;
+      margin: 0;
     }
-    #status { font-size: 12px; color: #aaa; padding: 0 0.75rem 0.6rem; }
+    /* concepts are click-selectable; relations are not — a relation instance
+       can't be shared, so a click on one can't mean what a concept click does */
+    .cg-concept {
+      cursor: pointer;
+      border-radius: 2px;
+      padding: 0 1px;
+    }
+    .cg-concept:hover { background: #e0e9fb; }
+    .cg-concept.is-focus  { background: #4a90d9; color: #fff; }
+    .cg-concept.is-target { background: #cde3c1; }
+    .cg-empty { color: #bbb; font-style: italic; }
+
+    /* ── editor pane ── */
+    #editor-pane { flex: 0 0 auto; }
+    #editor-body {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+    }
+    /* three undelineated fields: no boxes, just slots */
+    .slot {
+      min-width: 6rem;
+      padding: 0.2rem 0.35rem;
+      border: 1px dashed transparent;
+      border-radius: 3px;
+      cursor: pointer;
+      color: #333;
+      white-space: nowrap;
+    }
+    .slot.empty { color: #bbb; border-color: #ddd; }
+    .slot:hover { background: #f0f4fb; }
+    .slot.armed { background: #4a90d9; color: #fff; }
+    /* the two click zones of a concept slot */
+    .slot .zone-type { border-bottom: 1px dotted #aaa; }
+    .slot .zone-ref  { color: #777; }
+    .slot .zone-ref.disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* arrows show the arc's direction, and ARE the reverse control —
+       clickable only when both directions are legal, so a static pair
+       means there is no choice to make */
+    .arrow {
+      color: #999;
+      user-select: none;
+      padding: 0 0.1rem;
+    }
+    .arrow.flippable {
+      color: #4a90d9;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .arrow.flippable:hover { background: #e0e9fb; border-radius: 2px; }
+
+    #editor-actions { margin-left: auto; display: flex; gap: 0.3rem; }
+
+    /* ── display pane ── */
+    #display-pane { flex: 1 1 30%; }
+    #display-body { padding: 0.3rem 0.6rem; }
+    .arc-line {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      padding: 0.1rem 0;
+    }
+    .arc-line .text { flex: 1 1 auto; }
+    .arc-line .x {
+      color: #c0392b;
+      cursor: pointer;
+      opacity: 0.55;
+      font-size: 12px;
+      padding: 0 0.3rem;
+    }
+    .arc-line .x:hover { opacity: 1; }
+    .arc-line:hover { background: #fafafa; }
+
+    /* ── right: two type columns ── */
+    .type-col {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 50%;
+      min-width: 0;
+      border-right: 1px solid #eee;
+    }
+    .type-col:last-child { border-right: none; }
+    .type-list { overflow: auto; flex: 1 1 auto; background: #fff; }
+    .type-item {
+      padding: 0.15rem 0.5rem;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .type-item:hover { background: #eef4ff; }
+    .type-item .dir { color: #4a90d9; font-weight: bold; }
+    .type-item .long { color: #aaa; font-size: 11px; }
+    .type-empty { color: #bbb; font-style: italic; padding: 0.4rem 0.5rem; font-size: 12px; }
+
+    #status { font-size: 12px; color: #aaa; padding: 0.35rem 0.75rem; flex-shrink: 0;
+              border-top: 1px solid #eee; background: #fff; white-space: pre-wrap; }
     #status.error { color: #c0392b; }
     #status.done  { color: #2d7a4f; }
   </style>
 </head>
 <body>
   <div id="bar">
-    <span class="label">CGraph Editor</span>
-    <span class="label" id="session-label"></span>
+    <span class="title">CGraph Editor</span>
+    <span class="muted" id="session-label"></span>
     <span class="spacer"></span>
-    <button id="add">Apply</button>
     <button id="update">UPDATE</button>
     <button id="cancel">Cancel</button>
   </div>
 
-  <main>
-    <p class="skeleton-note">
-      Skeleton: the box below stands in for the graph pane, and the editable
-      field for the whole editor. Edit the notation and press Apply. The panes,
-      type columns and click model come next — see notes/graph-editor.md.
-    </p>
-    <pre id="graph"></pre>
-    <textarea id="scratch" rows="5"
-              placeholder="linear notation, e.g.  [EAT]-&gt;(loc)-&gt;[KITCHEN]."></textarea>
-  </main>
+  <div id="frame">
+    <div id="left">
+
+      <div class="pane" id="graph-pane">
+        <div class="pane-head">
+          Graph
+          <span class="spacer"></span>
+          <span class="muted" id="graph-hint">click a concept to focus it</span>
+        </div>
+        <div class="pane-body"><pre id="graph"></pre></div>
+      </div>
+
+      <div class="pane" id="editor-pane">
+        <div class="pane-head">Editor</div>
+        <div class="pane-body">
+          <div id="editor-body">
+            <span class="slot empty" id="slot-focus"></span>
+            <span class="arrow" id="arrow-left"></span>
+            <span class="slot empty" id="slot-relation"></span>
+            <span class="arrow" id="arrow-right"></span>
+            <span class="slot empty" id="slot-target"></span>
+            <span id="editor-actions">
+              <button id="add">Add</button>
+              <button id="clear">Clear</button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane" id="display-pane">
+        <div class="pane-head">
+          Focus
+          <span class="spacer"></span>
+          <span class="muted" id="focus-label"></span>
+        </div>
+        <div class="pane-body" id="display-body"></div>
+      </div>
+
+    </div>
+
+    <!-- Relations first, then concepts: after the focus is set you pick a
+         relation and then a target concept, so the columns run in the order
+         the editor pane fills — and left-to-right matches
+         [focus] →(relation)→ [concept]. -->
+    <div id="right">
+      <div class="type-col">
+        <div class="pane-head">Relation types</div>
+        <div class="type-list" id="relation-list"></div>
+      </div>
+      <div class="type-col">
+        <div class="pane-head">Concept types</div>
+        <div class="type-list" id="concept-list"></div>
+      </div>
+    </div>
+  </div>
 
   <div id="status"></div>
 
