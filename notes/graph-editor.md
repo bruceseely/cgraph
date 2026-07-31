@@ -159,17 +159,24 @@ user picks members; the editor decides where the commas go.
 
 ## Remove
 
-Each display-pane line has an ✕. Clicking it removes the relation, then
-continues **away from the focus**, deleting nodes until it reaches a concept
-with more than one relation still attached.
+Each display-pane line has an ✕. Clicking it removes the relation, then drops
+whatever that leaves unreachable from the focus.
+
+Implemented as reachability rather than as an outward walk testing "does this
+concept still have more than one relation". Disconnect the arc, then keep what
+is still reachable from the focus — the same rule stated directly, and it gets
+three cases right without special-casing any of them:
+
+- **Coreferent nodes survive**, because the other path still reaches them.
+  Deleting one path can never silently eat a node another path depends on.
+- **A dangling branch vanishes entirely**, not just its first node.
+- **Cycles terminate**, because reachability visits each node once. The
+  `mark` / `unmark` facility turned out not to be needed.
+
+Two things that hold regardless:
 
 - **Direction of travel has nothing to do with arc direction.** The focus is
   the root; the cascade runs outward from it.
-- **Coreferent nodes stop the cascade automatically** — a shared node has more
-  than one relation by definition. Deleting one path can never silently eat a
-  node another path depends on.
-- **Cycles** are handled with the existing `mark` / `unmark` facility
-  (`node.lisp:15,26,40`).
 - **The focus survives** even when its last arc goes; `[DOG]` is a valid graph.
   To remove the focus itself, focus on a neighbour first.
 
@@ -193,6 +200,53 @@ missed: the ✕ button already undoes the last Add, since the thing you just
 added is a leaf arc; and because every edit is a discrete operation against
 refs, retaining the operation list per level would give real undo later for
 almost nothing.
+
+### A closed tab is not a decision
+
+Cancel is an explicit act — it has a button. A tab closes because of a stray
+⌘W, a crash, or an ordinary reload, so treating that as "discard my work" reads
+an ambiguous event harshly and makes a refresh destructive.
+
+So a disconnect leaves the session **resumable**: it keeps its working graph,
+stays `:open`, and the same URL puts you back in it. Connection state is
+tracked separately from lifecycle for exactly this reason.
+
+The hard part isn't the policy, it's that a blocked REPL looks *identical*
+whether you are mid-edit or the browser has been gone for an hour. So the
+disconnect is announced:
+
+```
+;; editor session 1: browser disconnected; the call is still waiting.
+;;   reopen:  http://localhost:8060/editor?session=1
+;;   abandon: (cg::cancel-editor-session 1)
+```
+
+Reconnects are announced too, which is what lets a reload read as a pair rather
+than an alarm — and avoids needing a timer to tell reload from close. The first
+load is silent, since the URL was already printed.
+
+Announcing at all requires capturing the caller's `*standard-output*` when the
+session is created: a Hunchentoot worker thread inherits none of the caller's
+bindings, so there is otherwise no way to reach the REPL.
+
+Detection is the page's `pagehide` beacon (`sendBeacon`, since a request
+started while unloading is liable to be cancelled). It is **best-effort** — a
+browser crash or force-quit sends nothing, and then the REPL sits blocked with
+no explanation. The guaranteed recovery is `C-c C-c`, which unwinds the wait
+and lets `EDIT-CGRAPH`'s `UNWIND-PROTECT` clean up.
+
+A deliberately abandoned session goes through `CANCEL-EDITOR-SESSION`, which
+must be called from a source buffer rather than the blocked REPL — SLIME runs
+those in a separate worker thread. `(EDITOR-SESSIONS)` shows what is adrift:
+
+```
+#<EDITOR-SESSION 1 :open :disconnected 12m [EAT]→(agnt)→[DOG].>
+```
+
+There is no heartbeat and no reaper thread. For a single-user loopback tool
+that is more machinery than the problem justifies, and browsers throttle timers
+in background tabs, so a polling reaper would call a perfectly live session
+dead. `*EDITOR-OPEN-TIMEOUT*` remains available as a blunt backstop.
 
 ### node-refs are session handles
 
@@ -276,8 +330,6 @@ submission; returning a session handle to poll would be much worse to use.
 
 - **The non-graph referent editor** — not yet designed. Needs to cover
   individuals, sets, quantifiers, measures, with pickers rather than syntax.
-- **Session lifetime** — what happens to the working graph when a tab is closed
-  without committing.
 - **Formatter round-trip** — `format-cgraph` is breadth-first, so parse→format
   need not reproduce the input text. Opening a canonical graph and saving it
   *unchanged* could still rewrite the line in `concept-types.lisp`. Argues for

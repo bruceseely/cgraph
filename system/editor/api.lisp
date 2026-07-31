@@ -26,12 +26,18 @@
   (format nil "{\"ok\":false,\"error\":\"~a\"}" (json-escape (princ-to-string message))))
 
 (defmacro with-editor-session ((var id) &body body)
-  "Bind VAR to the session named by ID, or return a JSON error."
+  "Bind VAR to the session named by ID, or return a JSON error.
+
+   Touching the session here is what detects a browser coming back: any request
+   at all means the page is alive, so reopening a disconnected session's URL
+   reconnects it without a dedicated handshake. The disconnect endpoint
+   deliberately does NOT use this macro, for the obvious reason."
   `(let ((,var (find-editor-session ,id)))
      (cond ((null ,var) (json-error "no such editor session"))
            ((not (eq (session-state ,var) :open))
             (json-error "editor session is already finished"))
-           (t ,@body))))
+           (t (touch-editor-session ,var)
+              ,@body))))
 
 ;;; GET /editor?session=N — the editor page itself.
 (hunchentoot:define-easy-handler (handle-editor :uri "/editor") (session)
@@ -246,6 +252,23 @@
                     (json-relation-choices relations))))
       (editor-operation-error (e) (json-error e))
       (error (e) (json-error e)))))
+
+;;; POST /api/editor/disconnect?session=N
+;;;
+;;; The page's pagehide beacon. Marks the session disconnected -- it is NOT
+;;; cancelled: the working graph survives and the URL still resumes it. This
+;;; also fires on an ordinary reload, which is exactly why it must not mean
+;;; cancel; the reload's next request reconnects and both halves are announced,
+;;; so a refresh reads as a pair rather than an alarm.
+;;;
+;;; Not wrapped in WITH-EDITOR-SESSION, which would mark the session live again.
+(hunchentoot:define-easy-handler (handle-editor-disconnect :uri "/api/editor/disconnect")
+    (session)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (let ((s (find-editor-session session)))
+    (when s (disconnect-editor-session s))
+    "{\"ok\":true}"))
 
 ;;; POST /api/editor/finish?session=N&action=commit|cancel
 (hunchentoot:define-easy-handler (handle-editor-finish :uri "/api/editor/finish")

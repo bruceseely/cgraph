@@ -62,8 +62,20 @@
   working           ; the graph being edited -- a separate object
   parent            ; parent session, for nested editors
   (semaphore (bt:make-semaphore))
-  (state :open)     ; :open | :committed | :cancelled
-  result)
+  (state :open)     ; :open | :committed | :cancelled -- the LIFECYCLE
+  result
+  ;; Connection state, which is orthogonal to lifecycle: a session with no
+  ;; browser attached is still :OPEN and still holds its work. Closing a tab is
+  ;; not a decision to discard anything -- cancel is an explicit act, with a
+  ;; button -- so a disconnect leaves the session resumable at its URL.
+  (connected nil)
+  last-seen         ; universal-time of the last request; NIL until first seen
+  (created (get-universal-time))
+  ;; The caller's *STANDARD-OUTPUT*, captured at EDIT-CGRAPH time. Handler
+  ;; threads inherit none of the caller's bindings, so without this there is no
+  ;; way to tell the REPL that its browser went away -- and a blocked REPL that
+  ;; looks identical whether you are mid-edit or long gone is the whole problem.
+  out)
 
 ;;; --- Registry --------------------------------------------------------------
 
@@ -92,6 +104,74 @@
   "All live sessions, for inspection from the REPL."
   (bt:with-lock-held (*editor-sessions-lock*)
     (loop for s being the hash-values of *editor-sessions* collect s)))
+
+;;; --- Telling the caller what happened ---------------------------------------
+
+(defun announce-to-caller (session control &rest args)
+  "Write a line to the thread that called EDIT-CGRAPH. Best-effort: the caller
+   may have been interrupted and its stream closed, and losing a notice must
+   never break a request."
+  (let ((out (session-out session)))
+    (when out
+      (ignore-errors
+       (format out "~&;; ~?~%" control args)
+       (finish-output out)))))
+
+(defun session-age-string (session)
+  (let ((secs (- (get-universal-time) (session-created session))))
+    (cond ((< secs 60) (format nil "~ds" secs))
+          ((< secs 3600) (format nil "~dm" (floor secs 60)))
+          (t (format nil "~,1fh" (/ secs 3600.0))))))
+
+(defun touch-editor-session (session)
+  "Note that the browser is alive. Announces a RECONNECT -- but only when the
+   session had been seen before and then dropped, so an ordinary first load is
+   silent and a reload reads as disconnect-then-reconnect rather than an alarm."
+  (let ((reconnected nil))
+    (bt:with-lock-held (*editor-sessions-lock*)
+      (when (and (not (session-connected session)) (session-last-seen session))
+        (setf reconnected t))
+      (setf (session-connected session) t
+            (session-last-seen session) (get-universal-time)))
+    (when reconnected
+      (announce-to-caller session "editor session ~a: browser reconnected."
+                          (session-id session)))
+    session))
+
+(defun disconnect-editor-session (session)
+  "The page says it is going away. The session survives -- it keeps its working
+   graph and stays resumable at its URL. Announce it, because otherwise the
+   REPL sits blocked looking exactly as it did while you were editing, which is
+   the one thing that must not happen."
+  (let ((announce nil))
+    (bt:with-lock-held (*editor-sessions-lock*)
+      (when (and (session-connected session) (eq (session-state session) :open))
+        (setf (session-connected session) nil
+              announce t)))
+    (when announce
+      (announce-to-caller
+       session
+       "editor session ~a: browser disconnected; the call is still waiting.~%~
+        ;;   reopen:  ~a~%~
+        ;;   abandon: (cg::cancel-editor-session ~a)"
+       (session-id session) (editor-session-url session) (session-id session)))
+    session))
+
+(defmethod print-object ((session editor-session) stream)
+  (print-unreadable-object (session stream :type nil :identity nil)
+    (let ((graph (ignore-errors
+                  (let ((s (session-plain-render session)))
+                    (if (> (length s) 46)
+                        (concatenate 'string (subseq s 0 43) "...")
+                        s)))))
+      (format stream "EDITOR-SESSION ~a ~(:~a~)~@[ :disconnected~*~] ~a~@[ ~a~]"
+              (session-id session)
+              (session-state session)
+              (and (eq (session-state session) :open)
+                   (not (session-connected session))
+                   (session-last-seen session))
+              (session-age-string session)
+              (substitute #\Space #\Newline (or graph ""))))))
 
 ;;; --- Working copies --------------------------------------------------------
 ;;;
@@ -262,6 +342,9 @@
                    :original subject
                    :kind kind
                    :parent parent
+                   ;; Captured here, in the caller's thread, because handler
+                   ;; threads have no way to reach it later.
+                   :out *standard-output*
                    :working (make-working-graph (graph-source-string subject)))))
     (register-editor-session session)
     (unwind-protect
@@ -282,3 +365,23 @@
 (defun new-cgraph ()
   "Start the editor on an empty graph. Alias for (EDIT-CGRAPH)."
   (edit-cgraph))
+
+(defun cancel-editor-session (&optional id)
+  "Abandon editor session ID, releasing the EDIT-CGRAPH call that is waiting on
+   it. With no ID, abandons every open session.
+
+   For the session whose browser went away and is not coming back. Note that
+   the waiting REPL cannot evaluate this -- its thread is blocked -- so call it
+   from a source buffer, where SLIME uses a separate worker thread. C-c C-c in
+   the blocked REPL is the guaranteed alternative: it unwinds the wait and the
+   UNWIND-PROTECT in EDIT-CGRAPH cleans up."
+  (let ((targets (if id
+                     (let ((s (find-editor-session id)))
+                       (if s (list s) (progn (format t "~&;; no editor session ~a~%" id)
+                                             nil)))
+                     (remove-if-not (lambda (s) (eq (session-state s) :open))
+                                    (editor-sessions)))))
+    (dolist (s targets)
+      (when (finish-editor-session s :cancelled)
+        (format t "~&;; editor session ~a cancelled~%" (session-id s))))
+    (length targets)))

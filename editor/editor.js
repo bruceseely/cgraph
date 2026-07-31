@@ -389,6 +389,7 @@ async function finish(action) {
   try {
     await call(`/api/editor/finish?${q({ session: SESSION, action })}`,
                { method: 'POST' });
+    finished = true;   // closing the window now is not a disconnect worth reporting
     document.querySelectorAll('button').forEach(b => b.disabled = true);
     setStatus(action === 'commit'
       ? 'Committed — the REPL call has returned. You can close this window.'
@@ -398,6 +399,20 @@ async function finish(action) {
 
 $('update').addEventListener('click', () => finish('commit'));
 $('cancel').addEventListener('click', () => finish('cancel'));
+
+// Tell the server when this page goes away, so the waiting REPL learns its
+// browser left rather than sitting blocked and looking exactly as it did while
+// you were editing. This is a NOTICE, not a cancel — the session keeps its
+// working graph and this same URL resumes it. pagehide fires on reload too,
+// which is precisely why it must not discard anything.
+//
+// sendBeacon rather than fetch: a request started in a page that is unloading
+// is otherwise liable to be cancelled before it leaves.
+let finished = false;
+window.addEventListener('pagehide', () => {
+  if (finished || !SESSION) return;
+  navigator.sendBeacon(`/api/editor/disconnect?session=${encodeURIComponent(SESSION)}`);
+});
 
 // ── refresh ──────────────────────────────────────────────────────────────────
 // One place decides what the lists may contain, from what the editor pane
