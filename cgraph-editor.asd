@@ -16,4 +16,14 @@
   :components ((:module "system/editor"
                 :serial t
                 :components ((:file "session")
-                             (:file "api")))))
+                             (:file "operations")
+                             (:file "api")))
+               ;; Under test/editor/ rather than test/, because
+               ;; EXTRACT-TEST-NAMES scans test/ by filename and
+               ;; UIOP:DIRECTORY-FILES is not recursive -- so TEST-CGRAPH
+               ;; keeps passing for anyone who loads only :cgraph. Run these
+               ;; with (EDITOR-TEST).
+               (:module "test/editor"
+                :depends-on ("system/editor")
+                :serial t
+                :components ((:file "editor-operations-test")))))
