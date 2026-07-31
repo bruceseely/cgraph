@@ -6,22 +6,40 @@ Authoritative source: `system/core/reader.lisp` — specifically `read-features`
 `parse-at-word`, and the various `*-reader` functions registered in
 `*cg-readtable-mods*`.
 
+Reading a concept is split across eight functions rather than one
+`concept-reader`, which is worth knowing before chasing any citation below:
+
+| Function                        | Line | Role                                          |
+|---------------------------------|------|-----------------------------------------------|
+| `read-concept-type-label`       | 587  | the type portion                              |
+| `read-graph-referent-concept`   | 601  | `[TYPE: [graph]]`, pushes a child context      |
+| `resolve-target-concept`        | 620  | features → a concept: set, id, name, measure   |
+| `apply-concept-annotations`     | 664  | stamps the `@`-word slots onto the concept     |
+| `register-concept-coreference`  | 679  | binds a concept to its `?x` label              |
+| `read-feature-referent-concept` | 695  | `@` / `*` / `?` / `#` / `{}` / name features   |
+| `read-concept-with-referent`    | 710  | dispatches between the graph and feature forms |
+| `concept-reader`                | 721  | entry point; also the anonymous `[[…]]` form   |
+
+The division worth remembering: **`resolve-target-concept` builds the concept
+from the collected features; `apply-concept-annotations` then stamps the
+`@`-word state onto it.** Most citations below land in one of those two.
+
 ## Identity / quantity
 
-| Form    | Meaning                                       | Reader                             |
-|---------|-----------------------------------------------|------------------------------------|
-| (empty) | Generic concept, no referent                  | concept-reader, reader.lisp:630    |
-| `*`     | Generic                                       | `asterisk-reader`, reader.lisp:520 |
-| `*x`    | Variable, defining occurrence                 | `asterisk-reader`, reader.lisp:527 |
-| `?x`    | Co-reference label, bound or defining         | `question-reader`, reader.lisp:534 |
-| `#123`  | Individual id                                 | `individual-reader`, reader.lisp:437 |
+| Form    | Meaning                                       | Reader                               |
+|---------|-----------------------------------------------|--------------------------------------|
+| (empty) | Generic concept, no referent                  | `concept-reader`, reader.lisp:743    |
+| `*`     | Generic                                       | `asterisk-reader`, reader.lisp:533   |
+| `*x`    | Variable, defining occurrence                 | `asterisk-reader`, reader.lisp:529   |
+| `?x`    | Co-reference label, bound or defining         | `question-reader`, reader.lisp:536   |
+| `#123`  | Individual id                                 | `individual-reader`, reader.lisp:443 |
 | `#`     | Specific-but-unidentified individual          | `individual-reader`, reader.lisp:446 |
-| `Fido`  | Name (bare alpha token)                       | `read-term`, reader.lisp:151       |
+| `Fido`  | Name (bare alpha token)                       | `read-term`, reader.lisp:151         |
 
 A `*x` registers `x` as a variable in the current context. A `?x` is bound if
 the label is already known (via prior `*x` or `?x`); otherwise it becomes a
 defining occurrence and is registered as a variable so query-binding extraction
-can see it (reader.lisp:726).
+can see it — `set-variable` / `register-concept-coreference`, reader.lisp:706.
 
 When both `:id` and `:name` are supplied, `check-name-id-consistency` (reader.lisp:364)
 refuses to attach a different name to a pre-existing individual.
@@ -45,14 +63,15 @@ member list but still produce a set object.
 
 ## Measures
 
-`measure-reader` (reader.lisp:499) when the `@`-token starts with a digit.
+`measure-reader` (reader.lisp:501) when the `@`-token starts with a digit.
 
 | Form           | Result                       |
 |----------------|------------------------------|
 | `@ 5 ft.`      | `(:measure (5 "ft."))`       |
 | `@25.4 cm`     | `(:measure (25.4 "cm"))`     |
 
-Measures may also be attached to set referents (reader.lisp:679).
+Measures may also be attached to set referents
+(`resolve-target-concept`, reader.lisp:637).
 
 ## `@word` annotations
 
@@ -75,7 +94,8 @@ Words split on `-` so tense and aspect can compose.
 through as a generic quantifier keyword.
 
 The annotations are stamped onto the concept via `concept-quantifier`,
-`concept-tense`, `concept-aspect`, and `concept-voice` (reader.lisp:711).
+`concept-tense`, `concept-aspect`, and `concept-voice`
+(`apply-concept-annotations`, reader.lisp:673).
 
 ## Graph referents
 
@@ -89,21 +109,21 @@ A concept's referent can be an entire nested graph.
 
 Anonymous-context handling: `concept-reader` peeks for `[` immediately after
 the opening `[` and treats it as an implicit `PROPOSITION` whose referent is
-the nested graph (reader.lisp:602).
+the nested graph (reader.lisp:734).
 
-Negation: `negation-reader` (reader.lisp:816) sets `*negated-concept*` so the
+Negation: `negation-reader` (reader.lisp:817) sets `*negated-concept*` so the
 inner concept is marked negated. Combines with the graph-referent forms:
 `~[[...]]` and `~[TYPE: [...]]` both work.
 
-Inside a graph referent a fresh `*context*` is pushed (reader.lisp:643), which
+Inside a graph referent a fresh `*context*` is pushed (reader.lisp:609), which
 is what scopes `*x` to the inner graph and forces cross-context references to
 use `?x`.
 
 ## Combining
 
-`read-features` (reader.lisp:543) collects every `@` / `*` / `?` / `#` / `{}` /
-name token in the referent field into a single plist. `concept-reader`
-(reader.lisp:660) pulls out the recognized keys —
+`read-features` (reader.lisp:545, a `defmethod`) collects every `@` / `*` / `?` / `#` / `{}` /
+name token in the referent field into a single plist.
+`resolve-target-concept` (reader.lisp:630) pulls out the recognized keys —
 
 ```
 :id :variable :coref :set :quantifier :tense :aspect :voice :measure :name
