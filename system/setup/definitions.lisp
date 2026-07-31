@@ -48,6 +48,7 @@
 (defvar *cgraph-types-directory* nil)
 (defvar *cgraph-examples-directory* nil)
 (defvar *cgraph-data-directory* nil)
+(defvar *cgraph-log-directory* nil)
 (defvar *external-types-directory* nil)
 
 ;;; Tracks which type catalog is currently in memory so callers can avoid
@@ -120,6 +121,21 @@
   "When non-NIL, start-cgraph runs the test suite at startup.
    Useful while making modifications; can be disabled during regular
    use to skip the test report.")
+
+(defvar *web-log-destination* :file
+  "Where the web server writes its access and message logs.
+   Values:
+     :FILE  - append to web-access.log / web-message.log in
+              *CGRAPH-LOG-DIRECTORY* (~/.cgraph/logs/). The default:
+              every browser request the type editor makes would
+              otherwise print a line to the REPL.
+     :REPL  - Hunchentoot's own default, *ERROR-OUTPUT*, which under
+              SLIME is the REPL. Useful when actively debugging a
+              handler and you want the requests interleaved with your
+              own output.
+     NIL    - no logging at all.
+   Takes effect at START-WEB-SERVER. To change it on a server that is
+   already running, call APPLY-WEB-LOG-DESTINATIONS.")
 
 (defvar *run-lexicon-lint-on-startup* :all
   "Controls whether and how report-lexicon-lint runs at startup.

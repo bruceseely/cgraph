@@ -350,6 +350,26 @@ modifying types or relations."
                  (const :tag "All"                   :all))
   :group 'cgraph)
 
+(clopt-defcustom cgraph cgraph-web-log-destination
+    conceptual-graphs::*web-log-destination* :file
+  "Mirrors conceptual-graphs::*web-log-destination* in Common Lisp.
+Where the web server writes its access and message logs.
+  Log file  - append to web-access.log / web-message.log under
+              ~/.cgraph/logs/.  The default: the type editor makes a
+              request per interaction, and each one would otherwise
+              print a line to the REPL.
+  REPL      - Hunchentoot's own default.  Useful while debugging a
+              handler, when you want requests interleaved with your
+              own output.
+  Off       - no request logging at all.
+Takes effect at start-web-server; call
+conceptual-graphs::apply-web-log-destinations to change it on a
+server that is already running."
+  :type '(choice (const :tag "Log file" :file)
+                 (const :tag "REPL"     :repl)
+                 (const :tag "Off"      nil))
+  :group 'cgraph)
+
 
 ;;; Kept as named entry points: initialize.lisp calls
 ;;; (cgraph-read-options-from-cl) through eval-in-emacs, and both are handy
