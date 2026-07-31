@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CGraph Editor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      background: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: #fff;
+      border-top: 4px solid #333;
+      border-bottom: 1px solid #ddd;
+      flex-shrink: 0;
+    }
+    #bar .label { color: #888; }
+    #bar .spacer { margin-left: auto; }
+    button {
+      font-size: 11px;
+      padding: 0.18rem 0.55rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #f7f7f7;
+      color: #555;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
+    button:disabled { color: #bbb; cursor: default; }
+    #update { border-color: #a9bde8; background: #e0e9fb; color: #33507a; }
+
+    main { flex: 1 1 auto; overflow: auto; padding: 0.75rem; }
+
+    /* The skeleton's stand-in for the graph pane. Monospace because linear
+       notation is column-aligned by the formatter. */
+    pre#graph {
+      margin: 0 0 0.75rem 0;
+      padding: 0.6rem;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: pre;
+      overflow-x: auto;
+      min-height: 4rem;
+    }
+    .skeleton-note {
+      color: #999;
+      font-size: 12px;
+      margin: 0 0 0.5rem 0;
+    }
+    #scratch {
+      width: 100%;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      padding: 0.4rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+    #status { font-size: 12px; color: #aaa; padding: 0 0.75rem 0.6rem; }
+    #status.error { color: #c0392b; }
+    #status.done  { color: #2d7a4f; }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <span class="label">CGraph Editor</span>
+    <span class="label" id="session-label"></span>
+    <span class="spacer"></span>
+    <button id="add">Apply</button>
+    <button id="update">UPDATE</button>
+    <button id="cancel">Cancel</button>
+  </div>
+
+  <main>
+    <p class="skeleton-note">
+      Skeleton: the box below stands in for the graph pane, and the editable
+      field for the whole editor. Edit the notation and press Apply. The panes,
+      type columns and click model come next — see notes/graph-editor.md.
+    </p>
+    <pre id="graph"></pre>
+    <textarea id="scratch" rows="5"
+              placeholder="linear notation, e.g.  [EAT]-&gt;(loc)-&gt;[KITCHEN]."></textarea>
+  </main>
+
+  <div id="status"></div>
+
+  <script type="module" src="/editor.js"></script>
+</body>
+</html>
