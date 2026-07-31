@@ -350,6 +350,21 @@ modifying types or relations."
                  (const :tag "All"                   :all))
   :group 'cgraph)
 
+(clopt-defcustom cgraph cgraph-canonical-graph-format
+    conceptual-graphs::*canonical-graph-format* :linear
+  "Mirrors conceptual-graphs::*canonical-graph-format* in Common Lisp.
+How the concept-type editor's Canonical Graphs pane renders an entry.
+  Linear  - CG linear notation, as the formatter produces it.  The
+            default: it is the notation you write and read everywhere
+            else in cgraph.
+  Graph   - the rendered graphviz diagram.
+Supplies the pane's initial View setting; the Graph/Linear buttons in
+the pane still switch it for the current page.  Reload the page in the
+browser to pick up a change made here."
+  :type '(choice (const :tag "Linear" :linear)
+                 (const :tag "Graph"  :graph))
+  :group 'cgraph)
+
 (clopt-defcustom cgraph cgraph-web-log-destination
     conceptual-graphs::*web-log-destination* :file
   "Mirrors conceptual-graphs::*web-log-destination* in Common Lisp.

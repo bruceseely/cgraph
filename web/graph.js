@@ -410,7 +410,10 @@ const cgEntries = new Map();
 // Map from uppercase label → {bodyEl, svg, linear} — both render forms.
 const cgEntryData = new Map();
 
-let cgDisplayMode = 'graph'; // 'graph' | 'linear'
+// 'graph' | 'linear'. Seeded from the CL option *canonical-graph-format* at
+// startup (see loadOptions); this initial value is the fallback for when the
+// server can't be reached, and matches that option's default so the two agree.
+let cgDisplayMode = 'linear';
 
 function applyDisplayMode(key) {
   const data = cgEntryData.get(key);
@@ -441,12 +444,16 @@ function applyDisplayMode(key) {
   }
 }
 
+function syncDisplayModeButtons() {
+  document.querySelectorAll('.opt-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === cgDisplayMode)
+  );
+}
+
 function setDisplayMode(mode) {
   if (mode === cgDisplayMode) return;
   cgDisplayMode = mode;
-  document.querySelectorAll('.opt-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.mode === mode)
-  );
+  syncDisplayModeButtons();
   for (const key of cgEntries.keys()) applyDisplayMode(key);
 }
 
@@ -752,6 +759,26 @@ document.getElementById('init-btn').addEventListener('click', async () => {
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 console.log('[cgraph] graph.js starting');
+
+// Pull the CL-side options before anything renders. setDisplayMode is a no-op
+// when the server agrees with the built-in default, so the common case costs
+// nothing; a failed fetch leaves that default in place rather than blocking.
+async function loadOptions() {
+  try {
+    const resp = await fetch('/api/options');
+    if (!resp.ok) throw new Error(`/api/options returned ${resp.status}`);
+    const opts = await resp.json();
+    if (opts.canonical_graph_format === 'graph' ||
+        opts.canonical_graph_format === 'linear') {
+      setDisplayMode(opts.canonical_graph_format);
+    }
+  } catch (err) {
+    console.warn('[cgraph] using built-in option defaults:', err.message);
+  }
+  syncDisplayModeButtons();
+}
+
+loadOptions();
 
 fetch('/api/types')
   .then(resp => {

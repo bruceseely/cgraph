@@ -202,6 +202,18 @@
   "{\"ok\":false,\"error\":\"SWANK not available\"}"
   )
 
+;;; GET /api/options — the CL-side settings the browser UI honors.
+;;; The page has no other channel to the option system, so anything the user
+;;; sets through M-M-x customize-group cgraph (or initializations.lisp) reaches
+;;; the browser here. Keys are the JSON spelling of the defvar name.
+(hunchentoot:define-easy-handler (handle-api-options :uri "/api/options") ()
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (format nil "{\"canonical_graph_format\":\"~(~a~)\"}"
+          (case *canonical-graph-format*
+            (:graph "graph")
+            (t      "linear"))))
+
 ;;; GET /api/types — list all registered concept types as a JSON array.
 (hunchentoot:define-easy-handler (handle-api-types :uri "/api/types") ()
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")

@@ -122,6 +122,18 @@
    Useful while making modifications; can be disabled during regular
    use to skip the test report.")
 
+(defvar *canonical-graph-format* :linear
+  "How the concept-type editor's Canonical Graphs pane renders an entry.
+   Values:
+     :LINEAR - CG linear notation, as the formatter produces it. The
+               default: it is the notation you write and read
+               everywhere else in cgraph.
+     :GRAPH  - the rendered graphviz diagram.
+   Supplies the pane's initial View setting; the Graph/Linear buttons
+   in the pane still switch it for the current page. An entry falls
+   back to whichever form it has when the preferred one is
+   unavailable.")
+
 (defvar *web-log-destination* :file
   "Where the web server writes its access and message logs.
    Values:

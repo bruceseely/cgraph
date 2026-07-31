@@ -545,8 +545,11 @@
       <div id="cg-options" hidden>
         <div class="opt-row">
           <span class="opt-label">View</span>
-          <button class="opt-btn active" data-mode="graph">Graph</button>
-          <button class="opt-btn" data-mode="linear">Linear</button>
+          <!-- The active button is set by syncDisplayModeButtons() once the CL
+               option *canonical-graph-format* has been read; marking Linear
+               here just matches graph.js's fallback so there's no flash. -->
+          <button class="opt-btn" data-mode="graph">Graph</button>
+          <button class="opt-btn active" data-mode="linear">Linear</button>
         </div>
       </div>
       <div id="cg-entries">
