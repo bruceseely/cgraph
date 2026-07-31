@@ -30,6 +30,10 @@ $('session-label').textContent = SESSION ? `session ${SESSION}` : '(no session)'
 // focus/target hold {ref, text} for an existing node, or {type} for a concept
 // that does not exist yet. relation holds {label, direction, both}.
 const pane = { focus: null, relation: null, target: null };
+// The focus's current arcs, as the display pane last showed them. Kept so that
+// picking a target already joined to the focus can fill the relation in for
+// you — the link exists, so there is nothing to choose.
+let focusArcs = [];
 // A concept slot whose type zone was clicked: the next type-list click fills
 // that slot instead of creating a new concept. Same one-shot arming the type
 // editor uses for supertypes.
@@ -137,6 +141,15 @@ function onGraphConceptClick(ref, text) {
     pane.focus = { ref, text: label };
   } else {
     pane.target = { ref, text: label };
+    // If the two are already joined, fill the relation in rather than making
+    // you re-pick what the graph already says. `both' is corrected by the next
+    // choices fetch, which is what decides whether the arrows can be flipped.
+    const existing = focusArcs.find(a => a.conceptRef === ref);
+    if (existing && !pane.relation) {
+      pane.relation = { label: existing.relation,
+                        direction: existing.direction,
+                        both: false };
+    }
   }
   refresh();
 }
@@ -301,6 +314,7 @@ async function createFirstConcept(type) {
 // ── display pane ─────────────────────────────────────────────────────────────
 
 function paintDisplay(arcs) {
+  focusArcs = arcs || [];
   displayBody.replaceChildren();
   focusLabel.textContent = pane.focus ? slotText(pane.focus) : '';
   if (!pane.focus) {
@@ -409,6 +423,14 @@ async function refresh(opts = {}) {
     })}`);
     paintConceptList(choices.concepts);
     paintRelationList(choices.relations);
+    // An auto-filled relation arrives without knowing whether it is legal both
+    // ways; the choices list is what knows, and that decides whether the
+    // arrows can be clicked.
+    if (pane.relation) {
+      const match = choices.relations.find(
+        r => r.label.toLowerCase() === pane.relation.label.toLowerCase());
+      pane.relation.both = match ? match.both : false;
+    }
   } catch (err) {
     setStatus(err.message, 'error');
   }
