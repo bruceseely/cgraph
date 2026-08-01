@@ -146,14 +146,14 @@
 ;;       (inst)←[EAT]-
 ;;               (agnt)→[MONKEY]
 ;;               (obj)→[WALNUT:*y],
-;;       (matr)→[SHELL:*x]←(part)←[WALNUT:*y].")
+;;       (matr)→[SHELL:*x]←(physical-part)←[WALNUT:*y].")
 
 
 ;; (defparameter graph-string410 "[SPOON]-
 ;;                                   (inst)←[EAT]-
 ;;                                           (agnt)→[MONKEY]
 ;;                                           (obj)→[WALNUT:*y],
-;;                                   (matr)→[SHELL:*x]←(part)←[WALNUT:*y].")
+;;                                   (matr)→[SHELL:*x]←(physical-part)←[WALNUT:*y].")
 
 
 ;;; (ptestx 420)

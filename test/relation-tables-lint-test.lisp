@@ -109,8 +109,8 @@
                  (null (%lint-unrealizable-syntax-roles))))
 
         ;; The invariant that matters in practice: the table cgraph ships must
-        ;; itself be clean. This is what caught (has-part :pos) -- a one-letter
-        ;; typo for :poss that dropped every has-part arc from generated text,
+        ;; itself be clean. This is what caught (part :pos) -- a one-letter
+        ;; typo for :poss that dropped every part arc from generated text,
         ;; invisibly, because an unrecognized role and an absent entry fail
         ;; identically.
         (check "the shipped syntax table assigns only realizable roles"

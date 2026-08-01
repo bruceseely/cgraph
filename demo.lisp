@@ -200,7 +200,7 @@
                (attr)→[FRESH],
       (agnt)→[BABY]-
                 (attr)→[BLITHE]
-                (part)→[BELLY]→(attr)→[FAT]"))
+                (physical-part)→[BELLY]→(attr)→[FAT]"))
   (graph-to-text g))
 
 (progn
@@ -212,7 +212,7 @@
                (attr)→[FRESH],
       (agnt)→[BABY: {*}]-
                 (attr)→[BLITHE]
-                (part)→[BELLY: {*}]→(attr)→[FAT]"))
+                (physical-part)→[BELLY: {*}]→(attr)→[FAT]"))
   (graph-to-text g))
 
 (progn
@@ -224,7 +224,7 @@
                (attr)→[FRESH],
       (agnt)→[BABY: {*}]-
                 (attr)→[BLITHE]
-                (part)→[BELLY:{*}]→(attr)→[FAT]"))
+                (physical-part)→[BELLY:{*}]→(attr)→[FAT]"))
 
   (setq h (find-concept 'milk g))
   (setq z (make-cgraph h))

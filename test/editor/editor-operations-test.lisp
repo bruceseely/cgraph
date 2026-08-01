@@ -103,7 +103,7 @@
           (let ((eat (%editor-ref s "eat"))
                 (person (%editor-ref s "person")))
             (multiple-value-bind (rel attend)
-                (editor-add-arc s :focus eat :relation "has-part"
+                (editor-add-arc s :focus eat :relation "part"
                                   :target-type "attend")
               (declare (ignore rel))
               (editor-add-arc s :focus (node-ref attend) :relation "agnt"
@@ -134,7 +134,7 @@
           (let ((eat (%editor-ref s "eat"))
                 (person (%editor-ref s "person")))
             (multiple-value-bind (rel attend)
-                (editor-add-arc s :focus eat :relation "has-part"
+                (editor-add-arc s :focus eat :relation "part"
                                   :target-type "attend")
               (declare (ignore rel))
               (editor-add-arc s :focus (node-ref attend) :relation "agnt"
