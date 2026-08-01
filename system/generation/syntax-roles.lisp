@@ -17,10 +17,8 @@
     (age   :pp     "aged")
     (agnt  :subject)
     (attr  :adj)
-    (betw  :pp     "between")
     (chrc  :nmod   "of")
     (cntns :pp     "containing")
-    (cont  :dobj)
     (dest  :pp     "to")
     (dur   :pp     "for")
     (elem  :pp     "of")
@@ -41,14 +39,13 @@
     (physical-part :pp "of")
     (ploc  :pp     "at")
     (poss  :poss)
-    (prop  :dobj)   ;; generic clausal complement ("that S" / infinitival "to VP")
     (psize :pp      "of size")
     (ptnt  :dobj)
     (rcpt  :iobj   "to")
     (rslt  :pp     "resulting in")
     (sex   :adj)
     (size  :pp     "of size")
-    (stat  :dobj)
+    (stat  :dobj)   ;; clausal complement ("that S" / infinitival "to VP")
     (temp  :pp     "at temperature")
     (thme  :dobj)
     (time  :pp     "at")
@@ -165,7 +162,7 @@
 ;;; Within a single bucket, modifier ordering preferences.
 ;;; English: adverbs of manner before adverbs of time (Rule 1 example).
 (defparameter *pp-relation-priority*
-  '(inst loc dest physical-part membr elem cntns betw age hgt wgt temp size dur time))
+  '(inst loc dest physical-part membr elem cntns age hgt wgt temp size dur time))
 
 (defun relation-role-entry (rel-or-label)
   (let ((label (cond ((symbolp rel-or-label) rel-or-label)
