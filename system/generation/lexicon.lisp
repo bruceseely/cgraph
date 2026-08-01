@@ -293,9 +293,6 @@
     ("lose"  "lost"  "lost"   "loses")
     ("spend" "spent" "spent"  "spends")
     ("lend"  "lent"  "lent"   "lends")
-    ("believe" "believed" "believed" "believes")
-    ("own"   "owned" "owned"  "owns")
-    ("love"  "loved" "loved"  "loves")
     ("sell"  "sold"  "sold"   "sells")))
 
 (defparameter *irregular-plurals*
