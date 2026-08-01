@@ -267,33 +267,64 @@ function paintConceptList(types) {
   }
 }
 
+function relationRow(r) {
+  const el = document.createElement('div');
+  el.className = 'type-item';
+  const dir = document.createElement('span');
+  dir.className = 'dir';
+  dir.textContent = r.direction === 'reverse' ? '← ' : '→ ';
+  el.append(dir, document.createTextNode(r.label));
+  if (r.name && r.name.toLowerCase() !== r.label.toLowerCase()) {
+    const long = document.createElement('span');
+    long.className = 'long';
+    long.textContent = `  ${r.name}`;
+    el.append(long);
+  }
+  el.addEventListener('click', () => {
+    // Seed `legal' from what this very list says, so the arrows are right on
+    // the first paint rather than after the next fetch corrects them.
+    pane.relation = { label: r.label, direction: r.direction,
+                      legal: r.both ? ['forward', 'reverse'] : [r.direction] };
+    refresh();
+  });
+  return el;
+}
+
+// Grouped by direction, then alphabetical within each group -- rather than one
+// alphabetical list with the arrows interleaved.
+//
+// Direction is not a property of the relation, it is half of what you are
+// choosing, so it groups rather than decorates. The two groups answer two
+// different questions in the order you would ask them: what can the focus do,
+// then what can be done to it. It also separates the twins -- a relation legal
+// both ways otherwise renders as two near-identical adjacent rows, which reads
+// like a glitch and is precisely the pair that is easy to mis-pick.
+//
+// The per-row arrow stays even though the heading now implies it: it is the
+// same glyph the editor pane will show, and it survives scrolling past the
+// heading.
 function paintRelationList(rels) {
   relationList.replaceChildren();
   if (!rels.length) {
     relationList.innerHTML = '<div class="type-empty">no consistent relations</div>';
     return;
   }
-  for (const r of rels) {
-    const el = document.createElement('div');
-    el.className = 'type-item';
-    const dir = document.createElement('span');
-    dir.className = 'dir';
-    dir.textContent = r.direction === 'reverse' ? '← ' : '→ ';
-    el.append(dir, document.createTextNode(r.label));
-    if (r.name && r.name.toLowerCase() !== r.label.toLowerCase()) {
-      const long = document.createElement('span');
-      long.className = 'long';
-      long.textContent = `  ${r.name}`;
-      el.append(long);
-    }
-    el.addEventListener('click', () => {
-      // Seed `legal' from what this very list says, so the arrows are right on
-      // the first paint rather than after the next fetch corrects them.
-      pane.relation = { label: r.label, direction: r.direction,
-                        legal: r.both ? ['forward', 'reverse'] : [r.direction] };
-      refresh();
-    });
-    relationList.append(el);
+
+  const here = pane.focus ? (slotText(pane.focus) || 'the focus') : 'the focus';
+  const groups = [
+    ['forward', `from ${here}`],
+    ['reverse', `into ${here}`]
+  ];
+
+  for (const [direction, heading] of groups) {
+    const rows = rels.filter(r => r.direction === direction)
+                     .sort((a, b) => a.label.localeCompare(b.label));
+    if (!rows.length) continue;      // no heading for a group with nothing in it
+    const head = document.createElement('div');
+    head.className = 'group-head';
+    head.textContent = heading;
+    relationList.append(head);
+    for (const r of rows) relationList.append(relationRow(r));
   }
 }
 
