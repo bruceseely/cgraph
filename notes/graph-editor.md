@@ -330,10 +330,16 @@ submission; returning a session handle to poll would be much worse to use.
 
 - **The non-graph referent editor** — not yet designed. Needs to cover
   individuals, sets, quantifiers, measures, with pickers rather than syntax.
-- **Formatter round-trip** — `format-cgraph` is breadth-first, so parse→format
-  need not reproduce the input text. Opening a canonical graph and saving it
-  *unchanged* could still rewrite the line in `concept-types.lisp`. Argues for
-  writing back only when something actually changed.
+- ~~**Formatter round-trip**~~ — done. `/api/edit-type` now compares against what
+  `/api/type-def` served (`canonical-unchanged-p`, `supertypes-unchanged-p`) and
+  writes nothing when nothing changed; when something else changed but the graph
+  did not, it persists the *stored* text rather than the reformatted one. Three
+  causes of perturbation were measured over the live catalog, not one: of 38 types
+  with a canonical, 9 round-trip identically, 14 differ only by a trailing period,
+  and 15 are genuinely relinearized — arcs reordered by the breadth-first walk
+  (`[BOY]- (sex)… (life-stage)…` → `(life-stage)… (sex)…`) or a referent
+  case-normalized (`[breakfast]` → `[BREAKFAST]`). So 29 of 38 would have been
+  rewritten by opening and saving them untouched.
 - **One type column or two** — start with two, simplify later if warranted.
 
 ## First slice

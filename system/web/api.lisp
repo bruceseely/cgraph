@@ -351,6 +351,40 @@ tokens separated, so it can't merge adjacent tokens."
               (t (write-char c out)
                  (setf in-ws nil)))))))
 
+(defun canonical-as-served (label node)
+  "The canonical text /api/type-def hands the editor for LABEL: the stored string
+re-emitted with line breaks and indentation, or the raw string when it will not
+parse (so the type still opens to edit)."
+  (let ((raw (or (canonical-graph-string node) "")))
+    (if (plusp (length raw))
+        (or (ignore-errors (formatted-canonical-graph-string label)) raw)
+        "")))
+
+(defun canonical-unchanged-p (submitted label node)
+  "True when SUBMITTED — already whitespace-collapsed — is the canonical the editor
+was handed for LABEL, either the stored string verbatim or the formatted form
+collapsed back to one line.
+
+Both arms are needed because format-cgraph walks the segment graph breadth-first,
+so parse→format need not reproduce the stored text. Without this test, opening a
+type and saving it untouched would splice a different-but-equivalent string into
+concept-types.lisp — a spurious diff produced by having looked at the type."
+  (let ((sub    (string-trim '(#\Space) (or submitted "")))
+        (raw    (string-trim '(#\Space) (or (canonical-graph-string node) "")))
+        (served (string-trim '(#\Space)
+                             (collapse-graph-whitespace (canonical-as-served label node)))))
+    (or (string= sub raw) (string= sub served))))
+
+(defun supertypes-unchanged-p (tokens node)
+  "True when TOKENS name exactly the direct supertypes NODE already has. Compared
+the way /api/type-def presents them — top and bottom excluded, case-insensitive."
+  (let ((current (loop for s in (direct-supertypes node)
+                       unless (or (eq s *concept-type-top*) (eq s *concept-type-bottom*))
+                         collect (symbol-name (label s)))))
+    (and (= (length tokens) (length current))
+         (null (set-difference tokens current :test #'string-equal))
+         (null (set-difference current tokens :test #'string-equal)))))
+
 (defun validate-canonical-graph (string)
   "Parse STRING as a conceptual graph against the live catalog; return NIL when it
 is well-formed, else a one-line error message. Covers the three failure modes PCG
@@ -434,13 +468,10 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                             unless (or (eq s *concept-type-top*) (eq s *concept-type-bottom*))
                               collect (string-downcase (symbol-name (label s)))))
               ;; format for the editor: parse the one-line stored string and re-emit
-              ;; it with line breaks + indentation. Fall back to the raw string if it
-              ;; can't be parsed, so the type still opens to edit. (Saved back, the
-              ;; line breaks are collapsed out again — see collapse-graph-whitespace.)
-              (canon (let ((raw (or (canonical-graph-string node) "")))
-                       (if (plusp (length raw))
-                           (or (ignore-errors (formatted-canonical-graph-string label)) raw)
-                           "")))
+              ;; it with line breaks + indentation. (Saved back, the line breaks are
+              ;; collapsed out again — see collapse-graph-whitespace, and
+              ;; canonical-unchanged-p, which recognizes this exact text as "no edit".)
+              (canon (canonical-as-served label node))
               (note  (or (concept-type-file-note label (concept-types-file)) "")))
           (format nil "{\"label\":\"~a\",\"supertypes\":~a,\"canonical\":\"~a\",\"note\":\"~a\"}"
                   (json-escape (string-downcase label))
@@ -476,28 +507,48 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
           (error "a type name is required"))
         (when (null super-tokens)
           (error "at least one supertype is required"))
-        (let ((sym (intern (string-upcase label) :cg)))
-          (unless (ignore-errors (get-concept-type sym))
+        (let* ((sym  (intern (string-upcase label) :cg))
+               (node (ignore-errors (get-concept-type sym))))
+          (unless node
             (error "no such type to edit: ~a" label))
           (dolist (s super-tokens)
             (unless (ignore-errors (get-concept-type s))
               (error "unknown supertype: ~a" s)))
           (when (member label super-tokens :test #'string-equal)
             (error "a type cannot be its own supertype"))
-          ;; validate before mutating — the type already exists, so a self-ref resolves.
-          (when canonical
-            (let ((verr (validate-canonical-graph canonical)))
-              (when verr (error "invalid canonical graph: ~a" verr))))
-          ;; live: replace the definition (modify supertypes + canonical).
-          (define-concept-type :label sym
-                               :supertypes (mapcar (lambda (s) (intern (string-upcase s) :cg))
-                                                   super-tokens)
-                               :canonical-graph (or canonical ""))
-          ;; persist: splice the form in place, or append if it wasn't in the file.
-          (let ((file (concept-types-file)))
-            (unless (splice-concept-type-def label super-tokens canonical note file)
-              (append-concept-type-def label super-tokens canonical note file)))
-          (format nil "{\"ok\":true,\"label\":\"~a\"}" (json-escape (string-downcase label)))))
+          (let* ((file        (concept-types-file))
+                 (canon-same  (canonical-unchanged-p canonical label node))
+                 (supers-same (supertypes-unchanged-p super-tokens node))
+                 (note-same   (string= (or note "")
+                                       (or (concept-type-file-note label file) ""))))
+            ;; Nothing actually changed — leave the file alone. Merely opening a type
+            ;; reformats its canonical for display, so without this a look-and-save
+            ;; would rewrite the source line.
+            (when (and canon-same supers-same note-same)
+              (return-from handle-api-edit-type
+                (format nil "{\"ok\":true,\"unchanged\":true,\"label\":\"~a\"}"
+                        (json-escape (string-downcase label)))))
+            ;; Something changed, but not the graph: persist the stored text rather
+            ;; than the reformatted one, so a note or supertype edit does not drag a
+            ;; relinearized canonical into the file with it.
+            (let ((canonical (if canon-same
+                                 (let ((raw (canonical-graph-string node)))
+                                   (and raw (plusp (length raw)) raw))
+                                 canonical)))
+              ;; validate before mutating — the type already exists, so a self-ref resolves.
+              (when canonical
+                (let ((verr (validate-canonical-graph canonical)))
+                  (when verr (error "invalid canonical graph: ~a" verr))))
+              ;; live: replace the definition (modify supertypes + canonical).
+              (define-concept-type :label sym
+                                   :supertypes (mapcar (lambda (s) (intern (string-upcase s) :cg))
+                                                       super-tokens)
+                                   :canonical-graph (or canonical ""))
+              ;; persist: splice the form in place, or append if it wasn't in the file.
+              (unless (splice-concept-type-def label super-tokens canonical note file)
+                (append-concept-type-def label super-tokens canonical note file))
+              (format nil "{\"ok\":true,\"label\":\"~a\"}"
+                      (json-escape (string-downcase label)))))))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
       (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
