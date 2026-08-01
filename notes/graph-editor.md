@@ -96,12 +96,60 @@ Filtering is computed from the lattice, not heuristic.
 
 `rel-use` (`types.lisp:1136`) covers the focus+target case directly — call it
 twice with the arguments swapped and keep the results **direction-labelled**,
-so the list can offer `(agnt)→` and `←(agnt)` as separate rows. Two small
-additions are needed, both straightforward against the `source-types` /
+so the list can offer `(agnt)→` and `←(agnt)` as separate rows. Two further
+queries sit beside it, both straightforward against the `source-types` /
 `dest-type` slots:
 
-- relations consistent with a single concept type (either side)
-- concept types consistent with a given relation and a fixed other end
+- `rel-uses-for` — relations consistent with a single concept type, either side
+- `rel-far-end-types` — concept types consistent with a given relation and a
+  fixed other end
+
+with `rel-uses-between` for the pair. The first two return
+`(relation-type . direction)` with direction relative to the **focus**, which
+is what lets a relation legal both ways appear twice and be marked as such.
+
+### The relation list is grouped by direction
+
+Not one alphabetical list with the arrows interleaved. Two groups — focus as
+source first, then focus as destination — alphabetical within each, with the
+break between them labelled.
+
+Direction is not a property of the relation; it is half of what you are
+choosing. So it groups rather than decorates, and the two groups ask two
+questions in the order you would ask them: what can the focus do, then what can
+be done to it.
+
+It also separates the twins. A relation legal both ways otherwise renders as
+two near-identical adjacent rows —
+
+```
+← poss  possession
+→ poss  possession
+```
+
+— which reads like a rendering fault, and is exactly the pair easiest to
+mis-pick. It is the pair behind the `[DOG]←(poss)←[FOOD]` case below.
+
+The asymmetric case becomes legible for free. With `[DOG]` focused and `[FOOD]`
+targeted, `poss` appears under one heading and is simply **absent** from the
+other, so "only one direction is available here" is a missing row rather than
+something you infer from an absent twin in a mixed list.
+
+Details that follow from the above:
+
+- **Headings name the focus** — `FROM [DOG]` / `INTO [DOG]` — not "source" and
+  "destination", which is the code's vocabulary rather than the user's.
+- **Sticky**, so scrolling into a group keeps the label saying which one you
+  are in. A focus alone can offer thirty-odd relations.
+- **A group with nothing in it gets no heading**, so the headings never claim a
+  choice that isn't there.
+- **The per-row arrow stays** even though the heading implies it: it is the
+  same glyph the editor pane will show, and it survives scrolling.
+
+The cost, stated because it is real: whole-list alphabetical scanning is gone.
+Knowing you want `poss` no longer tells you where to look without also knowing
+the direction. Judged acceptable, since you must choose a direction anyway —
+the group is information you needed regardless.
 
 ### Type-in filters
 
