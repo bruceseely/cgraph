@@ -253,6 +253,13 @@
    :unknown gender and singular-they pronouns. May be intentional
    (gender-neutral role) or an oversight (FATHER, KING, ...).
 
+   :UNGENDERED T settles that question in the lexicon and silences the
+   finding. Only the absence of BOTH keys is reportable -- a type nobody
+   has ruled on either way. Singular-they is the right output for CHILD or
+   ADULT, so without a way to say so the check would report correct
+   behaviour forever, and a warning that is always wrong teaches you to
+   stop reading the ones that are not.
+
    The walk is rooted at PERSON, so a catalog without PERSON gives this
    check nothing to look at. Report that explicitly rather than returning
    quietly: the case where the check can't run is exactly the case where
@@ -275,7 +282,8 @@
          (lambda (node)
            (let ((label (label node)))
              (unless (or (eq node person-type)
-                         (lexicon-prop label :gender))
+                         (lexicon-prop label :gender)
+                         (lexicon-prop label :ungendered))
                (push (list :info
                            :person-without-gender
                            (format nil "Person subtype ~A has no :gender ~
@@ -283,7 +291,9 @@
                                         singular-they. Add ~
                                         (register-lexicon-entry '~(~A~) ~
                                         :gender :masc/:fem :human-p t) ~
-                                        if the type is inherently gendered."
+                                        if the type is inherently gendered, ~
+                                        or :ungendered t to record that it ~
+                                        is not."
                                    label label)
                            label)
                      findings))))

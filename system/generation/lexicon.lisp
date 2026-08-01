@@ -19,7 +19,8 @@
    Canonical keys:
      Word form:  :lemma :plural :past :past-participle :present-3sg :gerund
                  :particle
-     Noun class: :pos :mass-p :proper-p :gender (:masc/:fem) :human-p :animate-p
+     Noun class: :pos :mass-p :proper-p :gender (:masc/:fem) :ungendered
+                 :human-p :animate-p
      Verb frame: :raising :rcpt-direct :obj-prep :adv-form")
 
 (defparameter *lexicon-override-keys*
@@ -30,6 +31,13 @@
     (:mass-p      :reader "MASS-NOUN-P")
     (:proper-p    :reader "PROPER-NAME-P")
     (:gender      :reader "PRONOUN-FOR (anaphora.lisp)")
+    ;; Read by the lint, deliberately NOT by GENDER-OF. It records that a type
+    ;; carries no inherent gender and that this was decided rather than
+    ;; overlooked. It must not be spelled (:gender :unknown), because GENDER-OF
+    ;; consults the lexicon before the given-name registry -- so any gender
+    ;; value here, even :unknown, would shadow the name and turn
+    ;; [CHILD: Mary] from "she" into "they".
+    (:ungendered  :reader "%LINT-PERSON-SUBTYPES-WITHOUT-GENDER (lexicon-lint.lisp)")
     (:human-p     :reader "HUMAN-P")
     (:animate-p   :reader "ANIMATE-CONCEPT-P")
     (:raising     :reader "GRAPH-TO-TEXT dispatch")
