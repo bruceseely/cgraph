@@ -28,8 +28,14 @@ $('session-label').textContent = SESSION ? `session ${SESSION}` : '(no session)'
 
 // ── editor-pane state ────────────────────────────────────────────────────────
 // focus/target hold {ref, text} for an existing node, or {type} for a concept
-// that does not exist yet. relation holds {label, direction, both}.
+// that does not exist yet. relation holds {label, direction, legal}, where
+// `legal' is the directions the lattice permits for the pane's current pair --
+// [] , ['forward'], ['reverse'] or both. A boolean "is it symmetric" cannot
+// express the case that matters here, an arc pointing the ONE way that is not
+// allowed, so the set is carried instead and REFRESH reconciles it.
 const pane = { focus: null, relation: null, target: null };
+
+const OPPOSITE = d => (d === 'reverse' ? 'forward' : 'reverse');
 // The focus's current arcs, as the display pane last showed them. Kept so that
 // picking a target already joined to the focus can fill the relation in for
 // you — the link exists, so there is nothing to choose.
@@ -142,13 +148,13 @@ function onGraphConceptClick(ref, text) {
   } else {
     pane.target = { ref, text: label };
     // If the two are already joined, fill the relation in rather than making
-    // you re-pick what the graph already says. `both' is corrected by the next
+    // you re-pick what the graph already says. `legal' is filled by the next
     // choices fetch, which is what decides whether the arrows can be flipped.
     const existing = focusArcs.find(a => a.conceptRef === ref);
     if (existing && !pane.relation) {
       pane.relation = { label: existing.relation,
                         direction: existing.direction,
-                        both: false };
+                        legal: null };
     }
   }
   refresh();
@@ -202,13 +208,24 @@ function paintSlot(el, slot, placeholder, kind) {
   el.append(document.createTextNode(']'));
 }
 
+// The arrows ARE the reverse control. They are live whenever the OPPOSITE
+// direction is legal -- not merely when both are, which was the original test.
+// The two differ in exactly the case you most need the control: an arc pointing
+// the one way the lattice forbids, where the old test froze the arrows and left
+// no way out but a reload. Static now means "one legal direction, and it is the
+// one shown", which is still an honest reading of a dead affordance.
+function flippable(rel) {
+  return !!(rel && rel.legal && rel.legal.includes(OPPOSITE(rel.direction)));
+}
+
 function paintArrows() {
   const rel = pane.relation;
   const shown = rel ? (rel.direction === 'reverse' ? '←' : '→') : '';
+  const live = flippable(rel);
   [arrowLeft, arrowRight].forEach(a => {
     a.textContent = shown;
-    a.className = 'arrow' + (rel && rel.both ? ' flippable' : '');
-    a.title = rel && rel.both ? 'click to reverse the arc' : '';
+    a.className = 'arrow' + (live ? ' flippable' : '');
+    a.title = live ? 'click to reverse the arc' : '';
   });
 }
 
@@ -222,8 +239,8 @@ function paintEditor() {
 }
 
 [arrowLeft, arrowRight].forEach(a => a.addEventListener('click', () => {
-  if (!pane.relation || !pane.relation.both) return;
-  pane.relation.direction = pane.relation.direction === 'reverse' ? 'forward' : 'reverse';
+  if (!flippable(pane.relation)) return;
+  pane.relation.direction = OPPOSITE(pane.relation.direction);
   refresh();
 }));
 
@@ -270,7 +287,10 @@ function paintRelationList(rels) {
       el.append(long);
     }
     el.addEventListener('click', () => {
-      pane.relation = { label: r.label, direction: r.direction, both: r.both };
+      // Seed `legal' from what this very list says, so the arrows are right on
+      // the first paint rather than after the next fetch corrects them.
+      pane.relation = { label: r.label, direction: r.direction,
+                        legal: r.both ? ['forward', 'reverse'] : [r.direction] };
       refresh();
     });
     relationList.append(el);
@@ -280,11 +300,14 @@ function paintRelationList(rels) {
 // Clicking a type CREATES a concept — unless a slot is armed, in which case it
 // re-types that slot instead.
 function onConceptTypeClick(type) {
+  let notice = null;
   if (armedSlot) {
     const slot = pane[armedSlot];
     if (slot && slot.ref !== undefined && slot.ref !== null) {
-      setStatus('That concept already exists in the graph; '
-                + 'clear the slot to put a new one there.', 'error');
+      // Passed through REFRESH rather than set directly: refresh now clears the
+      // status line, so a message set beforehand would be wiped on the way out.
+      notice = ['That concept already exists in the graph; '
+                + 'clear the slot to put a new one there.', 'error'];
     } else {
       setSlot(armedSlot, { type });
     }
@@ -295,7 +318,7 @@ function onConceptTypeClick(type) {
   } else {
     pane.target = { type };
   }
-  refresh();
+  refresh({ notice });
 }
 
 // An empty graph gets its first node this way: the concept is created straight
@@ -419,6 +442,11 @@ window.addEventListener('pagehide', () => {
 // holds. The lattice does the filtering; nothing here guesses.
 
 async function refresh(opts = {}) {
+  // A message describes the action that produced it, so it must not outlive the
+  // next thing you do. Nothing used to clear it but a SUCCESSFUL add or remove,
+  // which meant a failed add's error sat there through every subsequent click --
+  // including Clear, making a pane that had in fact been emptied look stuck.
+  let notice = opts.notice || null;
   paintEditor();
   try {
     if (!opts.keepGraph) {
@@ -438,18 +466,75 @@ async function refresh(opts = {}) {
     })}`);
     paintConceptList(choices.concepts);
     paintRelationList(choices.relations);
-    // An auto-filled relation arrives without knowing whether it is legal both
-    // ways; the choices list is what knows, and that decides whether the
-    // arrows can be clicked.
-    if (pane.relation) {
-      const match = choices.relations.find(
-        r => r.label.toLowerCase() === pane.relation.label.toLowerCase());
-      pane.relation.both = match ? match.both : false;
-    }
+    notice = (await reconcileDirection(choices)) || notice;
   } catch (err) {
     setStatus(err.message, 'error');
+    paintEditor();
+    return;
   }
+  setStatus(notice ? notice[0] : '', notice ? notice[1] : '');
   paintEditor();
+}
+
+// Keep the pane from ever holding an arc the lattice forbids.
+//
+// The filtering tables assume you fill the pane left to right, and each step
+// narrows the next list. But a target picked by clicking the GRAPH is not drawn
+// from the narrowed list at all -- that click means "this existing node", and it
+// can name one for which the relation already sitting in the pane runs the wrong
+// way. Add then failed at the server, correctly but late, with a pane you could
+// not repair.
+//
+// So reconcile after every change instead of guarding one click: whatever the
+// pane now holds, ask what the lattice permits and correct it. Flipping is
+// silent-but-announced rather than a rejection -- the arc you asked for exists,
+// it just runs the other way, and the editor knowing which way is the whole
+// point of picking rather than typing.
+async function reconcileDirection(choices) {
+  const rel = pane.relation;
+  if (!rel || !pane.target) return null;
+
+  const targetIsRef = pane.target.ref !== undefined && pane.target.ref !== null;
+  let legal;
+
+  if (targetIsRef) {
+    // choices came back for this exact pair: the directions listed for this
+    // relation ARE the legal ones.
+    legal = choices.relations
+      .filter(r => r.label.toLowerCase() === rel.label.toLowerCase())
+      .map(r => r.direction);
+  } else {
+    // A target that does not exist yet is not in the graph, so the pair query
+    // cannot see it. `choices.concepts' is the far-end set for the direction we
+    // just asked about; the other direction needs its own question.
+    const type = String(pane.target.type).toLowerCase();
+    const here = choices.concepts.some(c => String(c).toLowerCase() === type);
+    let there = false;
+    try {
+      const other = await call(`/api/editor/choices?${q({
+        session: SESSION,
+        focus: pane.focus && pane.focus.ref !== undefined ? pane.focus.ref : null,
+        relation: rel.label,
+        direction: OPPOSITE(rel.direction)
+      })}`);
+      there = other.concepts.some(c => String(c).toLowerCase() === type);
+    } catch (err) { /* leave the pane alone if we cannot tell */ return null; }
+    legal = [...(here ? [rel.direction] : []),
+             ...(there ? [OPPOSITE(rel.direction)] : [])];
+  }
+
+  rel.legal = legal;
+  if (legal.includes(rel.direction)) return null;
+
+  const target = slotText(pane.target) || 'that concept';
+  if (legal.length === 0) {
+    pane.relation = null;
+    return [`(${rel.label}) cannot link ${slotText(pane.focus)} and ${target} `
+            + `in either direction — pick another relation.`, 'error'];
+  }
+  rel.direction = legal[0];
+  return [`(${rel.label}) only runs the other way between these two — `
+          + `direction corrected.`, 'note'];
 }
 
 refresh();
