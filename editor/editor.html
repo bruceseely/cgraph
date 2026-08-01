@@ -200,6 +200,26 @@
     }
     .group-head:first-child { border-top: none; }
 
+    /* Terminal state. The wash leaves the graph legible underneath -- what you
+       built is worth still being able to read -- while making it plainly past
+       rather than live. */
+    #veil {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(246, 247, 249, 0.82);
+    }
+    #veil[hidden] { display: none; }
+    #veil .card {
+      background: #fff; border: 1px solid #d4d9de; border-radius: 4px;
+      box-shadow: 0 2px 14px rgba(0, 0, 0, 0.12);
+      padding: 1.1rem 1.6rem; text-align: center; max-width: 26rem;
+    }
+    #veil .headline { font-size: 17px; font-weight: 600; margin-bottom: 0.4rem; }
+    #veil .detail { font-size: 13px; color: #555; }
+    #veil .hint { font-size: 12px; color: #999; margin-top: 0.7rem; }
+    #veil.committed .headline { color: #2d7a4f; }
+    #veil.cancelled .headline { color: #8a6d3b; }
+
     #status { font-size: 12px; color: #aaa; padding: 0.35rem 0.75rem; flex-shrink: 0;
               border-top: 1px solid #eee; background: #fff; white-space: pre-wrap; }
     #status.error { color: #c0392b; }
@@ -273,6 +293,16 @@
   </div>
 
   <div id="status"></div>
+
+  <!-- Shown when the session ends. Covers everything, so no stale handler can
+       fire no matter what is still wired underneath. -->
+  <div id="veil" hidden>
+    <div class="card">
+      <div class="headline"></div>
+      <div class="detail"></div>
+      <div class="hint">This session is finished — you can close this tab.</div>
+    </div>
+  </div>
 
   <script type="module" src="/editor.js"></script>
 </body>

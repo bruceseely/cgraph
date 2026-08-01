@@ -439,15 +439,48 @@ async function removeArc(relationRef) {
   } catch (err) { setStatus(err.message, 'error'); }
 }
 
+// A finished session is finished, and a page that still takes clicks can only
+// argue back. Disabling the four BUTTONs was not enough -- the graph concepts,
+// the type rows, the arrows and the display lines are divs and spans carrying
+// their own handlers, so clicking one still called REFRESH, and the error it
+// came back with overwrote the very message saying the session was over. That
+// is the "populated but unresponsive" state: not inert, just uselessly
+// responsive.
+//
+// The error it overwrote it with was "no such editor session", which is worse
+// than it sounds. FINISH-EDITOR-SESSION only sets the state and wakes the
+// waiting thread; EDIT-CGRAPH's UNWIND-PROTECT then FORGETs the session, so by
+// the time you click, lookups fail outright rather than reporting a finished
+// session. The page therefore accused itself of having lost your work at the
+// exact moment it had in fact completed normally.
+//
+// So the veil covers everything and swallows the clicks, rather than each
+// handler learning to check. Nothing underneath needs to know.
+//
+// It does not close the tab. window.close() only works on a window script
+// opened, and this one was opened by the server shelling out to the OS, so the
+// browser would refuse -- better to say plainly that the tab can be closed than
+// to try and silently fail.
+function showVeil(action) {
+  const veil = $('veil');
+  veil.className = action === 'commit' ? 'committed' : 'cancelled';
+  veil.querySelector('.headline').textContent =
+    action === 'commit' ? 'Committed' : 'Cancelled';
+  veil.querySelector('.detail').textContent =
+    action === 'commit'
+      ? 'The edited graph was installed and the REPL call has returned.'
+      : 'Nothing was changed — the original graph is untouched.';
+  veil.hidden = false;
+}
+
 async function finish(action) {
   try {
     await call(`/api/editor/finish?${q({ session: SESSION, action })}`,
                { method: 'POST' });
     finished = true;   // closing the window now is not a disconnect worth reporting
     document.querySelectorAll('button').forEach(b => b.disabled = true);
-    setStatus(action === 'commit'
-      ? 'Committed — the REPL call has returned. You can close this window.'
-      : 'Cancelled — the original is unchanged. You can close this window.', 'done');
+    setStatus('');     // the veil says it, and says it where you are looking
+    showVeil(action);
   } catch (err) { setStatus(err.message, 'error'); }
 }
 
