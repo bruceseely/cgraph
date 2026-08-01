@@ -1,6 +1,10 @@
 # Conceptual-Graph Editor — Design
 
-**Status:** design settled, not yet implemented.
+**Status:** built and working. Driven end to end in a browser on 2026-08-01
+against the live catalog: focus, contextual filtering in both columns, add,
+the removal cascade, the reverse control, and automatic coreference all behave
+as described below. The non-graph referent editor is the one designed-but-
+unbuilt piece — see "Open".
 
 A web-page editor for conceptual graphs, separate from the concept-type
 browser. Where the type browser edits the *lattice*, this edits *graphs*.
@@ -121,11 +125,59 @@ later.
 There is no separate reverse button. The arrows drawn in the editor pane *are*
 the control: click either one to flip the pair.
 
-They are clickable **only when both directions are legal** — which is exactly
-the symmetric case, and precisely the information the two `rel-use` calls
-already produce. So the affordance carries the information: static arrows mean
-there is no choice to make, and there is no disabled control to explain. It
-also cannot produce an invalid arc.
+They are clickable **whenever the opposite direction is legal** — which the two
+`rel-use` calls already tell you, since a relation offered both ways appears
+twice. So the affordance carries the information: static arrows mean there is
+no choice to make, and there is no disabled control to explain. It also cannot
+produce an invalid arc.
+
+The test is "the opposite direction is legal", **not** "both directions are" —
+the two differ in exactly the case where the control matters most, an arc
+pointing the one way the lattice forbids. Under the stricter test the arrows
+froze precisely there. That in turn means the pane must carry the legal
+*directions* for the current pair, not a symmetric-or-not boolean; a boolean
+cannot distinguish "only this way" from "only the other way."
+
+### The pane never holds an illegal arc
+
+The filtering table above assumes you fill the pane left to right, each step
+narrowing the next list. A target picked by **clicking the graph** is not drawn
+from a narrowed list at all — that click means "this existing node" — so it can
+name one for which the relation already sitting in the pane runs the wrong way.
+
+This is easy to walk into, not exotic. With `[DOG]` as the focus and nothing
+else, `rel-uses-for` offers `(poss)` **both ways**: a dog is animate, so it can
+possess, and also an entity, so it can be possessed. Picking `←(poss)` is
+legitimate against the list shown. Choosing `[FOOD]` is what makes it illegal,
+and food is not animate. Nothing noticed until the server refused the Add.
+
+So the rule is **reconcile after every pane change**, rather than guard the one
+click that happens to bypass a list:
+
+| Legal directions for what the pane holds | Result |
+|---|---|
+| current one is legal | nothing happens |
+| only the opposite | flip the arc, and say so |
+| neither | drop the relation, keep focus and target, say so |
+
+Flipping rather than refusing, because the arc you asked for does exist — it
+just runs the other way, and the editor knowing which way is the whole point of
+picking instead of typing.
+
+The same reconciliation covers a target that is a **concept type not yet in the
+graph**. The pair query cannot see a node that does not exist, so the far-end
+set answers instead — one question per direction.
+
+Two consequences worth stating, because the rest of the design leans on them:
+
+- The server's own legality check stays as the backstop, not the interlock. It
+  is right to refuse an illegal arc; it is just too late to be the only thing
+  that does.
+- **A message must never outlive the action that produced it.** A failed Add
+  once left its error on screen through every later click, including Clear —
+  which made a pane that *had* been emptied look stuck, turning a recoverable
+  mistake into a dead end. Clearing the status on every refresh is what makes
+  the correcting messages above readable as feedback rather than as wreckage.
 
 ## Concepts have two click zones
 
@@ -340,10 +392,22 @@ submission; returning a session handle to poll would be much worse to use.
   (`[BOY]- (sex)… (life-stage)…` → `(life-stage)… (sex)…`) or a referent
   case-normalized (`[breakfast]` → `[BREAKFAST]`). So 29 of 38 would have been
   rewritten by opening and saving them untouched.
-- **One type column or two** — start with two, simplify later if warranted.
+- **One type column or two** — still two. Nothing so far argues for collapsing
+  them; relations on the left and concepts on the right runs in the order you
+  fill the editor pane.
+- **Vertical proportions** — the graph pane holds a fixed share while a
+  three-arc graph uses a fraction of it, pushing the editor pane and the focus
+  list into the bottom third. The two panes you actually work in are the ones
+  being squeezed.
+- **Type-in filters** — the per-column text fields described under "Type-list
+  filtering" are not built. The lattice-computed narrowing is.
 
 ## First slice
 
-The non-recursive loop on a live graph object from the REPL: `(edit-cgraph g)`,
-add and remove arcs, UPDATE and CANCEL. Nesting, the string entry point, and
-the type-in filters come after.
+Done: the non-recursive loop on a live graph object from the REPL,
+`(edit-cgraph g)` — add and remove arcs, UPDATE and CANCEL — plus the string
+entry point, which arrived with it since a session parses to a working graph
+either way.
+
+Still to come: **nesting** (the recursive call, which needs the referent
+editors) and the **type-in filters**.
