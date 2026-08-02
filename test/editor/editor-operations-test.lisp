@@ -197,7 +197,9 @@
   "Run the editor system's tests. Not reached by TEST-CGRAPH -- see the
    comment at the top of this file."
   (let ((results (list (cons "editor-operations-test"
-                             (editor-operations-test verbose)))))
+                             (editor-operations-test verbose))
+                       (cons "referent-view-test"
+                             (referent-view-test verbose)))))
     (dolist (r results)
       (format t "~&-=- ~a~34t~:[failed <<<~;passed~]~%" (car r) (cdr r)))
     (every #'cdr results)))

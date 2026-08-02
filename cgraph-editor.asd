@@ -17,6 +17,7 @@
                 :serial t
                 :components ((:file "session")
                              (:file "operations")
+                             (:file "referent")
                              (:file "api")))
                ;; Under test/editor/ rather than test/, because
                ;; EXTRACT-TEST-NAMES scans test/ by filename and
@@ -26,4 +27,5 @@
                (:module "test/editor"
                 :depends-on ("system/editor")
                 :serial t
-                :components ((:file "editor-operations-test")))))
+                :components ((:file "editor-operations-test")
+                             (:file "referent-view-test")))))

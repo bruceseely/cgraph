@@ -352,6 +352,49 @@ not be offered.
 writes by hand, so it looks like the obvious first slice, but without stage 0
 you would be afraid to press UPDATE. The smallest honest slice is 0 + 1.
 
+#### Built: in place, not by re-emission
+
+Stage 0 above was written as *decompose → edit → re-emit notation*, with
+"emitted notation re-parses to an equal concept" as the contract. It was built
+differently, and the contract is stronger for it: **edits mutate the concept in
+place**, one named field at a time.
+
+Re-emission cannot work here. Re-parsing mints new nodes, so every referent
+edit would churn the `node-ref` the browser's click map is keyed on — the same
+reason every other editor operation mutates rather than rebuilds. It also puts
+the unbounded tail on the round trip, where any gap in the decomposition
+becomes silent data loss. In place, a feature nothing names is a feature
+nothing can drop, so losslessness is structural rather than earned.
+
+So the split (`system/editor/referent.lisp`) is a **read** side —
+`describe-referent` → a `referent-view` of identity / modifiers / tail — and a
+**write** side of setters that each touch one field. The identity setters do
+the real work, because identity is exclusive: each clears the other mechanisms
+first, or a concept holding both a coref label and an individual renders as
+neither.
+
+Three things the catalog-driven test caught, all of which a
+looks-right-by-inspection decomposition would have shipped:
+
+- `*x` and `?x` are **different mechanisms**, not two spellings. `*x` is a
+  `node-variable` rendered by `variable-text`; `?x` is a coreference label
+  rendered by `coref-text`; a concept with both renders only the coref
+  (`concept.lisp:124`). A `[DOG: *x]` concept has no referent *and* no coref
+  label, so a view consulting only those reports a bare generic and the label
+  is lost.
+- A measure on a non-set lands in the **individual's properties**, because
+  `:measure` is absent from `resolve-target-concept`'s `sans-prop` list. It is
+  therefore both a modelled modifier and a member of the tail, and must be
+  stripped from one of them or it gets written twice.
+- A measure on a non-set **mints an anonymous individual** to hang itself on,
+  so `[DISTANCE: @5 ft.]` has an `:individual` identity rather than none.
+
+`referent-identity-text` is deliberately more explicit than `format-concept`:
+the formatter drops an individual's id once its name is unambiguous
+(`[CAT: Felix #7]` → `[CAT: Felix]`), which is right for notation and wrong for
+an editor — the id is what the name resolves *to*, and a field you are not
+shown is a field you cannot edit.
+
 ## Remove
 
 Each display-pane line has an ✕. Clicking it removes the relation, then drops
