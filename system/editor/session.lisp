@@ -291,6 +291,19 @@
 
 ;;; --- Opening a window ------------------------------------------------------
 
+(defun sync-editor-port ()
+  "Point *EDITOR-PORT* at the port the server is actually listening on.
+
+   The editor registers its handlers on the type browser's acceptor, so the
+   8060 default is right until someone starts the server somewhere else -- and
+   then every URL the editor prints is wrong in a way that reads as a broken
+   editor rather than a mismatched port. Ask the acceptor instead of assuming.
+
+   Silent when no server is running: the default then stands, which is what
+   the tests want, since they never open a window."
+  (when *web-acceptor*
+    (setf *editor-port* (hunchentoot:acceptor-port *web-acceptor*))))
+
 (defun editor-session-url (session)
   (format nil "http://localhost:~a/editor?session=~a"
           *editor-port* (session-id session)))
@@ -328,6 +341,7 @@
 
    OPEN NIL skips launching a browser -- the URL is printed and the call still
    blocks, which is how the tests drive it."
+  (sync-editor-port)
   (let* ((kind (etypecase thing
                  (null    :graph)
                  (string  :string)

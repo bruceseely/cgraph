@@ -224,6 +224,11 @@
   ;; start web server
   (terpri)
   (asdf:load-system :cgraph-web)
+  ;; The editor registers its handlers on the acceptor started just below, and
+  ;; EDIT-CGRAPH is not so much as a defined name until this runs. Loaded here
+  ;; rather than on first use so there is one name to remember and no way to
+  ;; meet an undefined function by typing the obvious thing.
+  (asdf:load-system :cgraph-editor)
   (cg::start-web-server :port 8060)
   (terpri)
 
@@ -238,62 +243,3 @@
   (when cg::*run-tests-on-startup*
     (cg::test-cgraph t)))
 
-(in-package #:conceptual-graphs)
-
-;;; --- Opening the editor from the REPL --------------------------------------
-;;;
-;;; The editor is its own ASDF system, and START-CGRAPH does not load it -- it
-;;; loads :cgraph-web and starts the acceptor, nothing more. So the first edit
-;;; of a session otherwise needs the system loaded by hand before EDIT-CGRAPH
-;;; is so much as a defined name.
-;;;
-;;; EDIT-GRAPH is that preamble, done once and correctly:
-;;;
-;;;   (edit-graph "[EAT]- (agnt)→[DOG] (obj)→[FOOD]")
-;;;   (edit-graph some-graph)
-;;;   (edit-graph)                        ; start from nothing
-;;;
-;;; Loading on demand rather than at startup keeps the editor optional, which
-;;; is the reason it is a separate system at all. Same shape as START-CGRAPH
-;;; pulling in :cgraph-web when it is actually wanted.
-
-(defun %cg-symbol (name)
-  "The symbol NAME in this package, or an error naming what is missing.
-   Looked up rather than referenced so that this file, which is part of the
-   main system, need not mention names the editor system defines."
-  (or (find-symbol name '#:conceptual-graphs)
-      (error "~a is undefined -- :cgraph-editor did not load as expected." name)))
-
-(defun %sync-editor-port ()
-  "Point the editor at whatever port the server is really listening on.
-
-   *EDITOR-PORT* defaults to 8060 and the editor shares the type browser's
-   acceptor, so the two agree until someone starts the server elsewhere --
-   and then the printed URL is wrong in a way that looks like the editor is
-   broken. Ask the acceptor instead of assuming."
-  (let* ((sym (find-symbol "*WEB-ACCEPTOR*" '#:conceptual-graphs))
-         (acceptor (and sym (boundp sym) (symbol-value sym))))
-    (when acceptor
-      (setf (symbol-value (%cg-symbol "*EDITOR-PORT*"))
-            (uiop:symbol-call '#:hunchentoot '#:acceptor-port acceptor)))))
-
-(defun edit-graph (&optional thing &rest keys)
-  "Edit THING in the browser, loading the editor system if this image lacks it.
-
-   THING is anything EDIT-CGRAPH takes -- a string of linear notation, a live
-   GRAPH, a CONCEPT, or nothing at all for a fresh graph -- and KEYS pass
-   straight through (:PARENT, :OPEN). Blocks until UPDATE or CANCEL and returns
-   (VALUES RESULT COMMITTED-P), so a string in gives the edited string back and
-   a graph in is edited in place.
-
-   The system is loaded only when EDIT-CGRAPH is not already defined, so this
-   costs nothing after the first call and never recompiles under you
-   mid-session. To pick up edited editor sources, reload it yourself."
-  (unless (find-symbol "EDIT-CGRAPH" '#:conceptual-graphs)
-    ;; Derived from the loaded system rather than hard-coded: the editor's .asd
-    ;; sits beside cgraph's, wherever the repository happens to live.
-    (pushnew (asdf:system-source-directory '#:cgraph)
-             asdf:*central-registry* :test #'equal)
-    (asdf:load-system :cgraph-editor))
-  (%sync-editor-port)
-  (apply (%cg-symbol "EDIT-CGRAPH") thing keys))
