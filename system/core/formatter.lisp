@@ -177,6 +177,47 @@
                                  #'segment-lessp))
   )
 
+(defun strip-node-refs (text)
+  "TEXT with the ` +NNN' node-ref annotations removed, along with the spaces
+   that precede them: \"[DOG  +394]\" -> \"[DOG]\".
+
+   A ref is only recognised where it can actually be one -- digits after a `+',
+   closed immediately by the bracket of the node it belongs to -- so a `+' that
+   is part of a referent is left alone."
+  (with-output-to-string (out)
+    (let ((i 0) (n (length text)))
+      (loop while (< i n) do
+        (let ((c (char text i)))
+          (cond
+            ((char= c #\+)
+             (let ((j (1+ i)))
+               (loop while (and (< j n) (digit-char-p (char text j))) do (incf j))
+               (if (and (> j (1+ i)) (< j n) (find (char text j) "])"))
+                   (setf i j)          ; skip the annotation; the bracket stays
+                   (progn (write-char c out) (incf i)))))
+            ;; A run of spaces is held back until we know what follows: spaces
+            ;; before an annotation belong to it and go with it.
+            ((char= c #\Space)
+             (let ((j i))
+               (loop while (and (< j n) (char= (char text j) #\Space)) do (incf j))
+               (unless (and (< j n) (char= (char text j) #\+)
+                            (let ((k (1+ j)))
+                              (loop while (and (< k n) (digit-char-p (char text k)))
+                                    do (incf k))
+                              (and (> k (1+ j)) (< k n) (find (char text k) "])"))))
+                 (dotimes (ignore (- j i)) (write-char #\Space out)))
+               (setf i j)))
+            (t (write-char c out) (incf i))))))))
+
+(defun layout-width (text)
+  "The width TEXT will occupy once displayed.
+
+   Node-refs are an out-of-band handle for the editor, stripped by the page
+   before anything is shown, so they must not influence layout. Measuring with
+   them included over-indents every line beneath -- and compounds, since each
+   level's indent is derived from the width of the line above it."
+  (length (if *always-show-node-ref* (strip-node-refs text) text)))
+
 ;;; The 'branched' argument says that this segment is one of multiple segments starting
 ;;; from the same segment
 (defmethod format-segments ((current-segment graph-segment)
@@ -300,7 +341,7 @@
 
 
             (when connected-segments
-                (let ((base-indent (length text-line)))
+                (let ((base-indent (layout-width text-line)))
                   (dolist (next-segment connected-segments)
 
                     (format-segments next-segment base-indent indent-delta :branched branching-factor)

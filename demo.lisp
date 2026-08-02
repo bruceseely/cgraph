@@ -188,9 +188,6 @@
   (graph-to-text graph))
 
 
-
-
-
 (progn
   (initialize-context *context*)
   (initialize-types :external-types-directory "~/repo/cgraph-types/")
