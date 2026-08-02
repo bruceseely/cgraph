@@ -83,9 +83,11 @@
     /* Full width, above the frame: the sentence is about the whole graph, not
        about the focus, so it does not belong in either column. Sized to its
        content up to a couple of lines, then scrolls — it must not grow to the
-       point of pushing the graph off the screen. */
+       point of pushing the graph off the screen.
+       Headless, so it carries a little more vertical room of its own: without
+       a head above it the sentence would otherwise sit hard against the bar. */
     #text-pane { flex: 0 0 auto; }
-    #text-pane .pane-body { max-height: 5rem; }
+    #text-pane .pane-body { max-height: 5rem; padding: 0.6rem; }
     #english {
       font-size: 15px;
       line-height: 1.45;
@@ -252,12 +254,10 @@
     <button id="cancel">Cancel</button>
   </div>
 
+  <!-- No pane head: a sentence is self-evidently the sentence, and a label
+       reading ENGLISH over one line of English is the pane explaining what you
+       can already see. -->
   <div class="pane" id="text-pane">
-    <div class="pane-head">
-      English
-      <span class="spacer"></span>
-      <span class="muted" id="text-hint">re-read after each edit</span>
-    </div>
     <div class="pane-body"><div id="english"></div></div>
   </div>
 
