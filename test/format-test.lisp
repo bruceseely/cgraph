@@ -10,10 +10,10 @@
   (initialize-variables)
 
   ;; make individuals
-  (defparameter spot-indiv    (make-individual 'dog '(:name "Spot")))
+  (defparameter spot-indiv    (ensure-test-individual 'dog '(:name "Spot")))
   (defparameter spot-con      (make-concept (get-concept-type 'dog) (make-referent spot-indiv)))
 
-  (defparameter sue-indiv    (make-individual 'person '(:name "Sue")))
+  (defparameter sue-indiv    (ensure-test-individual 'person '(:name "Sue")))
   (defparameter sue-con      (make-concept (get-concept-type 'person) (make-referent sue-indiv)))
 
   (defvar spotz-con )

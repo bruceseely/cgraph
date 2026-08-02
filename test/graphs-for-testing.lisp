@@ -46,15 +46,33 @@
 
 
 
+(defun ensure-test-individual (type properties)
+  "The individual of TYPE with PROPERTIES, made only if there is not one
+   already.
+
+   MAKE-INDIVIDUAL always mints a new object -- that is what it is for -- and
+   RECORD-INDIVIDUAL files every one in *INDIVIDUALS*. The fixture initializers
+   run once per test, so creating unconditionally left a fresh Spot and Sue
+   behind on every call: twenty per suite run, squatting on ids 2-21 in the
+   running image. A later `[DOG: FIDO #7]' at the REPL then failed with
+   `Referent #7 is already named \"Sue\"' -- an error about a test fixture,
+   raised at the REPL, hours after the test that made it.
+
+   GET-INDIVIDUAL is the same lookup MAKE-CONCEPT already does for an explicit
+   :id, which is exactly why Spotz and Suez below never accumulated the way
+   Spot and Sue did."
+  (or (get-individual type :properties properties)
+      (make-individual type properties)))
+
 (defun init-test-graphs ()
   (clear-id-cache)
   (initialize-variables)
 
   ;; make individuals
-  (setf spot-indiv    (make-individual 'dog '(:name "Spot")))
+  (setf spot-indiv    (ensure-test-individual 'dog '(:name "Spot")))
   (setf spot-con      (make-concept (get-concept-type 'dog) (make-referent spot-indiv)))
 
-  (setf sue-indiv    (make-individual 'person '(:name "Sue")))
+  (setf sue-indiv    (ensure-test-individual 'person '(:name "Sue")))
   (setf sue-con      (make-concept (get-concept-type 'person) (make-referent sue-indiv)))
 
   (let ((*allow-dynamic-individual-creation* t))
