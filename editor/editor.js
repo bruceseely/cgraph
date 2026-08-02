@@ -46,15 +46,50 @@ let focusArcs = [];
 // editor uses for supertypes.
 let armedSlot = null;
 
+// Declared up here, ahead of its first reader, rather than beside the rest of
+// the orphan handling below: setStatus is called from everywhere and a `let'
+// read before its declaration is evaluated is a ReferenceError, not a NIL.
+let orphaned = false;
+
 function setStatus(msg, kind) {
+  // Once the session is gone every request fails, and each failure would write
+  // its error here — underneath the veil that already explains it, and after
+  // NOTE-SESSION-GONE cleared the line. Announcing it once means refusing to
+  // announce it again, and doing that here covers every caller rather than
+  // asking each catch to remember.
+  if (orphaned) return;
   statusEl.textContent = msg || '';
   statusEl.className = kind || '';
+}
+
+// A page can outlive its session: EDIT-CGRAPH's UNWIND-PROTECT forgets the
+// session, so a C-c C-c in the blocked REPL, or a CANCEL-EDITOR-SESSION from
+// another buffer, leaves this tab talking to a server that has never heard of
+// it. Every request then fails identically and forever, and REFRESH's catch
+// returns before the line that clears the status — so the red message is not
+// merely sticky, it is unclearable, because it is true again the moment you
+// try anything. That is not an error to report over and over; it is a state to
+// announce once. The veil already exists for exactly this.
+const SESSION_GONE = /no such editor session|session is already finished/i;
+// `orphaned' itself is declared above setStatus, which reads it.
+
+function noteSessionGone() {
+  if (orphaned) return;
+  orphaned = true;
+  finished = true;                 // its browser leaving is no longer news
+  document.querySelectorAll('button').forEach(b => b.disabled = true);
+  setStatus('');                   // the veil says it, where you are looking
+  showVeil('orphaned');
 }
 
 async function call(url, opts) {
   const resp = await fetch(url, opts);
   const data = await resp.json().catch(() => ({ ok: false, error: `HTTP ${resp.status}` }));
-  if (!resp.ok || !data.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+  if (!resp.ok || !data.ok) {
+    const message = data.error || `HTTP ${resp.status}`;
+    if (SESSION_GONE.test(message)) noteSessionGone();
+    throw new Error(message);
+  }
   return data;
 }
 
@@ -530,6 +565,11 @@ function closeReferent() {
   refConcept = null;
   refView = null;
   refPending = null;
+  // A message describes the action that produced it, and closing the panel
+  // ends that action. Without this a refusal from the panel outlived the panel
+  // itself, sitting at the bottom of a window with nothing left on screen to
+  // explain it.
+  setStatus('');
 }
 
 // Applying one field. The graph comes back with it, so the pane, the graph and
@@ -644,6 +684,9 @@ async function refreshEnglish() {
     const data = await call(`/api/editor/text?${q({ session: SESSION })}`);
     paintEnglish(data.text, data.note);
   } catch (err) {
+    // A dead session is not something to say about the graph. Leave the last
+    // sentence standing; the veil explains why it stopped moving.
+    if (orphaned) return;
     paintEnglish(null, err.message);
   }
 }
@@ -746,15 +789,25 @@ async function removeArc(relationRef) {
 // opened, and this one was opened by the server shelling out to the OS, so the
 // browser would refuse -- better to say plainly that the tab can be closed than
 // to try and silently fail.
+const VEIL_TEXT = {
+  commit:   ['committed', 'Committed',
+             'The edited graph was installed and the REPL call has returned.'],
+  cancel:   ['cancelled', 'Cancelled',
+             'Nothing was changed — the original graph is untouched.'],
+  // Not a failure of this page, and worth saying so: the work was not lost
+  // here, it stopped being wanted there.
+  orphaned: ['cancelled', 'Session ended',
+             'The REPL call this page was editing is no longer waiting — it was '
+             + 'interrupted, or the session was cancelled from elsewhere. '
+             + 'Nothing here can reach it now.']
+};
+
 function showVeil(action) {
   const veil = $('veil');
-  veil.className = action === 'commit' ? 'committed' : 'cancelled';
-  veil.querySelector('.headline').textContent =
-    action === 'commit' ? 'Committed' : 'Cancelled';
-  veil.querySelector('.detail').textContent =
-    action === 'commit'
-      ? 'The edited graph was installed and the REPL call has returned.'
-      : 'Nothing was changed — the original graph is untouched.';
+  const [cls, headline, detail] = VEIL_TEXT[action] || VEIL_TEXT.cancel;
+  veil.className = cls;
+  veil.querySelector('.headline').textContent = headline;
+  veil.querySelector('.detail').textContent = detail;
   veil.hidden = false;
 }
 

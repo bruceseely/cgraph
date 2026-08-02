@@ -70,7 +70,18 @@
 (defmethod unset-variable ((variable symbol))
   (let ((node (variable-node variable)))
     (remhash node (variables *variables*))
-    (remhash variable (nodes *variables*))))
+    (remhash variable (nodes *variables*))
+    ;; Give the letter back. Allocation removes from the pool permanently, so
+    ;; without this a name freed by an edit is still gone and the alphabet
+    ;; drains monotonically however much churn the session sees. Only
+    ;; single characters from the original alphabet go back -- a generated
+    ;; `v12' was never in the pool and does not belong in it.
+    (let ((s (string-downcase (string variable))))
+      (when (and (= 1 (length s))
+                 (find (char s 0) *variable-names*)
+                 (not (find (char s 0) (names *variables*))))
+        (setf (names *variables*)
+              (concatenate 'string (names *variables*) s))))))
 
 (defmethod unset-variable ((node graph-node))
   (unset-variable (node-variable node)))
@@ -81,6 +92,30 @@
 (defmethod variable-setep (node)
   (gethash node (variables *variables*)))
 
+(defun next-variable-name ()
+  "A free variable name: the next letter of the pool, or a generated one once
+   the alphabet is spent.
+
+   The pool holds 21 single characters and every allocation REMOVEs one for
+   good, so a long-lived session eventually empties it -- and the old code then
+   took (SUBSEQ \"\" 0 1) and signalled `The bounding indices 0 and 1 are bad
+   for a sequence of length 0'. In the graph editor that is fatal rather than
+   cosmetic: SESSION-RENDER runs on every request, so once the pool is dry
+   every request fails, including the ones the page uses to recover. The error
+   then cannot be cleared by anything the user does, because it is true again
+   the moment they try.
+
+   Falling off the end of the alphabet is not an error, so it no longer behaves
+   like one -- the names simply stop being single letters."
+  (let ((pool (names *variables*)))
+    (if (plusp (length pool))
+        (subseq pool 0 1)
+        (loop for i from 1
+              for candidate = (format nil "v~d" i)
+              unless (gethash (intern (string-upcase candidate) :keyword)
+                              (nodes *variables*))
+                return candidate))))
+
 (defmethod set-variable ((node basic-node) &optional new-name)
   (assert (or (null new-name) (typep new-name 'symbol) (typep new-name 'string)))
   (assert (typep node 'concept))
@@ -88,7 +123,7 @@
   (unless (variable-setep node)
     (let ((var-name (typecase new-name
                       (symbol  (or new-name
-                                   (intern (string-upcase (subseq (names *variables*) 0 1)) :keyword)))
+                                   (intern (string-upcase (next-variable-name)) :keyword)))
                       (string  (intern (string-upcase new-name) :keyword)))))
 
       (setf (names *variables*) (remove (string var-name) (names *variables*) :test #'string-equal))
