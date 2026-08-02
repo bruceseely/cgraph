@@ -37,7 +37,12 @@ arrow points. Everything is picked, nothing is typed as CG notation.
 │ │  ▲focus   └─ to add ─┘      │ │ EAT           │ (loc)→      │
 │ │  [Add] [Remove] [UPDATE]    │ │               │             │
 │ └─────────────────────────────┘ │ both lists filtered and     │
-│ ┌─ display pane (read-only) ──┐ │ sorted by context           │
+│ ┌─ referent pane (on demand) ─┐ │ sorted by context           │
+│ │ IDENTITY  — ?x name #n      │ │                             │
+│ │ MODIFIERS quant tense …     │ │                             │
+│ │ CARRIED   collar: red       │ │                             │
+│ └─────────────────────────────┘ │                             │
+│ ┌─ display pane (read-only) ──┐ │                             │
 │ │ →(agnt)→[DOG]             ✕ │ │                             │
 │ │ ←(obj)←[CAKE]             ✕ │ │ two columns for now; may    │
 │ │ →(loc)→[KITCHEN]          ✕ │ │ collapse to one later       │
@@ -60,6 +65,10 @@ arrow points. Everything is picked, nothing is typed as CG notation.
 - **English pane** — read-only. `GRAPH-TO-TEXT` on the working graph. Full
   width and above the frame, because the sentence is about the whole graph
   rather than about the focus, so it belongs to neither column.
+- **Referent pane** — one concept's referent, opened by clicking the referent
+  zone of a concept slot and closed again by hand. Hidden otherwise: it is
+  about ONE concept, so leaving it up while the focus moves elsewhere would be
+  showing a field that is no longer the one you are looking at.
 
 ### The English pane is refreshed by edits, not by clicks
 
@@ -280,6 +289,9 @@ Two kinds, one contract:
 Both open, edit, and finish with UPDATE or CANCEL, returning a referent. The
 recursion falls out of that uniformity rather than being special-cased.
 
+Both are now built; this section is the design, and the subsections that follow
+record where building it disagreed with the design.
+
 The non-graph referent editor needs real support, because referents get
 complex — individuals, sets, quantifiers, measures. For a set it should offer
 the available individuals to choose from and format the referent itself. The
@@ -331,13 +343,17 @@ The same discipline already runs elsewhere here: `/api/edit-type` writes the
 *stored* canonical text when the graph did not change, rather than the
 reformatted one. Don't rewrite what you didn't edit.
 
-| Stage | Covers | Why there |
-|---|---|---|
-| 0 | decompose and re-emit losslessly | makes every later stage non-destructive; needs no UI |
-| 1 | identity, minus sets — empty, `*`, `*x`, `?x`, `#`, `#123`, `Fido` | the exclusive spine, and most referents are identity-only |
-| 2 | modifiers — quantifier and measure first, then tense/aspect/voice gated on the concept type | orthogonal to 1, so it cannot destabilise it |
-| 3 | sets — `{Fido, #123, *}`, with optional `@ N` | recurses on stage 1's selector minus `:set`, so it is cheapest last |
-| 4 | decide the tail | by then use will have shown whether one ever needs editing |
+| Stage | Covers | Why there | State |
+|---|---|---|---|
+| 0 | decompose and re-emit losslessly | makes every later stage non-destructive; needs no UI | **built** — as a decomposition plus in-place setters, not re-emission; see below |
+| 1 | identity, minus sets — empty, `*`, `*x`, `?x`, `#`, `#123`, `Fido` | the exclusive spine, and most referents are identity-only | **built**, minus `*x` — see "A variable is not offered" |
+| 2 | modifiers — quantifier and measure first, then tense/aspect/voice gated on the concept type | orthogonal to 1, so it cannot destabilise it | **built** — the gate is not on the concept type; see "What actually gates tense" |
+| 3 | sets — `{Fido, #123, *}`, with optional `@ N` | recurses on stage 1's selector minus `:set`, so it is cheapest last | open |
+| 4 | decide the tail | by then use will have shown whether one ever needs editing | open — the pane shows the tail read-only, which may be all it ever needs |
+
+Graph referents were expected to "plug in at stage 1 as an alternative to the
+whole panel". They did, and they are **built** — see "Descending into a graph
+referent".
 
 Two things fall out rather than needing their own work. **Graph referents** plug
 in at stage 1 as an alternative to the whole panel, chosen by
@@ -394,6 +410,100 @@ the formatter drops an individual's id once its name is unambiguous
 (`[CAT: Felix #7]` → `[CAT: Felix]`), which is right for notation and wrong for
 an editor — the id is what the name resolves *to*, and a field you are not
 shown is a field you cannot edit.
+
+#### A variable is not offered
+
+Stage 1 lists `*x` among the identities. The panel does not offer it. Setting
+one *succeeds* — the request comes back reporting `:variable` — and the very
+next render discards it, because a lone variable with no coreference partner is
+dropped by design. Sharing is made by pointing two arcs at one node, not by
+naming it; see "Coreference is automatic". A button whose effect evaporates a
+moment later is worse than no button.
+
+The *view* still reads `:variable`, and must: a parse can produce one, and a
+view that could not see it would let an edit elsewhere overwrite it.
+
+Two related traps, both found by driving the panel rather than reading it. One
+text box serves both the coref **label** and the individual's **name**, so
+switching kinds carried the text across — clicking the button marked `?x` on
+`[PERSON: Sue]` produced `?sue`. Text is now reused only when the role is
+unchanged. And a **name is the one value a button cannot invent**: choosing
+`name` defaulted to "unnamed", which minted a real individual called that and
+made the sentence read *"Unnamed eats a pie."* The button now selects the kind
+and arms the field; nothing is sent until you type.
+
+#### What actually gates tense, aspect and voice
+
+Not the concept type, which is what this note assumed. The obvious
+implementation asks whether the lexicon classifies the type `:verb`, on the
+reasoning that the realizer consults that before conjugating. It does not, for
+the case that matters:
+
+```
+[WISH: @past]-(expr)->[PERSON: Sue] (thme)->[PIE]   ->   Sue wished a pie.
+```
+
+`WISH` and `DESIRE` are `STATE` subtypes, `STATE` is not among
+`*pos-hierarchy-roots*`, so both classify `:noun` — and the tense is realized
+anyway. It arrives through `find-main-predicate`, which prefers the verb side
+of a subject relation and never asks about POS. A POS gate would have hidden a
+control that demonstrably works, which is the exact failure it was meant to
+prevent.
+
+So the test is the realizer's own: a concept heads a clause if it is an act or
+event by the lattice, or if a relation the syntax table maps to `:subject`
+points at it from the verb side. Being **graph-derived rather than
+type-derived**, it also changes as you build — attaching an `(expr)` arc is
+what makes the tense controls appear, which is the honest moment for them to.
+
+A value already set outranks the gate. A graph can arrive carrying
+`[WISH: @past]` whatever this thinks, and hiding the control would hide the
+only way to remove it.
+
+Quantifier is deliberately **not** gated: universal quantification over an
+event is meaningful in CG, so `@every` on a verb is not the nonsense that
+`@past` on a dog is.
+
+#### Clearing the whole referent
+
+`—` clears the identity and keeps the modifiers, those being orthogonal. That
+left six interactions between `[DOG: Rex @past @passive @every]` and a bare
+`[DOG]`, so there is also a **Clear all**. It is one request rather than six,
+so a half-cleared referent is not a state anything can stop in, and it sits at
+the far end of the *modifier* row rather than beside the identity buttons —
+`—` and "clear everything" mean different things and must not look alike.
+
+It is the one operation allowed to drop the tail, and what it does is worth
+stating exactly: the unrecognised properties belong to the **individual**, so
+clearing *detaches* them rather than destroying them. The individual survives
+and giving the concept that id back re-attaches the lot. The catch is that the
+panel stops showing the id at that point, so the thing that makes it reversible
+is the thing it hides.
+
+#### Descending into a graph referent
+
+`Edit graph…` opens a **child session** over the concept's referent; the page
+navigates to it and UPDATE or CANCEL brings you back. Two pieces of existing
+design carried it: `editor-session` has had a `parent` slot from the start, and
+sessions are already resumable at their URL — which is what a disconnect relies
+on — so leaving the parent page and returning to it needed nothing new.
+
+The child's `original` is the enclosing **concept**, not a graph, because the
+graph need not exist yet. Creating an empty one on descent is the obvious
+alternative and is unusable: a graph with no head cannot be formatted
+(`cgraph-text` has no method for `NIL`), so attaching one broke rendering of
+the *parent* — a descent you had not finished left the outer editor unable to
+draw itself. `install-working-graph` therefore grew a `:graph-referent` case
+that either sets an existing nested graph's head (keeping the object, and with
+it the `holders` back-pointer the referent rests on) or attaches the working
+graph as a new referent.
+
+Finishing a child also **forgets** it. A child has no blocked caller and no
+`unwind-protect` behind it, so without that its URL keeps resolving and a stale
+tab can go on editing a graph the user believes they closed.
+
+Returning does not raise the veil. The veil means "this is over"; finishing a
+nested graph ends that graph, not the session you are in.
 
 ## Remove
 
@@ -566,9 +676,17 @@ submission; returning a session handle to poll would be much worse to use.
 
 ## Open
 
-- **The non-graph referent editor** — designed (see §Referent editors), not
-  built. Staged 0–4; nothing beyond stage 0 is started, and stage 0 is the one
-  that has to exist before any of the rest is safe.
+- ~~**The non-graph referent editor**~~ — built through stage 2, plus graph
+  referents. What remains is stage 3 (sets) and stage 4 (whether the tail ever
+  needs editing, as opposed to the read-only display it has now). Three things
+  the design got wrong and building corrected are recorded in place: the write
+  side is in-place mutation rather than re-emission, `*x` is not offerable, and
+  tense/aspect/voice are gated on whether the concept heads a clause rather
+  than on its type.
+- **A cleared referent hides the id that would undo it** — Clear all detaches
+  the individual, and giving the id back re-attaches it with its properties,
+  but the panel stops showing that id the moment it clears. A breadcrumb
+  ("was #2") would make the reversibility reachable rather than merely true.
 - ~~**Formatter round-trip**~~ — done. `/api/edit-type` now compares against what
   `/api/type-def` served (`canonical-unchanged-p`, `supertypes-unchanged-p`) and
   writes nothing when nothing changed; when something else changed but the graph
