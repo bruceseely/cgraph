@@ -803,6 +803,7 @@ const ntNote      = document.getElementById('nt-note');
 const ntStatus    = document.getElementById('nt-status');
 const ntCreateBtn = document.getElementById('nt-create');
 const ntSaveBtn   = document.getElementById('nt-save');
+const ntDeleteBtn = document.getElementById('nt-delete');
 const editTypeBtn = document.getElementById('edit-type-btn');
 
 // Supertypes are chosen by clicking existing types (sidebar or graph), never typed —
@@ -903,6 +904,8 @@ function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
   ntCanon.classList.remove('field-error');
   ntCreateBtn.hidden = isEdit;               // Create ↔ Save
   ntSaveBtn.hidden   = !isEdit;
+  ntDeleteBtn.hidden = !isEdit;              // nothing to delete while creating
+  disarmDelete();                            // never inherit an arm from a previous type
   clearError();
   setNtHint(isEdit ? `editing ${edit} — “+” adds a supertype; explore the graph freely`
                    : '“+” adds a supertype; explore the graph freely');
@@ -917,9 +920,71 @@ function hideForm() {
   clearSuperSet();            // drop the sidebar is-super highlights
   editingLabel = null;
   ntLabel.readOnly = false;
+  disarmDelete();
   setNtHint('');
   clearError();
 }
+
+// ── Delete a type ───────────────────────────────────────────────────────────────
+// Two clicks, not a confirm(): the first arms the button and says what is about
+// to happen, the second does it. Same one-shot arming the "+" supertype pick and
+// the graph editor's slots use, so the gesture is already familiar here — and it
+// keeps a modal from freezing the page over what is usually a just-made typo.
+//
+// The guard that matters is on the server, not here: it refuses any type that
+// still has subtypes, is named in another type's canonical graph, or appears in
+// a relation's signature. So an armed Delete cannot silently take a referrer
+// with it; the worst case is a refusal explaining what to fix first.
+
+// Arming changes the button's COLOUR and the hint line, never its label: a
+// control that resizes as it arms shifts the buttons beside it, and the one
+// beside this is Cancel. Growing it to "Delete xat — click again" moved Cancel
+// out from under the pointer, so the click meant to back out committed the
+// delete instead. The wording belongs where it costs no width.
+let deleteArmed = false;
+let hintBeforeArm = '';
+
+function disarmDelete() {
+  if (deleteArmed) setNtHint(hintBeforeArm);
+  deleteArmed = false;
+  ntDeleteBtn.classList.remove('armed');
+}
+
+function armDelete() {
+  hintBeforeArm = ntStatus.textContent;
+  deleteArmed = true;
+  ntDeleteBtn.classList.add('armed');
+  setNtHint(`click Delete again to remove ${editingLabel} — Cancel, or any edit, backs out`);
+}
+
+async function deleteType() {
+  const label = editingLabel;
+  if (!label) return;
+  if (!deleteArmed) { armDelete(); return; }
+  disarmDelete();
+  setNtHint(`deleting ${label}…`);
+  try {
+    const resp = await fetch(`/api/delete-type?label=${encodeURIComponent(label)}`,
+                             { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      setNtHint('');
+      showError(data.error || `failed: ${resp.status}`);
+      return;
+    }
+    hideForm();
+    selected.delete(label);      // a deleted type must not linger as a chip
+    await refreshTypeList();
+    await redraw();
+  } catch (err) {
+    setNtHint('');
+    showError(err.message);
+  }
+}
+
+ntDeleteBtn.addEventListener('click', deleteType);
+// Typing into the form is a change of mind about deleting it.
+for (const el of [ntCanon, ntNote]) el.addEventListener('input', disarmDelete);
 
 function cancelPickTarget() {
   pickTargetMode = false;

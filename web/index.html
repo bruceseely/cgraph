@@ -192,6 +192,13 @@
       cursor: pointer;
     }
     #new-type-form button:hover { background: #e8e8e8; border-color: #aaa; }
+    /* Delete sits apart from Create/Save and reads destructive only once armed:
+       unarmed it is quiet, so it does not compete with the action you actually
+       came here to do. */
+    #nt-delete { margin-left: 0.5rem; color: #a04040; border-color: #ddc4c4; }
+    #nt-delete:hover { background: #fbeaea; border-color: #c88; }
+    #nt-delete.armed,
+    #nt-delete.armed:hover { background: #c0392b; border-color: #a5301f; color: #fff; }
     #nt-sep    { color: #999; }
     #nt-status { flex-basis: 100%; font-size: 11px; color: #aaa; }  /* comment on its own line below the fields+buttons row */
     #nt-status.error { color: #c0392b; }
@@ -515,6 +522,18 @@
     <button id="nt-create">Create</button>
     <button id="nt-save" hidden>Save Type Definition</button>
     <button id="nt-cancel">Cancel</button>
+    <!-- Editing only, and two-step: the first click arms it, the second commits.
+         An in-page arm rather than confirm(), because a modal blocks the page
+         and reads as heavier than the act deserves — this is a leaf type with
+         nothing attached, or the server would have refused it.
+
+         LAST in the row, and its label never changes, both for the same reason:
+         arming must not move any other control. A first version put it before
+         Cancel and widened it to "Delete xat — click again", which shifted
+         Cancel out from under the pointer — so the click meant to back out
+         landed on the armed button and committed the delete. The confirmation
+         wording lives in the hint line below instead, where it costs no width. -->
+    <button id="nt-delete" hidden title="Delete this type (refused if anything still uses it)">Delete</button>
     <span id="nt-status"></span>
   </div>
 

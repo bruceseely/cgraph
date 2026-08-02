@@ -313,6 +313,81 @@ appends). Writes the truename'd path, so a ~/.cgraph symlink stays intact."
           (write-string out-text out)))
       t)))
 
+(defun remove-concept-type-def (label file)
+  "Cut the (:label LABEL ...) form out of FILE, preserving every other byte.
+Returns T if a form was removed, NIL if it was not there (a runtime-only type,
+which is not an error -- the live catalog is still the thing being deleted).
+
+The span ends just past the form's closing paren, so the newline the form was
+written with is still ahead of it; taking that too is what keeps a delete from
+leaving a blank line where the type used to be."
+  (let* ((text (uiop:read-file-string file))
+         (span (concept-type-form-span label text)))
+    (when span
+      (let* ((end       (cdr span))
+             (with-eol  (if (and (< end (length text)) (char= (char text end) #\Newline))
+                            (1+ end)
+                            end))
+             (out-text  (concatenate 'string
+                                     (subseq text 0 (car span))
+                                     (subseq text with-eol))))
+        (with-open-file (out file :direction :output :if-exists :supersede
+                                  :if-does-not-exist :error)
+          (write-string out-text out)))
+      t)))
+
+(defun type-name-mentioned-p (label text)
+  "True when TEXT uses LABEL as a whole token. Tokens run over alphanumerics and
+hyphens, so ABSTRACT-OBJECT is one name rather than two, and CAT does not match
+inside CATALOG."
+  (and text
+       (let ((needle (string-downcase (string label)))
+             (token-char (lambda (c) (or (alphanumericp c) (char= c #\-)))))
+         (loop with down = (string-downcase text)
+               with n = (length down)
+               for start = 0 then (1+ pos)
+               for pos = (search needle down :start2 start)
+               while pos
+               thereis (and (or (zerop pos)
+                                (not (funcall token-char (char down (1- pos)))))
+                            (let ((after (+ pos (length needle))))
+                              (or (>= after n)
+                                  (not (funcall token-char (char down after))))))))))
+
+(defun concept-type-referrers (label)
+  "Everything that would be left dangling by deleting LABEL: the types that
+inherit from it, the types whose canonical graph names it, and the relation
+types that list it as a source or destination. Returns a list of human-readable
+strings, empty when the type is free to go."
+  (let ((sym (intern (string-upcase (string label)) :cg))
+        (found (list)))
+    ;; Subtypes first -- deleting a type with children orphans them. The bounds
+    ;; do not count: the lattice puts BOTTOM under everything, so every leaf has
+    ;; it as a subtype, and counting it would make every leaf permanently
+    ;; undeletable -- which is precisely the case a delete is FOR.
+    (let ((node (ignore-errors (get-concept-type sym))))
+      (when node
+        (dolist (sub (direct-subtypes node))
+          (unless (or (bottom-concept-type-p sub) (top-concept-type-p sub))
+            (push (format nil "~(~a~) inherits from it" (label sub)) found)))))
+    ;; canonical graphs of OTHER types
+    (loop for other being the hash-values of *concept-type-catalog* do
+      (unless (string-equal (string (label other)) (string label))
+        (let ((canon (ignore-errors (canonical-graph-string other))))
+          (when (type-name-mentioned-p label canon)
+            (push (format nil "~(~a~)'s canonical graph names it" (label other))
+                  found)))))
+    ;; relation signatures
+    (loop for rel being the hash-values of *relation-type-catalog* do
+      (let ((dest (ignore-errors (dest-type rel)))
+            (srcs (ignore-errors (source-types rel))))
+        (when (and dest (string-equal (string (label dest)) (string label)))
+          (push (format nil "relation (~(~a~)) points at it" (label rel)) found))
+        (when (find-if (lambda (s) (string-equal (string (label s)) (string label)))
+                       srcs)
+          (push (format nil "relation (~(~a~)) comes from it" (label rel)) found))))
+    (nreverse found)))
+
 (defun concept-type-file-note (label file)
   "The :note string stored for LABEL in FILE, or NIL. Notes live only in the file
 (the loader drops them), so this is the only way to pre-fill a note for editing."
@@ -549,6 +624,53 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                 (append-concept-type-def label super-tokens canonical note file))
               (format nil "{\"ok\":true,\"label\":\"~a\"}"
                       (json-escape (string-downcase label)))))))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+
+;;; POST /api/delete-type?label=X — remove a concept type, live and on disk.
+;;;
+;;; The counterpart create has always needed: a type added by hand is a type
+;;; that can be added by MISTAKE, and until now a misspelling was permanent --
+;;; you could not rename it, because the label IS the identity, and you could
+;;; not remove it either. So a typo lived in the ontology forever.
+;;;
+;;; Refuses rather than cascades. Everything that would be left dangling is
+;;; reported in one message, so a refusal tells you what to fix instead of
+;;; making you delete one referrer at a time to discover the next. Cascading
+;;; would be the wrong default anyway: deleting a type that others inherit from
+;;; is nearly always a mistake, and the one case it is not -- a fresh typo with
+;;; nothing attached -- is exactly the case that passes these checks.
+(hunchentoot:define-easy-handler (handle-api-delete-type :uri "/api/delete-type")
+    (label)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (unless (eq (hunchentoot:request-method*) :post)
+    (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
+    (return-from handle-api-delete-type "{\"error\":\"POST required\"}"))
+  (handler-case
+      (let ((label (and label (string-trim '(#\Space #\Tab) label))))
+        (when (or (null label) (zerop (length label)))
+          (error "a type name is required"))
+        (let* ((sym  (intern (string-upcase label) :cg))
+               (node (ignore-errors (get-concept-type sym))))
+          (unless node
+            (error "no such type: ~a" label))
+          (when (or (top-concept-type-p node) (bottom-concept-type-p node))
+            (error "~a is a bound of the lattice and cannot be deleted" label))
+          ;; Validate everything before mutating anything -- same order create
+          ;; follows, so a refusal leaves the catalog and the file untouched.
+          (let ((referrers (concept-type-referrers label)))
+            (when referrers
+              (error "~a is still in use: ~{~a~^; ~}" label referrers)))
+          (let* ((file    (concept-types-file))
+                 (in-file (concept-type-in-file-p label file)))
+            ;; live first: rollback-concept-type unlinks the inheritance AND
+            ;; drops the catalog entry, which is what keeps it out of /api/types.
+            (rollback-concept-type label)
+            (when in-file (remove-concept-type-def label file))
+            (format nil "{\"ok\":true,\"label\":\"~a\",\"removedFromFile\":~:[false~;true~]}"
+                    (json-escape (string-downcase label))
+                    in-file))))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
       (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
