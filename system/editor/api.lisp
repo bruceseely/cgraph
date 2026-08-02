@@ -218,7 +218,7 @@
                  \"aspect\":~:[null~;\"~:*~(~a~)\"~],\"voice\":~:[null~;\"~:*~(~a~)\"~],~
                  \"raising\":~:[false~;true~],\"negated\":~:[false~;true~],~
                  \"measure\":~a,\"tail\":~a,\"graphCompatible\":~:[false~;true~],~
-                 \"verbal\":~:[false~;true~]}"
+                 \"verbal\":~:[false~;true~],\"members\":~a}"
             (rview-kind v)
             (rview-label v)
             (rview-defining-p v)
@@ -234,7 +234,17 @@
             (json-measure (rview-measure v))
             (json-tail (rview-tail v))
             (ignore-errors (graph-compatible-p (concept-type concept)))
-            (referent-verbal-p concept))))
+            (referent-verbal-p concept)
+            ;; Positional: the ✕ beside a member names it by index, so the
+            ;; order the page shows has to be the order the server removes by.
+            (with-output-to-string (out)
+              (write-char #\[ out)
+              (loop for (m . rest) on (rview-members v) do
+                (format out "{\"id\":~a,\"name\":~:[null~;\"~:*~a\"~]}"
+                        (or (getf m :id) "null")
+                        (let ((n (getf m :name))) (and n (json-escape n))))
+                (when rest (write-char #\, out)))
+              (write-char #\] out)))))
 
 ;;; GET /api/editor/referent?session=N&concept=REF
 (hunchentoot:define-easy-handler (handle-editor-referent :uri "/api/editor/referent")
@@ -277,6 +287,19 @@
                         (t (or (parse-integer (string-trim " #" id) :junk-allowed t)
                                (editor-error "~a is not an individual id" id))))
               :name (unless (blank name) name))))
+          ;; Set membership. Add takes an identity (the same one the selector
+          ;; offers); remove takes the position the page is showing.
+          ((string= field "set-add")
+           (add-referent-set-member
+            node
+            :id (cond ((blank id) nil)
+                      (t (or (parse-integer (string-trim " #" id) :junk-allowed t)
+                             (editor-error "~a is not an individual id" id))))
+            :name (unless (blank name) name)))
+          ((string= field "set-remove")
+           (remove-referent-set-member
+            node (or (parse-integer (string-trim " " (or value "")) :junk-allowed t)
+                     (editor-error "which member? expected a position"))))
           ((string= field "measure")
            (set-referent-measure
             node (unless (blank value)

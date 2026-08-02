@@ -448,6 +448,9 @@ const REF_KINDS = [
   ['coref',      '?x',     ['label']],
   ['individual', 'name',   ['name']],
   ['individual', '#n',     ['id']],
+  // A set needs no input of its own: `{}' is a generic plural and a legitimate
+  // referent, and members are added afterwards one identity at a time.
+  ['set',        '{…}',    []],
 ];
 // `verbal' marks the three that only mean something on a type the realizer
 // will conjugate. They are hidden on anything else — same show-only-real-
@@ -514,6 +517,34 @@ function paintReferent() {
   // The identity selector is meaningless for a graph referent, and the graph
   // control is meaningless without a type that can hold one, so they trade
   // places rather than sitting side by side pretending both apply.
+  // Members, for a set. Each chip is an identity with its own ✕; removal is by
+  // POSITION, so the order shown has to be the order the server holds.
+  const isSet = refView.kind === 'set';
+  $('ref-members-row').hidden = !isSet;
+  if (isSet) {
+    const box = $('ref-members');
+    box.replaceChildren();
+    const ms = refView.members || [];
+    if (!ms.length) {
+      const em = document.createElement('span');
+      em.className = 'none';
+      em.textContent = 'a generic plural — no members named';
+      box.append(em);
+    }
+    ms.forEach((m, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'member-chip';
+      chip.append(document.createTextNode(m.name || `#${m.id}`));
+      const x = document.createElement('span');
+      x.className = 'x';
+      x.textContent = '✕';
+      x.title = 'remove this member';
+      x.addEventListener('click', () => setRefField('set-remove', String(i)));
+      chip.append(x);
+      box.append(chip);
+    });
+  }
+
   const graphy = !!refView.graphCompatible;
   $('ref-graph').hidden = !graphy;
   refKinds.hidden = graphy && refView.kind === 'graph';
@@ -679,6 +710,21 @@ for (const el of [refInputA, refInputB]) {
 $('ref-measure').addEventListener('keydown', ev => { if (ev.key === 'Enter') ev.target.blur(); });
 $('ref-measure').addEventListener('blur', ev => setRefField('measure', ev.target.value.trim()));
 $('ref-close').addEventListener('click', closeReferent);
+
+// "#7" names an existing individual; anything else is a name. One field rather
+// than two, because a member is one identity and asking for both halves of it
+// separately would make the common case (a name) cost an empty box.
+function addSetMember() {
+  const raw = $('ref-member-new').value.trim();
+  if (!raw) return;
+  $('ref-member-new').value = '';
+  const extra = raw.startsWith('#') ? { id: raw } : { name: raw };
+  setRefField('set-add', '', extra);
+}
+$('ref-member-add').addEventListener('click', addSetMember);
+$('ref-member-new').addEventListener('keydown', ev => {
+  if (ev.key === 'Enter') { ev.preventDefault(); addSetMember(); }
+});
 
 // One request, not six: the server clears the whole referent, so there is no
 // moment at which half of it is gone. A pending kind is abandoned too — it

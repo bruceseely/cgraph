@@ -193,6 +193,21 @@
     /* The tail: shown, never edited. A feature need not be editable to be
        preserved, which is what keeps the unbounded tail from blocking the
        design — see notes/graph-editor.md. */
+    /* One chip per member, each carrying its own ✕ — the same shape the
+       display pane uses for arcs, since both are "a list of things you can
+       take one off". */
+    .member-chip {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; background: #eef3fb; border: 1px solid #cfdcf0;
+      border-radius: 10px; padding: 0.05rem 0.2rem 0.05rem 0.45rem;
+      margin-right: 0.25rem;
+    }
+    .member-chip .x { color: #c0392b; cursor: pointer; opacity: 0.55; padding: 0 0.25rem; }
+    .member-chip .x:hover { opacity: 1; }
+    #ref-members .none { color: #bbb; font-style: italic; font-size: 12px; }
+    #ref-member-new { width: 8rem; }
+
     #ref-tail {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 11px; color: #888;
@@ -349,6 +364,15 @@
                    not a sixth state of the selector; it is an alternative to
                    the whole of it, so it gets its own control. -->
               <button id="ref-graph" hidden title="Edit this concept's referent as a nested graph">Edit graph…</button>
+            </div>
+            <!-- Only for a set. "The user picks members; the editor decides
+                 where the commas go" — so this is a list of identities and an
+                 ✕ each, never a text field holding braces. -->
+            <div class="ref-row" id="ref-members-row" hidden>
+              <span class="lab">Members</span>
+              <span id="ref-members"></span>
+              <input type="text" id="ref-member-new" placeholder="name or #id" autocomplete="off" spellcheck="false">
+              <button id="ref-member-add">Add</button>
             </div>
             <div class="ref-row">
               <span class="lab">Modifiers</span>

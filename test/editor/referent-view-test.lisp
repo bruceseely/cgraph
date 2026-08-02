@@ -267,6 +267,45 @@
       (check "a bare noun is not"
              (not (referent-verbal-p (find-if #'concept-p (parse-cgraph "[DOG]")))))
 
+      ;; --- J. sets: a member is just an identity ---------------------------
+      ;; Which is why stage 3 is mostly wiring -- the claim the staging rested
+      ;; on, checked rather than assumed.
+      (let ((c (find-if #'concept-p (parse-cgraph "[DOG]"))))
+        (set-referent-identity c :set)
+        (check "an empty set is a legitimate referent"
+               (string= "[DOG: {}]" (format-concept c)))
+        (add-referent-set-member c :name "Fido")
+        (add-referent-set-member c :name "Spot")
+        (check "members are appended in the order added"
+               (string= "[DOG: {Fido, Spot}]" (format-concept c)))
+        (check "the view reports them positionally"
+               (equal '("Fido" "Spot")
+                      (mapcar (lambda (m) (getf m :name))
+                              (rview-members (describe-referent c)))))
+        ;; Cardinality is a modifier, and must survive membership changes.
+        (set-referent-measure c '(4 ""))
+        (check "a cardinality rides alongside the members"
+               (string= "[DOG: {Fido, Spot}@4]" (format-concept c)))
+        (remove-referent-set-member c 0)
+        (check "removing by position drops the right one"
+               (string= "[DOG: {Spot}@4]" (format-concept c)))
+        (remove-referent-set-member c 0)
+        (check "emptying leaves a generic plural, not a generic singular"
+               (string= "[DOG: {}@4]" (format-concept c)))
+        (check "an out-of-range member is refused"
+               (handler-case (progn (remove-referent-set-member c 9) nil)
+                 (referent-edit-error () t))))
+
+      ;; An existing individual joins by id rather than being duplicated.
+      (let ((c (find-if #'concept-p (parse-cgraph "[DOG]"))))
+        (make-individual 'dog '(:name "Rex" :collar "red") :id 95)
+        (set-referent-identity c :set)
+        (add-referent-set-member c :id 95)
+        (check "a member given an id reuses that individual"
+               (equal "Rex" (getf (first (rview-members (describe-referent c))) :name)))
+        (check "and keeps its properties"
+               (equal "red" (getf (properties (find-individual-with-id 95)) :collar))))
+
       ;; Refusals are errors, not silent no-ops.
       (multiple-value-bind (view concept) (%rview-of "[DOG]")
         (declare (ignore view))

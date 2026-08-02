@@ -54,6 +54,7 @@
   id               ; individual id: an integer, or T for a bare `#'
   name             ; individual name string, or NIL
   set              ; the SET object, for :set
+  members          ; for :set -- a list of (:id N :name S), in order
   graph            ; the GRAPH object, for :graph
   ;; --- modifiers: independent of the identity and of each other ---
   quantifier tense aspect voice raising
@@ -108,7 +109,16 @@
              (rview-graph view) (graph-referent concept)))
       ((set-p content)
        (setf (rview-kind view) :set
-             (rview-set view) content))
+             (rview-set view) content
+             ;; A member is just an identity -- which is what makes sets mostly
+             ;; wiring rather than a new mechanism. Only the resolved ones are
+             ;; here: a generic member (`*') never becomes an individual, so
+             ;; `{Fido, *}' has one member and a cardinality saying otherwise.
+             (rview-members view)
+             (loop for m in (members content)
+                   when (individual-p m)
+                     collect (list :id (id m)
+                                   :name (getf (properties m) :name)))))
       ((individual-p content)
        (setf (rview-kind view) :individual
              (rview-id view)   (id content)
@@ -376,6 +386,63 @@
                    (eq concept (ignore-errors (verb-side-of-subject-rel rel)))))
               (ignore-errors (arcs concept)))))
 
+(defun resolve-editor-individual (ctype &key id name)
+  "The individual named by ID and/or NAME, made if there is not one already.
+
+   Shared by the :INDIVIDUAL identity and by set members, because a member IS
+   an identity -- which is the whole reason stage 3 is mostly wiring. An
+   existing id wins: pointing at #7 and calling it something new renames #7
+   rather than minting a rival."
+  (let ((found (and id (numberp id) (find-individual-with-id id))))
+    (cond (found
+           (when name (setf (getf (properties found) :name) name))
+           found)
+          (t (make-individual ctype (when name (list :name name))
+                              :id (if (numberp id) id nil))))))
+
+(defun referent-set (concept)
+  "CONCEPT's set referent, or NIL."
+  (let* ((r (referent concept)) (c (and r (content r))))
+    (and (set-p c) c)))
+
+(defun add-referent-set-member (concept &key id name)
+  "Add one member to CONCEPT's set referent, making the set if it has none.
+
+   Members are appended rather than pushed: the order you added them is the
+   order they read in, and a list that reshuffled itself as it grew would make
+   the ✕ beside each one a guess."
+  (unless (or id name)
+    (referent-edit-error "a set member needs an id, a name, or both"))
+  (let* ((existing (referent-set concept))
+         (indiv (resolve-editor-individual (concept-type concept) :id id :name name)))
+    (cond (existing
+           (setf (members existing)
+                 (append (members existing) (list indiv))))
+          (t
+           (clear-referent-identity concept)
+           (let ((referent (make-referent (make-set-from-individuals (list indiv)))))
+             (setf (referent concept) referent)
+             (setf (concept referent) concept)))))
+  concept)
+
+(defun remove-referent-set-member (concept index)
+  "Drop the INDEXth member of CONCEPT's set referent.
+
+   Removing the last one leaves an EMPTY set rather than no referent: `{}' is a
+   generic plural, which is a different claim from a generic singular, and
+   silently collapsing one into the other would lose the plurality. Use the
+   identity selector to stop it being a set at all."
+  (let ((set (referent-set concept)))
+    (unless set (referent-edit-error "this concept has no set referent"))
+    (let ((n (length (members set))))
+      (unless (and (integerp index) (< -1 index n))
+        (referent-edit-error "no member ~a; the set has ~a" index n)))
+    (setf (members set)
+          (loop for m in (members set)
+                for i from 0
+                unless (= i index) collect m)))
+  concept)
+
 (defun clear-referent (concept)
   "Strip CONCEPT back to a bare generic: identity, modifiers and measure gone.
 
@@ -435,17 +502,18 @@
               (setf (getf (properties current) :name) name)
               (remf (properties current) :name)))
          (t
-          (let* ((ctype (concept-type concept))
-                 (props (when name (list :name name)))
-                 (found (and id (numberp id) (find-individual-with-id id)))
-                 (indiv (or found
-                            (make-individual ctype props
-                                             :id (if (numberp id) id nil)))))
-            (when (and found name)
-              (setf (getf (properties found) :name) name))
+          (let ((indiv (resolve-editor-individual (concept-type concept)
+                                                  :id id :name name)))
             (clear-referent-identity concept)
             (setf (referent concept) (make-referent indiv))
-            (setf (concept (referent concept)) concept)))))))
+            (setf (concept (referent concept)) concept))))))
+    ;; An empty set -- `{}' -- is a generic PLURAL, and a legitimate referent
+    ;; in its own right. Members are added afterwards, one identity at a time.
+    (:set
+     (clear-referent-identity concept)
+     (let ((referent (make-referent (make-set-from-individuals nil))))
+       (setf (referent concept) referent)
+       (setf (concept referent) concept))))
   concept)
 
 (defun referent-view-complete-p (view concept)
