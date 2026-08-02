@@ -658,6 +658,14 @@ $('ref-measure').addEventListener('keydown', ev => { if (ev.key === 'Enter') ev.
 $('ref-measure').addEventListener('blur', ev => setRefField('measure', ev.target.value.trim()));
 $('ref-close').addEventListener('click', closeReferent);
 
+// One request, not six: the server clears the whole referent, so there is no
+// moment at which half of it is gone. A pending kind is abandoned too — it
+// described an identity that no longer exists.
+$('ref-clear').addEventListener('click', () => {
+  refPending = null;
+  setRefField('all', '');
+});
+
 // ── English pane ─────────────────────────────────────────────────────────────
 // Asked for only when the graph CHANGES — the add, the arc removal, the first
 // concept, and the initial load. Not on REFRESH: that runs after every click,

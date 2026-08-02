@@ -273,6 +273,31 @@
   (setf (referent concept) nil)
   concept)
 
+(defun clear-referent (concept)
+  "Strip CONCEPT back to a bare generic: identity, modifiers and measure gone.
+
+   One call rather than the six the panel would otherwise need -- and one call
+   rather than six also means a half-cleared referent is not a state anything
+   can stop in.
+
+   The measure needs no separate step: it lives on the referent (for a set) or
+   on the individual (otherwise), and clearing the identity drops the referent
+   that held either.
+
+   The type and the negation stay, because neither is part of the referent.
+
+   What this does to the tail is worth being clear about, since every other
+   operation here goes out of its way to preserve it: the unrecognised
+   properties belong to the INDIVIDUAL, so clearing detaches them rather than
+   destroying them. The individual survives in *INDIVIDUALS* with its
+   properties intact, and giving the concept that id back re-attaches the lot.
+   The panel stops showing the id at that point, though, so in practice the
+   thing that makes this reversible is the thing it hides."
+  (dolist (modifier *referent-modifiers*)
+    (set-referent-modifier concept modifier nil))
+  (clear-referent-identity concept)
+  concept)
+
 (defun set-referent-identity (concept kind &key label id name)
   "Give CONCEPT the identity KIND, replacing whatever it had.
 

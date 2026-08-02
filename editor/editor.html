@@ -353,6 +353,11 @@
               <select id="ref-aspect"></select>
               <select id="ref-voice"></select>
               <input type="text" id="ref-measure" placeholder="measure" autocomplete="off" spellcheck="false">
+              <!-- Deliberately at the far end of the MODIFIER row, not beside
+                   the identity buttons. "—" clears the identity; this clears
+                   everything, and two controls that mean different things
+                   should not sit next to each other looking alike. -->
+              <button id="ref-clear" title="Clear the whole referent: identity, modifiers and measure">Clear all</button>
             </div>
             <div class="ref-row">
               <span class="lab">Carried</span>

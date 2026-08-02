@@ -216,6 +216,33 @@
           (check "the node-ref survives every kind of edit"
                  (eql ref (node-ref concept)))))
 
+      ;; --- H. clearing the whole referent ----------------------------------
+      ;; The one operation that is ALLOWED to drop the tail, so the test says
+      ;; exactly what it drops and what it only detaches.
+      (let* ((indiv (make-individual 'dog '(:name "Rex" :collar "red") :id 94))
+             (concept (make-concept (get-concept-type 'dog) (make-referent indiv))))
+        (set-referent-modifier concept :tense :past)
+        (set-referent-modifier concept :voice :passive)
+        (set-referent-measure concept '(5 "kg"))
+        (clear-referent concept)
+        (let ((after (describe-referent concept)))
+          (check "clear drops the identity"  (eq :none (rview-kind after)))
+          (check "clear drops the modifiers" (and (null (rview-tense after))
+                                                  (null (rview-voice after))))
+          (check "clear drops the measure"   (null (rview-measure after)))
+          (check "clear leaves a bare concept"
+                 (string= "[DOG]" (format-concept concept))))
+        ;; Detached, not destroyed -- which is what makes the clear reversible.
+        (check "the individual survives the clear"
+               (let ((found (find-individual-with-id 94)))
+                 (and found (equal "red" (getf (properties found) :collar)))))
+        (set-referent-identity concept :individual :id 94)
+        (let ((back (describe-referent concept)))
+          (check "giving the id back re-attaches the individual"
+                 (equal "Rex" (rview-name back)))
+          (check "and the tail comes back with it"
+                 (equal "red" (getf (rview-tail back) :collar)))))
+
       ;; Refusals are errors, not silent no-ops.
       (multiple-value-bind (view concept) (%rview-of "[DOG]")
         (declare (ignore view))

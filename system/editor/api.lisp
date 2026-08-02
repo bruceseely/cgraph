@@ -254,6 +254,9 @@
              (kw (x) (and x (plusp (length x))
                           (intern (string-upcase x) :keyword))))
         (cond
+          ;; The whole referent at once. Its own field rather than a loop in
+          ;; the page, so a half-cleared referent is never a reachable state.
+          ((string= field "all") (clear-referent node))
           ((string= field "identity")
            (let ((k (kw kind)))
              (unless k (editor-error "identity needs a kind"))
