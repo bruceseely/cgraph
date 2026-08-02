@@ -449,11 +449,19 @@ const REF_KINDS = [
   ['individual', 'name',   ['name']],
   ['individual', '#n',     ['id']],
 ];
+// `verbal' marks the three that only mean something on a type the realizer
+// will conjugate. They are hidden on anything else — same show-only-real-
+// choices rule the arc affordances follow: a control that cannot produce a
+// legal result should not be offered.
+//
+// Quantifier is deliberately NOT gated. Universal quantification over an event
+// is meaningful in CG ("every eating"), so `@every' on a verb is not the
+// nonsense that `@past' on a dog is.
 const MODIFIERS = [
-  ['ref-quantifier', 'quantifier', ['', 'every', 'some']],
-  ['ref-tense',      'tense',      ['', 'past', 'present', 'future']],
-  ['ref-aspect',     'aspect',     ['', 'simple', 'progressive', 'perfect', 'perfect-progressive']],
-  ['ref-voice',      'voice',      ['', 'active', 'passive']],
+  ['ref-quantifier', 'quantifier', ['', 'every', 'some'], false],
+  ['ref-tense',      'tense',      ['', 'past', 'present', 'future'], true],
+  ['ref-aspect',     'aspect',     ['', 'simple', 'progressive', 'perfect', 'perfect-progressive'], true],
+  ['ref-voice',      'voice',      ['', 'active', 'passive'], true],
 ];
 
 let refConcept = null;   // node-ref of the concept being edited, or null
@@ -500,7 +508,7 @@ function paintReferent() {
 
   $('ref-preview').textContent = refView.identityText || '';
 
-  for (const [id, field, options] of MODIFIERS) {
+  for (const [id, field, options, verbalOnly] of MODIFIERS) {
     const sel = $(id);
     if (!sel.dataset.built) {
       for (const o of options) {
@@ -512,6 +520,10 @@ function paintReferent() {
       sel.dataset.built = '1';
       sel.addEventListener('change', () => setRefField(field, sel.value));
     }
+    // A value already set outranks the gate: if the graph arrived carrying
+    // [WISH: @past], hiding the control would hide the only way to remove it
+    // and leave an annotation nothing on screen accounts for.
+    sel.hidden = verbalOnly && !refView.verbal && !refView[field];
     sel.value = refView[field] || '';
     sel.classList.toggle('set', !!refView[field]);
   }

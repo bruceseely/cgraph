@@ -210,7 +210,8 @@
                  \"quantifier\":~:[null~;\"~:*~(~a~)\"~],\"tense\":~:[null~;\"~:*~(~a~)\"~],~
                  \"aspect\":~:[null~;\"~:*~(~a~)\"~],\"voice\":~:[null~;\"~:*~(~a~)\"~],~
                  \"raising\":~:[false~;true~],\"negated\":~:[false~;true~],~
-                 \"measure\":~a,\"tail\":~a,\"graphCompatible\":~:[false~;true~]}"
+                 \"measure\":~a,\"tail\":~a,\"graphCompatible\":~:[false~;true~],~
+                 \"verbal\":~:[false~;true~]}"
             (rview-kind v)
             (rview-label v)
             (rview-defining-p v)
@@ -225,7 +226,8 @@
             (rview-raising v) (rview-negated v)
             (json-measure (rview-measure v))
             (json-tail (rview-tail v))
-            (ignore-errors (graph-compatible-p (concept-type concept))))))
+            (ignore-errors (graph-compatible-p (concept-type concept)))
+            (referent-verbal-p concept))))
 
 ;;; GET /api/editor/referent?session=N&concept=REF
 (hunchentoot:define-easy-handler (handle-editor-referent :uri "/api/editor/referent")

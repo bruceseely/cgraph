@@ -273,6 +273,40 @@
   (setf (referent concept) nil)
   concept)
 
+(defun referent-verbal-p (concept)
+  "True when tense, aspect and voice can actually reach anything on CONCEPT --
+   that is, when the realizer would conjugate it.
+
+   Part of speech alone is the WRONG test, and measurably so. The obvious
+   version of this asked whether the lexicon classifies the type :VERB, on the
+   reasoning that the realizer consults that before conjugating. It does not,
+   for the case that matters: WISH and DESIRE are subtypes of STATE, STATE is
+   not one of *POS-HIERARCHY-ROOTS*, so both classify :NOUN -- and yet
+
+     [WISH: @past]-(expr)->[PERSON: Sue] (thme)->[PIE]  ->  Sue wished a pie.
+
+   The tense is realized. It arrives through FIND-MAIN-PREDICATE, which prefers
+   the verb side of a subject relation and never asks about POS at all. A POS
+   gate would therefore have hidden a control that demonstrably works, which is
+   the exact failure it was meant to prevent.
+
+   So the test is the realizer's own: a concept heads a clause if something
+   points at it through a relation the syntax table maps to :SUBJECT (AGNT,
+   EXPR, ...), or if it is an act or event by the lattice. Being graph-derived
+   rather than type-derived, it also changes as you build -- attaching an
+   (expr) arc is what makes the tense controls appear, which is the honest
+   moment for them to."
+  (or (act-or-event-concept-p concept)
+      (some (lambda (rel)
+              ;; VERB-SIDE-OF-SUBJECT-REL: these relations put the
+              ;; animate/experiencer on the outarc and the verb on the inarc,
+              ;; so being the subject relation's OTHER end is what makes this
+              ;; concept the predicate rather than the subject.
+              (and (relation-p rel)
+                   (eq :subject (ignore-errors (relation-role rel)))
+                   (eq concept (ignore-errors (verb-side-of-subject-rel rel)))))
+              (ignore-errors (arcs concept)))))
+
 (defun clear-referent (concept)
   "Strip CONCEPT back to a bare generic: identity, modifiers and measure gone.
 

@@ -243,6 +243,30 @@
           (check "and the tail comes back with it"
                  (equal "red" (getf (rview-tail back) :collar)))))
 
+      ;; --- I. tense/aspect/voice offered only where they land ---------------
+      ;; The regression this guards is a specific wrong answer, not a vague
+      ;; one: gating on part of speech looks right and is not. WISH and DESIRE
+      ;; are STATE subtypes, STATE is not a POS root, so both classify :NOUN --
+      ;; and [WISH: @past] still realizes as "Sue wished a pie", because tense
+      ;; arrives via FIND-MAIN-PREDICATE, which never consults POS.
+      (let* ((nodes (parse-cgraph "[WISH]-(expr)->[PERSON: Sue] (thme)->[PIE]"))
+             (wish   (find-if (lambda (n) (and (concept-p n)
+                                               (string-equal (string (label (concept-type n))) "WISH")))
+                              nodes))
+             (person (find-if (lambda (n) (and (concept-p n)
+                                               (string-equal (string (label (concept-type n))) "PERSON")))
+                              nodes)))
+        (check "a clause head is verbal even when its POS is not :verb"
+               (referent-verbal-p wish))
+        (check "POS alone would have got that wrong"
+               (not (eq :verb (or (lexicon-prop (concept-type wish) :pos)
+                                  (pos-from-hierarchy (concept-type wish))))))
+        (check "its subject is not verbal" (not (referent-verbal-p person))))
+      (check "an act is verbal with no arcs at all"
+             (referent-verbal-p (find-if #'concept-p (parse-cgraph "[EAT]"))))
+      (check "a bare noun is not"
+             (not (referent-verbal-p (find-if #'concept-p (parse-cgraph "[DOG]")))))
+
       ;; Refusals are errors, not silent no-ops.
       (multiple-value-bind (view concept) (%rview-of "[DOG]")
         (declare (ignore view))
