@@ -23,6 +23,7 @@ const relationList= $('relation-list');
 const displayBody = $('display-body');
 const statusEl    = $('status');
 const focusLabel  = $('focus-label');
+const englishEl   = $('english');
 
 $('session-label').textContent = SESSION ? `session ${SESSION}` : '(no session)';
 
@@ -360,9 +361,40 @@ async function createFirstConcept(type) {
                             { method: 'POST' });
     pane.focus = { ref: data.ref, text: `[${type.toUpperCase()}]` };
     renderGraph(data.withRefs);
+    refreshEnglish();
     setStatus('');
     await refresh();
   } catch (err) { setStatus(err.message, 'error'); }
+}
+
+// ── English pane ─────────────────────────────────────────────────────────────
+// Asked for only when the graph CHANGES — the add, the arc removal, the first
+// concept, and the initial load. Not on REFRESH: that runs after every click,
+// including the ones that merely fill the editor pane, and the sentence cannot
+// have moved for any of them. Generation is the most expensive thing the editor
+// can ask the server for, so it is worth asking only when the answer can differ.
+//
+// Deliberately not awaited by its callers, and it swallows its own errors into
+// the pane rather than the status line: the sentence is a readout, and a graph
+// the generator cannot yet realize is a normal thing to be holding mid-edit,
+// not a failed edit.
+
+function paintEnglish(text, note) {
+  englishEl.replaceChildren();
+  if (text) { englishEl.textContent = text; return; }
+  const em = document.createElement('span');
+  em.className = 'none';
+  em.textContent = note || '—';
+  englishEl.append(em);
+}
+
+async function refreshEnglish() {
+  try {
+    const data = await call(`/api/editor/text?${q({ session: SESSION })}`);
+    paintEnglish(data.text, data.note);
+  } catch (err) {
+    paintEnglish(null, err.message);
+  }
 }
 
 // ── display pane ─────────────────────────────────────────────────────────────
@@ -421,6 +453,7 @@ $('add').addEventListener('click', async () => {
     pane.relation = pane.target = null;
     renderGraph(data.withRefs);
     paintDisplay(data.focus);
+    refreshEnglish();
     setStatus('');
     await refresh({ keepGraph: true });
   } catch (err) { setStatus(err.message, 'error'); }
@@ -434,6 +467,7 @@ async function removeArc(relationRef) {
     pane.relation = pane.target = null;
     renderGraph(data.withRefs);
     paintDisplay(data.focus);
+    refreshEnglish();
     setStatus('');
     await refresh({ keepGraph: true });
   } catch (err) { setStatus(err.message, 'error'); }
@@ -602,3 +636,6 @@ async function reconcileDirection(choices) {
 }
 
 refresh();
+// A session opened on an existing graph already has something to say, so the
+// pane is filled once at load rather than staying blank until the first edit.
+refreshEnglish();

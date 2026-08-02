@@ -172,6 +172,49 @@
       (editor-operation-error (e) (json-error e))
       (error (e) (json-error e)))))
 
+;;; --- The graph in English --------------------------------------------------
+
+(defun editor-english (session)
+  "The working graph as an English sentence.
+
+   Returns (VALUES TEXT NOTE). TEXT is \"\" when there is nothing to say, and
+   NOTE then carries the reason, because the two silences mean different
+   things: a graph with no nodes yet has nothing to generate FROM, while a
+   graph the generator cannot realize has something to say about itself.
+
+   Generation is a much larger surface than the rest of the editor -- lexicon
+   lookups, morphology, the whole realizer -- and an arc the tables do not
+   cover is a perfectly ordinary thing to be holding halfway through an edit.
+   So an error here is reported IN the pane and nowhere else: a sentence that
+   cannot yet be produced must not look like a failed edit."
+  (let ((g (session-working session)))
+    (cond ((null g) (values "" "no graph yet"))
+          (t (handler-case
+                 (with-cg-thread-bindings
+                   (let ((text (graph-to-text g)))
+                     (if (plusp (length text))
+                         (values text nil)
+                         (values "" "nothing to say about this graph yet"))))
+               (error (e)
+                 (values "" (format nil "cannot say it yet: ~a" e))))))))
+
+;;; GET /api/editor/text?session=N — the working graph as English.
+;;;
+;;; Its own endpoint rather than a field on the graph responses, for two
+;;; reasons. It is asked for only when the graph actually CHANGES -- an add, a
+;;; remove, the first concept -- and not on the focus refresh that runs after
+;;; every click, so generation stays off the hot path. And a generator that
+;;; signals cannot then take an otherwise successful edit down with it.
+(hunchentoot:define-easy-handler (handle-editor-text :uri "/api/editor/text")
+    (session)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (with-editor-session (s session)
+    (multiple-value-bind (text note) (editor-english s)
+      (format nil "{\"ok\":true,\"text\":\"~a\"~@[,\"note\":\"~a\"~]}"
+              (json-escape text)
+              (and note (json-escape note))))))
+
 ;;; --- Contextual type lists -------------------------------------------------
 ;;; Filtering is computed from the lattice, not guessed. Which of the three
 ;;; states we are in depends on what the editor pane holds.

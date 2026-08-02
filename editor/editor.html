@@ -79,6 +79,22 @@
     .pane-head .spacer { margin-left: auto; }
     .pane-body { overflow: auto; padding: 0.5rem 0.6rem; background: #fff; }
 
+    /* ── English pane ── */
+    /* Full width, above the frame: the sentence is about the whole graph, not
+       about the focus, so it does not belong in either column. Sized to its
+       content up to a couple of lines, then scrolls — it must not grow to the
+       point of pushing the graph off the screen. */
+    #text-pane { flex: 0 0 auto; }
+    #text-pane .pane-body { max-height: 5rem; }
+    #english {
+      font-size: 15px;
+      line-height: 1.45;
+      color: #333;
+    }
+    /* The pane is only refreshed by an edit, so it is never stale — but it can
+       be empty, and an empty pane has to say which kind of empty it is. */
+    #english .none { color: #bbb; font-style: italic; font-size: 13px; }
+
     /* ── graph pane ── */
     #graph-pane { flex: 1 1 45%; }
     #graph {
@@ -234,6 +250,15 @@
     <span class="spacer"></span>
     <button id="update">UPDATE</button>
     <button id="cancel">Cancel</button>
+  </div>
+
+  <div class="pane" id="text-pane">
+    <div class="pane-head">
+      English
+      <span class="spacer"></span>
+      <span class="muted" id="text-hint">re-read after each edit</span>
+    </div>
+    <div class="pane-body"><div id="english"></div></div>
   </div>
 
   <div id="frame">

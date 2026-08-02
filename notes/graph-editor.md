@@ -23,6 +23,9 @@ arrow points. Everything is picked, nothing is typed as CG notation.
 ## Frame
 
 ```
+┌─ English pane ────────────────────────────────────────────────┐
+│ An old dog eats food.                                         │
+└───────────────────────────────────────────────────────────────┘
 ┌─ LEFT ──────────────────────────┬─ RIGHT ─────────────────────┐
 │ ┌─ graph pane ────────────────┐ │ concept-types │ relation-   │
 │ │ linear display of the graph │ │               │ types       │
@@ -54,6 +57,31 @@ arrow points. Everything is picked, nothing is typed as CG notation.
   pair per line, in the shape linear notation uses, **with direction shown** —
   inbound and outbound arcs of the focus must not look alike. Each line carries
   an ✕.
+- **English pane** — read-only. `GRAPH-TO-TEXT` on the working graph. Full
+  width and above the frame, because the sentence is about the whole graph
+  rather than about the focus, so it belongs to neither column.
+
+### The English pane is refreshed by edits, not by clicks
+
+`/api/editor/text` is asked only when the graph can actually have changed —
+the add, the arc removal, the first concept, and the initial load — and
+deliberately *not* from `refresh()`, which runs after every click, including
+the many that only fill the editor pane. Generation is by far the most
+expensive thing the editor asks the server for, and the sentence cannot have
+moved for a click that did not touch the graph. Because every mutation is
+covered, the pane is never stale, so it needs no staleness marker and no
+manual refresh control.
+
+It is its own endpoint rather than another field on the graph responses, for
+the same reason: a field would be computed on the focus refresh too. And
+generation is a much larger surface than the rest of the editor — lexicon,
+morphology, the whole realizer — so an arc the tables do not cover is a
+perfectly ordinary thing to be holding halfway through an edit. Keeping it
+separate means a generator that signals cannot take an otherwise successful
+add down with it. Failures are reported **in the pane**, never in the status
+line: a sentence that cannot yet be produced must not look like a failed edit.
+The pane distinguishes its two silences — a graph with nothing to generate
+from, and a graph the generator cannot realize.
 
 ## The edit primitive is one arc
 
