@@ -152,15 +152,20 @@
   ;;(format t "~&(content referent): ~s~%"  (princ-to-string (content referent)))
   (cond ((set-p (content referent))
          ;; A set's cardinality is a :measure on the REFERENT (the set object
-         ;; doesn't carry it). A generic plural with a count is just the count
-         ;; ("three dogs" -> [DOG: @3]); a set with named members keeps the
-         ;; brace form, plus the count when present ([DOG: {Spot, Fido, *}@5]).
+         ;; doesn't carry it), so the braces are the only thing distinguishing
+         ;; "five dogs" from a measurement of five.
+         ;;
+         ;; A generic plural with a count used to print as the bare count
+         ;; ("three dogs" -> [DOG: @3]), which reads better but does not read
+         ;; BACK: @3 re-parses as a measure, and the plural is gone. The braces
+         ;; therefore stay even when empty -- [DOG: {}@5] -- so what is emitted
+         ;; says which of the two was meant without anything having to infer it.
+         ;; Bare @5 remains accepted on input; see COUNTABLE-CONCEPT-TYPE-P.
          (let ((set     (content referent))
                (measure (measure-property referent)))
-           (cond
-             ((and measure (null (members set))) (format-measure measure))
-             (measure (format nil "~a~a" (format-object set) (format-measure measure)))
-             (t (format-object set)))))
+           (if measure
+               (format nil "~a~a" (format-object set) (format-measure measure))
+               (format-object set))))
         ((content referent)
          (format-object (content referent)))
         ;; generic

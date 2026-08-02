@@ -617,6 +617,26 @@
          (referent      (make-referent graph nil)))
     (make-concept ctype referent)))
 
+(defun bare-measure-p (measure)
+  "MEASURE is (SIZE UNITS) from MEASURE-READER. Bare means no unit was
+   written -- `@5' rather than `@5 ft.' -- which is the only case where a
+   count and a measurement are spelled the same way."
+  (and measure
+       (let ((units (second measure)))
+         (or (null units) (zerop (length (string-trim " " units)))))))
+
+(defun countable-concept-type-p (ctype)
+  "True when CTYPE names something you can have several of.
+
+   Decides what a bare `@5' means: a count of members for a countable type,
+   a measurement for a mass one. Only ever consulted on input, as a
+   convenience for what a person means when they type it -- what the
+   FORMATTER emits is unambiguous either way, so an incomplete mass-noun
+   list can make this guess wrong without ever making a round trip lossy.
+   That separation is deliberate: the mass-noun registry is a starter set
+   users extend, so a guarantee must not rest on it."
+  (not (and *mass-type-p* (funcall *mass-type-p* ctype))))
+
 (defun resolve-target-concept (ctype features)
   "Build the concept implied by FEATURES — set referent, bound-variable
    reference, individual lookup, or a dynamically-created individual
@@ -638,6 +658,15 @@
              (when measure
                (setf (getf (properties referent) :measure) measure))
              (make-concept ctype referent)))))
+      ;; `[DOG: @5]' with no braces: on a countable type the number counts
+      ;; members, so it means the same as `[DOG: {}@5]'. Written by hand it is
+      ;; the natural spelling; the formatter always writes the braces back, so
+      ;; this arm only ever has to be generous, never exact.
+      ((and (bare-measure-p (getf features :measure))
+            (countable-concept-type-p ctype))
+       (let ((referent (make-referent (make-set-from-individuals nil))))
+         (setf (getf (properties referent) :measure) (getf features :measure))
+         (make-concept ctype referent)))
       (t
        ;; Variable lookup → individual lookup → dynamic creation. Each
        ;; arm returns NIL to fall through to the next via OR.

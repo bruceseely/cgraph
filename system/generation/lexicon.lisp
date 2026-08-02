@@ -371,6 +371,11 @@
              substance))
   (register-lexicon-entry m :mass-p t))
 
+;;; Teach the reader which types are mass nouns. Core declares *MASS-TYPE-P*
+;;; and leaves it NIL; filling it here keeps the dependency pointing the way
+;;; the systems already do, generation onto core.
+(setf *mass-type-p* (lambda (ctype) (lexicon-prop ctype :mass-p)))
+
 ;;; --- Adverb-form overrides -------------------------------------------------
 ;;; Some types are abstract category labels rather than specific adjectives,
 ;;; so suffix-derivation produces nonsense (MANNER -> "mannerly"). Provide

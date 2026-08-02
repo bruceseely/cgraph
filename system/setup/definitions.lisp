@@ -104,6 +104,18 @@
 (defvar *always-format-nodes* nil
   "Causes nodes to be formatted as they look in graphs, rather than as Lisp objects.")
 
+(defvar *mass-type-p* nil
+  "Function of one concept type, true when that type names a mass noun.
+
+   The reader needs this to tell `[DOG: @5]' (five dogs) from `[WATER: @5]'
+   (five of whatever water is measured in), but mass-noun knowledge lives in
+   the lexicon, which is part of generation and loads AFTER core. So core
+   declares the hole and generation fills it, rather than core reaching
+   forward into a module that depends on it.
+
+   NIL means nothing has taught the reader about mass nouns yet, in which
+   case every type is treated as countable.")
+
 (defvar *always-print-ascii-arrows* nil
   "Use the string (eg. \"->\") instead of the single-character arrow (eg. →)")
 
