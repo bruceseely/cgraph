@@ -264,16 +264,55 @@
 
 
 
+(defun concept-annotation-text (concept)
+  "CONCEPT's quantifier, tense, aspect and voice as @-words, space separated.
+
+   These live on the CONCEPT rather than the referent -- `@every' typically has
+   no individual at all -- so FORMAT-REFERENT never sees them and, until this
+   existed, they were simply not emitted: [EAT: @past] printed as [EAT]. Any
+   round trip through notation lost them, which includes the graph editor,
+   whose working copy is parsed from FORMAT-CGRAPH output.
+
+   Tense and aspect combine into the one hyphenated word the reader produces
+   them from, `@past-progressive' rather than `@past @progressive', so what is
+   written back is what would have been written by hand."
+  (let ((words '()))
+    (let ((quantifier (concept-quantifier concept)))
+      (when quantifier
+        (push (format nil "@~(~a~)"
+                      (case quantifier
+                        (:universal   "every")
+                        (:existential "some")
+                        ;; Anything else passed through PARSE-AT-WORD as a
+                        ;; generic quantifier keyword, e.g. @most.
+                        (t quantifier)))
+              words)))
+    (let ((tense  (concept-tense concept))
+          (aspect (concept-aspect concept)))
+      (cond ((and tense aspect) (push (format nil "@~(~a-~a~)" tense aspect) words))
+            (tense              (push (format nil "@~(~a~)" tense) words))
+            (aspect             (push (format nil "@~(~a~)" aspect) words))))
+    (let ((voice (concept-voice concept)))
+      (when voice (push (format nil "@~(~a~)" voice) words)))
+    (format nil "~{~a~^ ~}" (nreverse words))))
+
 (defmethod format-concept ((node concept) &key &allow-other-keys)
   (let* ((separator (if *concise* "" " "))
          (concept-type (concept-type node))
          ;;(refstr (format nil "~a~a" separator (format-referent node)))
          (refstr (string-trim " " (format-referent node)))
-         (ref-p (plusp (length refstr)))
+         (annotations (concept-annotation-text node))
+         ;; Annotations follow the identity, as they are written:
+         ;; [EAT: *e @past-progressive @passive]. Either part may be absent --
+         ;; a concept can carry annotations and no referent at all.
+         (body (cond ((zerop (length annotations)) refstr)
+                     ((zerop (length refstr))      annotations)
+                     (t (concatenate 'string refstr " " annotations))))
+         (ref-p (plusp (length body)))
          (node-ref (node-ref node))
          (node-ref-text (format nil "~:[~; +~d~]"  *always-show-node-ref* node-ref))
          (ref-text (if ref-p
-                       (format nil ":~a~a~a~a"  separator refstr separator node-ref-text)
+                       (format nil ":~a~a~a~a"  separator body separator node-ref-text)
                        node-ref-text)))
 
     (format nil "[~a~a]" (princ-to-string (label concept-type)) (string-right-trim " " ref-text))))
