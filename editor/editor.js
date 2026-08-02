@@ -464,6 +464,9 @@ const MODIFIERS = [
   ['ref-voice',      'voice',      ['', 'active', 'passive'], true],
 ];
 
+// Session id of the graph this one is nested inside, or null at the top level.
+let nestedIn = null;
+
 let refConcept = null;   // node-ref of the concept being edited, or null
 let refView    = null;   // its last-known decomposition
 // A kind chosen in the UI but not yet sent, because it needs a value the
@@ -507,6 +510,13 @@ function paintReferent() {
   refInputB.value = refView.id === null || refView.id === undefined ? '' : String(refView.id);
 
   $('ref-preview').textContent = refView.identityText || '';
+
+  // The identity selector is meaningless for a graph referent, and the graph
+  // control is meaningless without a type that can hold one, so they trade
+  // places rather than sitting side by side pretending both apply.
+  const graphy = !!refView.graphCompatible;
+  $('ref-graph').hidden = !graphy;
+  refKinds.hidden = graphy && refView.kind === 'graph';
 
   for (const [id, field, options, verbalOnly] of MODIFIERS) {
     const sel = $(id);
@@ -678,6 +688,22 @@ $('ref-clear').addEventListener('click', () => {
   setRefField('all', '');
 });
 
+// Descend into a graph referent. The server opens a CHILD session over it and
+// this page navigates there — the nested editor is the same editor, which is
+// what makes the recursion fall out rather than needing to be built. Leaving
+// this page is safe: sessions are resumable at their URL, which is what a
+// disconnect already relies on, so coming back finds the parent as it was.
+$('ref-graph').addEventListener('click', async () => {
+  if (refConcept === null) return;
+  try {
+    const data = await call(`/api/editor/referent/graph?${q({
+      session: SESSION, concept: refConcept
+    })}`, { method: 'POST' });
+    finished = true;        // navigating in is not a disconnect worth reporting
+    location.href = data.url;
+  } catch (err) { setStatus(err.message, 'error'); }
+});
+
 // ── English pane ─────────────────────────────────────────────────────────────
 // Asked for only when the graph CHANGES — the add, the arc removal, the first
 // concept, and the initial load. Not on REFRESH: that runs after every click,
@@ -833,9 +859,13 @@ function showVeil(action) {
 
 async function finish(action) {
   try {
-    await call(`/api/editor/finish?${q({ session: SESSION, action })}`,
-               { method: 'POST' });
+    const data = await call(`/api/editor/finish?${q({ session: SESSION, action })}`,
+                            { method: 'POST' });
     finished = true;   // closing the window now is not a disconnect worth reporting
+    // A nested editor has somewhere to go back TO, so it goes there instead of
+    // veiling. The veil means "this is over"; finishing a nested graph ends
+    // that graph, not the session you are actually in.
+    if (data.parent) { location.href = `/editor?session=${data.parent}`; return; }
     document.querySelectorAll('button').forEach(b => b.disabled = true);
     setStatus('');     // the veil says it, and says it where you are looking
     showVeil(action);
@@ -878,6 +908,17 @@ async function refresh(opts = {}) {
       })}`);
       renderGraph(state.withRefs);
       paintDisplay(state.focus);
+      // The page is loaded from a URL carrying only its own session id, so
+      // this is the only way it learns it is a nested editor — and what UPDATE
+      // should do depends on the answer.
+      if (state.parent && !nestedIn) {
+        nestedIn = state.parent;
+        $('session-label').textContent =
+          `session ${SESSION} — a graph inside session ${state.parent}`;
+        $('update').textContent = 'UPDATE ↩';
+        $('update').title = `install this graph and return to session ${state.parent}`;
+        $('cancel').title = `discard this graph and return to session ${state.parent}`;
+      }
     }
     const choices = await call(`/api/editor/choices?${q({
       session: SESSION,

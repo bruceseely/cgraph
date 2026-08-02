@@ -270,7 +270,29 @@
            (working  (session-working session)))
        (when (and original working)
          (setf (head original) (head working)))
-       original))))
+       original))
+    ;; A nested graph referent. ORIGINAL is the enclosing CONCEPT, because the
+    ;; graph it will hold need not exist until there is something to put in it
+    ;; -- an empty graph cannot be formatted, so one attached early would break
+    ;; rendering of the graph above.
+    (:graph-referent
+     (let* ((concept  (session-original session))
+            (working  (session-working session))
+            (existing (and concept (graph-referent concept))))
+       (cond
+         ;; Already had one: set its head, keeping the same graph OBJECT and
+         ;; with it the HOLDERS back-pointer the concept's referent rests on.
+         ((and existing working) (setf (head existing) (head working)))
+         ;; First content it has ever had: attach the working graph itself.
+         (working
+          (let ((referent (make-referent working concept)))
+            (setf (referent concept) referent)
+            (setf (concept referent) concept)))
+         ;; Emptied: a concept with a graph referent holding nothing is not a
+         ;; thing the formatter can render, so committing nothing removes the
+         ;; referent rather than leaving an unprintable husk.
+         (t (setf (referent concept) nil)))
+       concept))))
 
 (defun finish-editor-session (session state)
   "Complete SESSION as :COMMITTED or :CANCELLED, and release the blocked

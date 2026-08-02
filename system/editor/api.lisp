@@ -97,10 +97,17 @@
 ;;; life of the session -- the browser's click map depends on it.
 
 (defun editor-graph-json (session &optional focus)
-  "The working graph plus, when FOCUS is given, its neighbourhood."
-  (format nil "{\"ok\":true,\"withRefs\":\"~a\",\"plain\":\"~a\"~@[,\"focus\":~a~]}"
+  "The working graph plus, when FOCUS is given, its neighbourhood.
+
+   PARENT rides along because the page has no other way to learn it is a nested
+   editor: it is loaded from a URL carrying only its own session id, and what
+   UPDATE should do -- veil, or return to the graph above -- depends on the
+   answer."
+  (format nil "{\"ok\":true,\"withRefs\":\"~a\",\"plain\":\"~a\"~@[,\"parent\":~a~]~@[,\"focus\":~a~]}"
           (json-escape (session-render session))
           (json-escape (session-plain-render session))
+          (let ((p (session-parent session)))
+            (and p (session-id p)))
           (when focus
             (with-output-to-string (out)
               (write-char #\[ out)
@@ -297,6 +304,23 @@
               (json-escape (session-render s))
               (json-escape (session-plain-render s))))))
 
+;;; POST /api/editor/referent/graph?session=N&concept=REF
+;;;
+;;; Descend into a concept's graph referent, creating an empty one if it has
+;;; none. Returns a CHILD session; the page navigates to its URL, edits there,
+;;; and comes back when it finishes. Sessions are already resumable at their
+;;; URL -- that is what a disconnect leaves behind -- so navigating away from
+;;; the parent and back is safe and needs nothing new.
+(define-editor-post (handle-editor-referent-graph "/api/editor/referent/graph")
+    (session concept)
+  (with-cg-thread-bindings
+    (let* ((node (editor-concept s concept))
+           (child (open-nested-editor-session s node)))
+      (format nil "{\"ok\":true,\"session\":~a,\"url\":\"~a\",\"subject\":\"~a\"}"
+              (session-id child)
+              (json-escape (editor-session-url child))
+              (json-escape (format-node node))))))
+
 ;;; --- The graph in English --------------------------------------------------
 
 (defun editor-english (session)
@@ -451,5 +475,14 @@
                        ((string-equal (or action "") "cancel") :cancelled)
                        (t nil))))
       (cond ((null state) (json-error "action must be commit or cancel"))
-            (t (finish-editor-session s state)
-               (format nil "{\"ok\":true,\"state\":\"~(~a~)\"}" state))))))
+            (t
+             ;; A child has no blocked caller and no UNWIND-PROTECT behind it,
+             ;; so finishing one has to drop it from the registry as well --
+             ;; otherwise its URL keeps resolving and a stale tab could go on
+             ;; editing a graph the user believes they closed.
+             (let ((parent (session-parent s)))
+               (if parent
+                   (finish-nested-editor-session s state)
+                   (finish-editor-session s state))
+               (format nil "{\"ok\":true,\"state\":\"~(~a~)\"~@[,\"parent\":~a~]}"
+                       state (and parent (session-id parent)))))))))

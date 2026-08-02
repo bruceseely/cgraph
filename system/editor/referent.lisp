@@ -273,6 +273,75 @@
   (setf (referent concept) nil)
   concept)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  Graph referents -- the identity that is not a state of the selector.
+;;
+;;  A concept whose referent is a whole graph (PROPOSITION, BELIEF, SITUATION)
+;;  does not get a row in the identity panel; it gets a nested GRAPH editor,
+;;  which is the same editor again. The recursion falls out of the uniformity
+;;  rather than being special-cased: both kinds open, edit, and finish with
+;;  UPDATE or CANCEL.
+;;
+;;  A CHILD SESSION is what makes that work, and the session model was built
+;;  for it -- EDITOR-SESSION has had a PARENT slot from the start. The child's
+;;  ORIGINAL is the nested graph OBJECT, so INSTALL-WORKING-GRAPH sets that
+;;  object's head on commit and the enclosing concept, which points at the same
+;;  object, sees the change without anything having to relink it. Cancel
+;;  discards the child's working copy and the nested graph is untouched, at any
+;;  depth.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun check-graph-referent-allowed (concept)
+  "Signal unless CONCEPT's type may hold a graph referent. GRAPH-COMPATIBLE-P
+   is the existing answer to which types those are, so nothing here decides it."
+  (unless (ignore-errors (graph-compatible-p (concept-type concept)))
+    (referent-edit-error "~(~a~) cannot hold a graph referent"
+                         (label (concept-type concept))))
+  concept)
+
+(defun open-nested-editor-session (parent concept)
+  "A child session editing CONCEPT's graph referent, for the browser to descend
+   into. CONCEPT belongs to PARENT's working graph.
+
+   Nobody blocks on a child: it is created by a request rather than by a REPL
+   call, so its semaphore is never waited on and no UNWIND-PROTECT will clean
+   it up. FINISH-NESTED-EDITOR-SESSION is what forgets it instead.
+
+   The child gets the parent's output stream so a disconnect notice still
+   reaches whoever is actually waiting -- the REPL at the root of the chain,
+   however deep this is."
+  (check-graph-referent-allowed concept)
+  (let* ((existing (graph-referent concept))
+         (child (make-editor-session
+                 ;; The ORIGINAL is the CONCEPT, not a graph, because the graph
+                 ;; may not exist yet. Creating an empty one up front was the
+                 ;; obvious alternative and is unusable: a graph with no head
+                 ;; cannot be formatted (CGRAPH-TEXT has no method for NIL), so
+                 ;; attaching one immediately breaks rendering of the PARENT
+                 ;; graph that contains it -- a descent you had not finished
+                 ;; would leave the outer editor unable to draw itself.
+                 :original concept
+                 :kind :graph-referent
+                 :parent parent
+                 :out (session-out parent)
+                 :working (make-working-graph
+                           (if (and existing (head existing))
+                               (graph-source-string existing)
+                               "")))))
+    (register-editor-session child)
+    child))
+
+(defun finish-nested-editor-session (session state)
+  "Complete a child session and drop it from the registry.
+
+   A top-level session is forgotten by EDIT-CGRAPH's UNWIND-PROTECT once its
+   blocked caller wakes. A child has no such caller, so without this it would
+   sit in *EDITOR-SESSIONS* for the life of the image -- and its URL would keep
+   resolving, letting a stale tab edit a graph the user believes they finished
+   with."
+  (prog1 (finish-editor-session session state)
+    (forget-editor-session session)))
+
 (defun referent-verbal-p (concept)
   "True when tense, aspect and voice can actually reach anything on CONCEPT --
    that is, when the realizer would conjugate it.
