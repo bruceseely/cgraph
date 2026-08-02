@@ -163,6 +163,46 @@
 
     #editor-actions { margin-left: auto; display: flex; gap: 0.3rem; }
 
+    /* ── referent pane ── */
+    /* Opens under the editor pane when a concept's referent zone is clicked,
+       and only then: it is about ONE concept, so leaving it up while the focus
+       moves elsewhere would be showing you a field that is no longer the one
+       you are looking at. */
+    #referent-pane { flex: 0 0 auto; }
+    #referent-pane[hidden] { display: none; }
+    #referent-body { display: flex; flex-direction: column; gap: 0.4rem; }
+    .ref-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+    .ref-row > .lab {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+      color: #999; width: 5rem; flex-shrink: 0;
+    }
+    /* The identity selector: exactly one is on, because a concept has exactly
+       one identity. Radio semantics, button appearance. */
+    .kind-btn {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; padding: 0.15rem 0.45rem;
+    }
+    .kind-btn.on { background: #4a90d9; border-color: #3d78b4; color: #fff; }
+    #referent-body input[type="text"] {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; padding: 0.15rem 0.35rem;
+      border: 1px solid #ccc; border-radius: 3px; width: 7rem;
+    }
+    #referent-body select { font-size: 11px; padding: 0.1rem 0.2rem; }
+    #referent-body select.set { border-color: #4a90d9; }
+    /* The tail: shown, never edited. A feature need not be editable to be
+       preserved, which is what keeps the unbounded tail from blocking the
+       design — see notes/graph-editor.md. */
+    #ref-tail {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px; color: #888;
+    }
+    #ref-tail .none { font-style: italic; color: #bbb; }
+    #ref-preview {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; color: #333;
+    }
+
     /* ── display pane ── */
     #display-pane { flex: 1 1 30%; }
     #display-body { padding: 0.3rem 0.6rem; }
@@ -286,6 +326,38 @@
               <button id="add">Add</button>
               <button id="clear">Clear</button>
             </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane" id="referent-pane" hidden>
+        <div class="pane-head">
+          Referent
+          <span class="spacer"></span>
+          <span class="muted" id="ref-subject"></span>
+          <button id="ref-close">Close</button>
+        </div>
+        <div class="pane-body">
+          <div id="referent-body">
+            <div class="ref-row">
+              <span class="lab">Identity</span>
+              <span id="ref-kinds"></span>
+              <input type="text" id="ref-input-a" hidden autocomplete="off" spellcheck="false">
+              <input type="text" id="ref-input-b" hidden autocomplete="off" spellcheck="false">
+              <span id="ref-preview"></span>
+            </div>
+            <div class="ref-row">
+              <span class="lab">Modifiers</span>
+              <select id="ref-quantifier"></select>
+              <select id="ref-tense"></select>
+              <select id="ref-aspect"></select>
+              <select id="ref-voice"></select>
+              <input type="text" id="ref-measure" placeholder="measure" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="ref-row">
+              <span class="lab">Carried</span>
+              <span id="ref-tail"></span>
+            </div>
           </div>
         </div>
       </div>

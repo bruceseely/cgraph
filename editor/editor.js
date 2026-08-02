@@ -183,8 +183,9 @@ function paintSlot(el, slot, placeholder, kind) {
   if (kind === 'relation') { el.textContent = `(${slot.label})`; return; }
 
   // A concept has two click zones: the type arms the type list, the referent
-  // opens a sub-editor. The referent zone is inert until the referent editor
-  // exists — see the Open section of notes/graph-editor.md.
+  // opens the referent pane. The referent zone is live only for a concept that
+  // EXISTS — a slot holding a type the graph has not been given yet has no
+  // node-ref, so there is nothing for the pane to edit until Add creates it.
   const text = slotText(slot);
   const m = /^\[([^\]:]+)(?::(.*))?\]$/.exec(text);
   if (!m) { el.textContent = text; return; }
@@ -201,10 +202,20 @@ function paintSlot(el, slot, placeholder, kind) {
   });
   el.append(type);
 
+  const live = slot.ref !== undefined && slot.ref !== null;
   const ref = document.createElement('span');
-  ref.className = 'zone-ref disabled';
-  ref.textContent = m[2] !== undefined ? `: ${m[2].trim()}` : '';
-  ref.title = 'referent editor not built yet';
+  ref.className = 'zone-ref' + (live ? '' : ' disabled');
+  // An empty referent still needs something to click, or a generic concept
+  // would be the one case you could not give a referent to.
+  ref.textContent = m[2] !== undefined ? `: ${m[2].trim()}` : ': —';
+  ref.title = live ? 'edit the referent'
+                   : 'add this concept to the graph before editing its referent';
+  if (live) {
+    ref.addEventListener('click', ev => {
+      ev.stopPropagation();
+      openReferent(slot.ref, text);
+    });
+  }
   el.append(ref);
   el.append(document.createTextNode(']'));
 }
@@ -366,6 +377,246 @@ async function createFirstConcept(type) {
     await refresh();
   } catch (err) { setStatus(err.message, 'error'); }
 }
+
+// ── Referent pane ────────────────────────────────────────────────────────────
+// One concept's referent: an EXCLUSIVE identity plus modifiers that compose
+// freely with it and with each other. That shape is the whole design — read as
+// a list of forms the catalogue looks like modes to pick between, and it is
+// not — so the panel is one selector plus independent controls, never a mode
+// picker. See notes/graph-editor.md, "Referent editors".
+//
+// Every control sends ONE field. The server's setters each touch one field, so
+// a request that changed two things could not fail cleanly in the middle.
+//
+// The tail is displayed and never edited: a feature need not be editable to be
+// preserved, which is what stops the unbounded tail from being a design
+// blocker. It is shown so you can see what you are carrying.
+
+const refPane   = $('referent-pane');
+const refKinds  = $('ref-kinds');
+const refInputA = $('ref-input-a');
+const refInputB = $('ref-input-b');
+
+// [value, label, which inputs it needs]
+//
+// :VARIABLE is deliberately NOT offered, though the view reads it. A lone `*x'
+// is dropped by the formatter on the very next render — a label only means
+// something once a node is genuinely shared, and sharing is made by pointing
+// two arcs at one node, not by typing a name for it. Offering the button would
+// be offering an edit the system discards a moment later. Coreference is
+// automatic; see that section of notes/graph-editor.md.
+//
+// Reading :VARIABLE still matters: a parse can produce one, and a view that
+// could not see it would let an edit elsewhere overwrite it.
+const REF_KINDS = [
+  ['none',       '—',      []],
+  ['coref',      '?x',     ['label']],
+  ['individual', 'name',   ['name']],
+  ['individual', '#n',     ['id']],
+];
+const MODIFIERS = [
+  ['ref-quantifier', 'quantifier', ['', 'every', 'some']],
+  ['ref-tense',      'tense',      ['', 'past', 'present', 'future']],
+  ['ref-aspect',     'aspect',     ['', 'simple', 'progressive', 'perfect', 'perfect-progressive']],
+  ['ref-voice',      'voice',      ['', 'active', 'passive']],
+];
+
+let refConcept = null;   // node-ref of the concept being edited, or null
+let refView    = null;   // its last-known decomposition
+// A kind chosen in the UI but not yet sent, because it needs a value the
+// concept cannot supply. See chooseKind.
+let refPending = null;
+
+function refRowLabel(view) {
+  // Which of the two individual buttons is "on" depends on what the concept
+  // actually has, not on which one you last pressed.
+  if (view.kind !== 'individual') return view.kind;
+  return view.name ? 'individual:name' : 'individual:#n';
+}
+
+function paintReferent() {
+  if (!refView) return;
+  const active = refPending || refRowLabel(refView);
+
+  refKinds.replaceChildren();
+  for (const [kind, label, needs] of REF_KINDS) {
+    const key = kind === 'individual' ? `individual:${label}` : kind;
+    const b = document.createElement('button');
+    b.className = 'kind-btn' + (key === active ? ' on' : '');
+    b.textContent = label;
+    b.addEventListener('click', () => chooseKind(kind, needs, key));
+    refKinds.append(b);
+  }
+
+  // Only the inputs the current identity actually uses are shown — an id box
+  // beside a coref label would be a field with nowhere to go.
+  const needs = (REF_KINDS.find(([k, l]) =>
+    (k === 'individual' ? `individual:${l}` : k) === active) || [,, []])[2];
+  refInputA.hidden = !needs.includes('label') && !needs.includes('name');
+  refInputB.hidden = !needs.includes('id');
+  refInputA.placeholder = needs.includes('label') ? 'label' : 'name';
+  // A pending kind is one the concept does not have yet, so there is nothing
+  // of its own to prefill and the previous kind's text must not leak in.
+  refInputA.value = refPending ? ''
+                  : needs.includes('label') ? (refView.label || '')
+                  : (refView.name || '');
+  refInputB.placeholder = 'id';
+  refInputB.value = refView.id === null || refView.id === undefined ? '' : String(refView.id);
+
+  $('ref-preview').textContent = refView.identityText || '';
+
+  for (const [id, field, options] of MODIFIERS) {
+    const sel = $(id);
+    if (!sel.dataset.built) {
+      for (const o of options) {
+        const opt = document.createElement('option');
+        opt.value = o;
+        opt.textContent = o === '' ? `${field} —` : o;
+        sel.append(opt);
+      }
+      sel.dataset.built = '1';
+      sel.addEventListener('change', () => setRefField(field, sel.value));
+    }
+    sel.value = refView[field] || '';
+    sel.classList.toggle('set', !!refView[field]);
+  }
+
+  const m = $('ref-measure');
+  m.value = refView.measure ? `${refView.measure[0]} ${refView.measure[1]}`.trim() : '';
+
+  const tail = $('ref-tail');
+  tail.replaceChildren();
+  const keys = Object.keys(refView.tail || {});
+  if (!keys.length) {
+    const em = document.createElement('span');
+    em.className = 'none';
+    em.textContent = 'nothing beyond the fields above';
+    tail.append(em);
+  } else {
+    tail.textContent = keys.map(k => `${k}: ${refView.tail[k]}`).join('   ');
+  }
+}
+
+// Re-read one concept's rendered text out of the graph pane and push it
+// everywhere the old text is being displayed.
+function relabelConcept(ref) {
+  const el = graphEl.querySelector(`.cg-concept[data-ref="${ref}"]`);
+  if (!el) return;
+  const text = el.textContent.replace(/\s+/g, ' ').trim();
+  for (const slot of ['focus', 'target']) {
+    if (pane[slot] && pane[slot].ref === ref) pane[slot].text = text;
+  }
+  for (const a of focusArcs) if (a.conceptRef === ref) a.concept = text;
+  if (refConcept === ref) $('ref-subject').textContent = text;
+  // The Focus head is painted by paintDisplay, which the keepGraph refresh
+  // skips — so it has to be told here or it keeps the pre-edit name.
+  if (pane.focus && pane.focus.ref === ref) focusLabel.textContent = text;
+}
+
+async function openReferent(ref, label) {
+  refConcept = ref;
+  refPending = null;          // a half-chosen kind belongs to the concept it was chosen on
+  $('ref-subject').textContent = label || '';
+  try {
+    const data = await call(`/api/editor/referent?${q({ session: SESSION, concept: ref })}`);
+    refView = data.referent;
+    refPane.hidden = false;
+    paintReferent();
+  } catch (err) { setStatus(err.message, 'error'); }
+}
+
+function closeReferent() {
+  refPane.hidden = true;
+  refConcept = null;
+  refView = null;
+  refPending = null;
+}
+
+// Applying one field. The graph comes back with it, so the pane, the graph and
+// the sentence all move together rather than drifting until the next refresh.
+async function setRefField(field, value, extra = {}) {
+  if (refConcept === null) return;
+  try {
+    const data = await call(`/api/editor/referent/set?${q({
+      session: SESSION, concept: refConcept, field, value, ...extra
+    })}`, { method: 'POST' });
+    refView = data.referent;
+    renderGraph(data.withRefs);
+    // The editor pane and the pane heads hold a concept's text as it read when
+    // it was CLICKED. Editing its referent changes that text, so without this
+    // the graph says [PERSON: Mary] while the slot beside it still says
+    // [PERSON: Sue] — the same concept, disagreeing with itself on screen.
+    // The freshly rendered graph is the authority; re-read the label from it.
+    relabelConcept(refConcept);
+    paintReferent();
+    refreshEnglish();
+    setStatus('');
+    await refresh({ keepGraph: true });
+  } catch (err) { setStatus(err.message, 'error'); }
+}
+
+// One text box serves two different roles — a coref LABEL and an individual's
+// NAME — so switching between kinds that use different roles must not carry
+// the text across. It did, and clicking the button marked "?x" on [PERSON: Sue]
+// produced "?sue": the name was silently repurposed as the label. The button
+// has to mean what it says, so text is reused only when the role is unchanged
+// (retyping a label, correcting a name) and otherwise the kind's own default
+// applies.
+function currentNeeds() {
+  if (!refView) return [];
+  const active = refPending || refRowLabel(refView);
+  const entry = REF_KINDS.find(([k, l]) =>
+    (k === 'individual' ? `individual:${l}` : k) === active);
+  return entry ? entry[2] : [];
+}
+
+// A NAME is the one value the button cannot invent. `*x' and `?x' default to
+// the conventional `x', and `#' is itself a legitimate referent ("specific but
+// unidentified"), but there is no sensible default name — the first version
+// used "unnamed", which minted a real individual called that and made the
+// sentence read "Unnamed eats a pie."
+//
+// So the button selects the KIND and the field supplies the VALUE: choosing
+// `name' with nothing to go on arms the input and sends nothing until you type.
+function chooseKind(kind, needs, key) {
+  const was = currentNeeds();
+  const keeps = role => was.includes(role);      // same slot as before?
+  const typed = refInputA.value.trim();
+
+  if (needs.includes('name') && !(keeps('name') && typed)) {
+    refPending = key;
+    paintReferent();
+    refInputA.focus();
+    return;
+  }
+
+  const extra = { kind };
+  if (needs.includes('label')) extra.label = (keeps('label') && typed) || 'x';
+  if (needs.includes('name'))  extra.name  = typed;
+  if (needs.includes('id'))    extra.id    = (keeps('id') && refInputB.value.trim()) || '#';
+  refPending = null;
+  setRefField('identity', '', extra);
+}
+
+// Committing a text field is Enter or blur, not every keystroke: each one is a
+// server round trip that rewrites the graph.
+for (const el of [refInputA, refInputB]) {
+  el.addEventListener('keydown', ev => { if (ev.key === 'Enter') el.blur(); });
+  el.addEventListener('blur', () => {
+    if (!refView) return;
+    const active = refPending || refRowLabel(refView);
+    const entry = REF_KINDS.find(([k, l]) =>
+      (k === 'individual' ? `individual:${l}` : k) === active);
+    // An armed kind with the field still empty stays armed: leaving a name box
+    // blank is not a request to be named "".
+    if (!entry) return;
+    if (refPending && !refInputA.value.trim()) return;
+    chooseKind(entry[0], entry[2], active);
+  });
+}
+$('ref-measure').addEventListener('keydown', ev => { if (ev.key === 'Enter') ev.target.blur(); });
+$('ref-measure').addEventListener('blur', ev => setRefField('measure', ev.target.value.trim()));
+$('ref-close').addEventListener('click', closeReferent);
 
 // ── English pane ─────────────────────────────────────────────────────────────
 // Asked for only when the graph CHANGES — the add, the arc removal, the first

@@ -172,6 +172,126 @@
       (editor-operation-error (e) (json-error e))
       (error (e) (json-error e)))))
 
+;;; --- The referent editor ---------------------------------------------------
+;;;
+;;; One concept's referent, read as the identity/modifiers/tail split and
+;;; edited one named field at a time. The HTTP surface mirrors the setters
+;;; deliberately: a request that could change two things at once would be a
+;;; request whose failure could leave one of them changed.
+
+(defun json-measure (measure)
+  "(SIZE UNITS) as a JSON pair, or null."
+  (if measure
+      (format nil "[~a,\"~a\"]" (first measure) (json-escape (or (second measure) "")))
+      "null"))
+
+(defun json-tail (tail)
+  "The unrecognised properties as a JSON object. Values are stringified: the
+   tail is shown, not interpreted, so whatever the reader put there is
+   displayable without this having to know what it meant."
+  (with-output-to-string (out)
+    (write-char #\{ out)
+    (loop for (key value) on tail by #'cddr
+          for first = t then nil
+          do (unless first (write-char #\, out))
+             (format out "\"~a\":\"~a\""
+                     (json-escape (string-downcase (string key)))
+                     (json-escape (princ-to-string value))))
+    (write-char #\} out)))
+
+(defun json-referent-view (concept)
+  "CONCEPT's referent, decomposed. GRAPHCOMPATIBLE says whether this type may
+   take a nested graph instead of the panel -- the one identity that is not a
+   state of the selector but an alternative to the whole of it."
+  (let ((v (describe-referent concept)))
+    (format nil "{\"kind\":\"~(~a~)\",\"label\":~:[null~;\"~:*~(~a~)\"~],~
+                 \"defining\":~:[false~;true~],\"id\":~a,\"name\":~:[null~;\"~:*~a\"~],~
+                 \"identityText\":\"~a\",\"modifierText\":\"~a\",~
+                 \"quantifier\":~:[null~;\"~:*~(~a~)\"~],\"tense\":~:[null~;\"~:*~(~a~)\"~],~
+                 \"aspect\":~:[null~;\"~:*~(~a~)\"~],\"voice\":~:[null~;\"~:*~(~a~)\"~],~
+                 \"raising\":~:[false~;true~],\"negated\":~:[false~;true~],~
+                 \"measure\":~a,\"tail\":~a,\"graphCompatible\":~:[false~;true~]}"
+            (rview-kind v)
+            (rview-label v)
+            (rview-defining-p v)
+            (let ((id (rview-id v)))
+              (cond ((numberp id) id)
+                    ((eq id t) "\"#\"")
+                    (t "null")))
+            (and (rview-name v) (json-escape (rview-name v)))
+            (json-escape (referent-identity-text v))
+            (json-escape (referent-modifier-text v))
+            (rview-quantifier v) (rview-tense v) (rview-aspect v) (rview-voice v)
+            (rview-raising v) (rview-negated v)
+            (json-measure (rview-measure v))
+            (json-tail (rview-tail v))
+            (ignore-errors (graph-compatible-p (concept-type concept))))))
+
+;;; GET /api/editor/referent?session=N&concept=REF
+(hunchentoot:define-easy-handler (handle-editor-referent :uri "/api/editor/referent")
+    (session concept)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (with-editor-session (s session)
+    (handler-case
+        (with-cg-thread-bindings
+          (let ((node (editor-concept s concept)))
+            (format nil "{\"ok\":true,\"referent\":~a}" (json-referent-view node))))
+      (editor-operation-error (e) (json-error e))
+      (error (e) (json-error e)))))
+
+;;; POST /api/editor/referent/set?session=N&concept=REF&field=F&...
+;;;
+;;; FIELD is one of the @-word modifiers, `measure', or `identity'.
+;;; An empty VALUE clears -- which is a real edit, not a missing argument, so
+;;; the parameter is distinguished by presence rather than by emptiness.
+(define-editor-post (handle-editor-referent-set "/api/editor/referent/set")
+    (session concept field value kind label id name)
+  (with-cg-thread-bindings
+    (let* ((node (editor-concept s concept))
+           (field (string-downcase (or field ""))))
+      (flet ((blank (x) (or (null x) (zerop (length (string-trim " " x)))))
+             (kw (x) (and x (plusp (length x))
+                          (intern (string-upcase x) :keyword))))
+        (cond
+          ((string= field "identity")
+           (let ((k (kw kind)))
+             (unless k (editor-error "identity needs a kind"))
+             (set-referent-identity
+              node k
+              :label (unless (blank label) label)
+              :id (cond ((blank id) nil)
+                        ((string= (string-trim " " id) "#") t)
+                        (t (or (parse-integer (string-trim " #" id) :junk-allowed t)
+                               (editor-error "~a is not an individual id" id))))
+              :name (unless (blank name) name))))
+          ((string= field "measure")
+           (set-referent-measure
+            node (unless (blank value)
+                   ;; "5 ft." / "25.4cm" / "5" -- the number, then whatever
+                   ;; follows it as the unit.
+                   (let* ((v (string-trim " " value))
+                          (end (or (position-if-not
+                                    (lambda (c) (or (digit-char-p c) (char= c #\.)))
+                                    v)
+                                   (length v))))
+                     (when (zerop end)
+                       (editor-error "a measure starts with a number"))
+                     (list (read-from-string (subseq v 0 end))
+                           (string-trim " " (subseq v end)))))))
+          ((member field '("quantifier" "tense" "aspect" "voice" "raising")
+                   :test #'string=)
+           (set-referent-modifier node (kw field)
+                                  (if (string= field "raising")
+                                      (and (not (blank value))
+                                           (not (string-equal value "false")))
+                                      (kw (unless (blank value) value)))))
+          (t (editor-error "unknown referent field: ~a" field))))
+      (format nil "{\"ok\":true,\"referent\":~a,\"withRefs\":\"~a\",\"plain\":\"~a\"}"
+              (json-referent-view node)
+              (json-escape (session-render s))
+              (json-escape (session-plain-render s))))))
+
 ;;; --- The graph in English --------------------------------------------------
 
 (defun editor-english (session)
