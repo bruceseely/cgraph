@@ -247,7 +247,7 @@ Two kinds, one contract:
 - **Referent is a graph** (PROPOSITION, BELIEF, SITUATION, …) → a nested
   **graph editor**. Which types qualify is already known: `graph-compatible-p`
   on `concept-type`.
-- **Referent is not a graph** → a **referent editor** (not yet designed).
+- **Referent is not a graph** → a **referent editor**, designed below.
 
 Both open, edit, and finish with UPDATE or CANCEL, returning a referent. The
 recursion falls out of that uniformity rather than being special-cased.
@@ -256,6 +256,73 @@ The non-graph referent editor needs real support, because referents get
 complex — individuals, sets, quantifiers, measures. For a set it should offer
 the available individuals to choose from and format the referent itself. The
 user picks members; the editor decides where the commas go.
+
+#### What a referent is made of
+
+Every form is catalogued in `notes/referent-catalog.md`, with verified
+`reader.lisp` citations. That is the reference; this is the shape.
+
+The keys `resolve-target-concept` pulls out divide in two, and the division is
+what the UI should be built on:
+
+- **Identity** — `:id :name :variable :coref :set`. Mutually exclusive: one
+  selector with five states, plus empty for a generic concept. A concept has
+  exactly one identity.
+- **Modifiers** — `:quantifier :tense :aspect :voice :measure`. These compose
+  freely, with each other and with any identity.
+
+So the panel is *one exclusive control plus orthogonal ones* — not a mode
+picker, which is what the list of forms first suggests.
+
+Anything `resolve-target-concept` does not recognise becomes an arbitrary
+individual property. That tail is unbounded, so no purely structured editor
+can express everything the reader accepts.
+
+#### Build it in stages, but not UI first
+
+The tail, and the staging, are the same problem: at any moment the editor
+understands less than the reader does. A stage-1 editor that knows only
+identity will still be *opened* on `[EAT: *e @past-progressive @passive]` — and
+if it re-emits only what it understands, pressing UPDATE silently drops the
+tense, aspect and voice. Every stage is a data-loss risk until that is solved,
+so it is solved first, before any control exists.
+
+**Stage 0** is a decomposition with a lossless round trip: split a concept into
+**identity / modifiers / unrecognised tail**, edit only what the current stage
+understands, and re-emit the rest untouched. The contract is *emitted notation
+re-parses to an equal concept*. It is pure Lisp, and testable against every row
+of the referent catalog with no UI at all.
+
+That also settles the scope question the tail poses. "Complete but narrower"
+versus "escape hatch" has a third answer: **complete for editing, lossless for
+everything else.** A feature need not be editable to be preserved — show it,
+read-only, and hand it back verbatim. The unbounded tail stops being a design
+blocker and becomes a display question.
+
+The same discipline already runs elsewhere here: `/api/edit-type` writes the
+*stored* canonical text when the graph did not change, rather than the
+reformatted one. Don't rewrite what you didn't edit.
+
+| Stage | Covers | Why there |
+|---|---|---|
+| 0 | decompose and re-emit losslessly | makes every later stage non-destructive; needs no UI |
+| 1 | identity, minus sets — empty, `*`, `*x`, `?x`, `#`, `#123`, `Fido` | the exclusive spine, and most referents are identity-only |
+| 2 | modifiers — quantifier and measure first, then tense/aspect/voice gated on the concept type | orthogonal to 1, so it cannot destabilise it |
+| 3 | sets — `{Fido, #123, *}`, with optional `@ N` | recurses on stage 1's selector minus `:set`, so it is cheapest last |
+| 4 | decide the tail | by then use will have shown whether one ever needs editing |
+
+Two things fall out rather than needing their own work. **Graph referents** plug
+in at stage 1 as an alternative to the whole panel, chosen by
+`graph-compatible-p` — which is what unblocks nesting. And **sets are not a
+special case**: a member is just an identity, so stage 3 is mostly wiring.
+
+Gating tense/aspect/voice on the concept type is the same show-only-real-choices
+principle the arcs follow — a control that cannot produce a legal result should
+not be offered.
+
+**Stage 1 is not shippable alone.** Identity-only covers most of what one
+writes by hand, so it looks like the obvious first slice, but without stage 0
+you would be afraid to press UPDATE. The smallest honest slice is 0 + 1.
 
 ## Remove
 
@@ -428,8 +495,9 @@ submission; returning a session handle to poll would be much worse to use.
 
 ## Open
 
-- **The non-graph referent editor** — not yet designed. Needs to cover
-  individuals, sets, quantifiers, measures, with pickers rather than syntax.
+- **The non-graph referent editor** — designed (see §Referent editors), not
+  built. Staged 0–4; nothing beyond stage 0 is started, and stage 0 is the one
+  that has to exist before any of the rest is safe.
 - ~~**Formatter round-trip**~~ — done. `/api/edit-type` now compares against what
   `/api/type-def` served (`canonical-unchanged-p`, `supertypes-unchanged-p`) and
   writes nothing when nothing changed; when something else changed but the graph
@@ -457,5 +525,6 @@ Done: the non-recursive loop on a live graph object from the REPL,
 entry point, which arrived with it since a session parses to a working graph
 either way.
 
-Still to come: **nesting** (the recursive call, which needs the referent
-editors) and the **type-in filters**.
+Still to come: the **referent editor**, staged 0–4 under §Referent editors;
+**nesting**, which waits on it only for the shared contract, since the graph
+half is already settled; and the **type-in filters**, which wait on nothing.
