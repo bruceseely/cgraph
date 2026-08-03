@@ -334,25 +334,38 @@
       (with-input-from-string (stream trimmed)
         (block nil
           (loop
-            (let ((feature (read-term stream :end-chars terms)))
+            ;; ASTERISK-READER returns NIL for a bare `*', which this loop used
+            ;; to read as end-of-input: the marker was neither recorded nor
+            ;; survived, and everything after it was dropped too. So a `*' was
+            ;; invisible wherever it appeared, and `{Fido, Spot, *}' arrived
+            ;; here as two named members and nothing else.
+            ;;
+            ;; Peeking first is what tells the two NILs apart -- "a generic
+            ;; marker was consumed" from "there is nothing left". A `*x' still
+            ;; goes through READ-TERM and comes back as a variable, so the
+            ;; peek alone must not be taken as the answer.
+            (let* ((pchar   (peek-char nil stream nil nil))
+                   (starred (and pchar (char= pchar #\*)))
+                   (feature (read-term stream :end-chars terms)))
               (skip-char stream #\,)
               (consume-whitespace stream)
-              (when (and feature (not (equal feature "")))
-                (push feature set-contents))
-
-              (when (or (null feature)
-                        (equal feature "")
-                        (equal feature "}"))
+              (cond ((and feature (not (equal feature "")))
+                     (push feature set-contents))
+                    (starred
+                     ;; a bare `*': the placeholder, and the loop goes on
+                     (push "*" set-contents)))
+              (when (and (not starred)
+                         (or (null feature)
+                             (equal feature "")
+                             (equal feature "}")))
                 (return))))))
       (skip-char stream #\})
-      ;; Generic set: both '{*}' and '{}' denote a plural referent with
-      ;; unspecified members. Inside the braces the asterisk-reader may
-      ;; consume '*' and return NIL, leaving set-contents empty; an empty
-      ;; '{}' similarly yields no contents. In either case preserve a "*"
-      ;; placeholder so downstream code can distinguish a generic plural
-      ;; from a missing set entirely.
+      ;; `{}' -- braces with nothing between them. Still a SET, so it needs a
+      ;; spec list RESOLVE-TARGET-CONCEPT will act on, but not a generic one:
+      ;; the empty set is not the generic collection. This placeholder used to
+      ;; be "*" for both, which is exactly why they were indistinguishable.
       (when (null set-contents)
-        (push "*" set-contents)))
+        (push "" set-contents)))
     ;; Reverse to preserve original order (push reverses)
     (list :set (nreverse set-contents))))
 
@@ -424,14 +437,20 @@
    When MEMBER-SPECS is non-empty but every member is generic (e.g. '{*}'),
    still return an empty set — the user has explicitly asked for a plural
    referent with unspecified members."
-  (let ((members (list)))
-    (dolist (spec member-specs)
-      (let ((individual (resolve-set-member spec concept-type)))
-        (when individual
-          (push individual members))))
-    (cond (members      (make-set-from-individuals (nreverse members)))
-          (member-specs (make-set-from-individuals nil))
-          (t            nil))))
+  (let ((members (list))
+        (generic nil))
+    (flet ((marker (spec text)
+             (and (stringp spec) (string= (string-trim " " spec) text))))
+      (dolist (spec member-specs)
+        (cond ((marker spec "*") (setf generic t))   ; unnamed members besides
+              ((marker spec "")  nil)                ; `{}' -- a set, no members
+              (t (let ((individual (resolve-set-member spec concept-type)))
+                   (when individual (push individual members)))))))
+    (let ((set (cond (members      (make-set-from-individuals (nreverse members)))
+                     (member-specs (make-set-from-individuals nil))
+                     (t            nil))))
+      (when set (setf (set-open-p set) generic))
+      set)))
 
 
 (defun individual-reader (stream initial-char)

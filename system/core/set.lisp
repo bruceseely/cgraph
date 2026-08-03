@@ -13,6 +13,14 @@
   ((members :initarg :members
             :type list  ; list of content objects (individuals, nested sets, etc.)
             :accessor members)
+   ;; True when the set has unnamed members besides the ones listed -- the `*'
+   ;; placeholder. `{}' and `{*}' are DIFFERENT referents: the first is the
+   ;; empty or wholly unquantified set, the second a generic collection, and it
+   ;; is the second that a count attaches to. `[CAT: {} @4]' is not how you say
+   ;; four unnamed cats; `[CAT: {*} @4]' is.
+   (open :initform nil
+         :initarg :open
+         :accessor set-open-p)
    ;; concepts referencing this set (via referent)
    (concepts :initform (list)
              :accessor concepts)))
@@ -46,7 +54,15 @@
     (format stream "~{~a~^ ~}" (members object))))
 
 (defmethod format-set ((set set))
-  (format nil "{~{~a~^, ~}}" (mapcar #'format-object (members set))))
+  "`{}', `{*}', `{Fido, Spot}', `{Fido, Spot, *}'.
+
+   The `*' is a placeholder for unnamed members, so it is emitted whenever
+   there are any -- with named members beside it or without. Dropping it
+   closed every set on the way out: `{*}' became `{}', and `{Fido, Spot, *}@4'
+   became a two-member set asserting it had four."
+  (let ((names (mapcar #'format-object (members set))))
+    (format nil "{~{~a~^, ~}~:[~;~:[~;, ~]*~]}"
+            names (set-open-p set) names)))
 
 
 (defmethod format-object ((object set)  &rest keys &key &allow-other-keys)

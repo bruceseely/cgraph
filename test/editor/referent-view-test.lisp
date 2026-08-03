@@ -29,9 +29,9 @@
     ;; one. The view shows it either way, which the formatter does not.
     ("[DOG: Fido]"                     :individual   nil)
     ("[CAT: Felix #7]"                 :individual   "Felix #7")
-    ("[DOG: {*}]"                      :set          "{}")
+    ("[DOG: {*}]"                      :set          "{*}")
     ("[DOG: {Fido, Spot}]"             :set          "{Fido, Spot}")
-    ("[DOG: {*} @ 5]"                  :set          "{}")
+    ("[DOG: {*} @ 5]"                  :set          "{*}")
     ("[PROPOSITION: [DOG: *x]]"        :graph        nil)   ; text checked loosely
     ("[[PERSON: *x]]"                  :graph        nil)))
 
@@ -284,10 +284,8 @@
                               (rview-members (describe-referent c)))))
         ;; A count on a fully specified set contradicts its own members:
         ;; {Fido, Spot}@4 is a set of two asserting it has four. The count
-        ;; belongs on a set with UNNAMED members ({*}@4, {Fido, Spot, *}@4),
-        ;; which the model cannot yet express because the reader drops the `*'
-        ;; placeholder -- so the editor refuses rather than produce the one
-        ;; form it can spell.
+        ;; belongs on a set with UNNAMED members -- {*}@4, {Fido, Spot, *}@4 --
+        ;; and those are expressible again now that a `*' survives the reader.
         (check "a count on a fully specified set is refused"
                (handler-case (progn (set-referent-measure c '(4 "")) nil)
                  (referent-edit-error () t)))
