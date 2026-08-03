@@ -34,7 +34,12 @@ $('session-label').textContent = SESSION ? `session ${SESSION}` : '(no session)'
 // [] , ['forward'], ['reverse'] or both. A boolean "is it symmetric" cannot
 // express the case that matters here, an arc pointing the ONE way that is not
 // allowed, so the set is carried instead and REFRESH reconciles it.
-const pane = { focus: null, relation: null, target: null };
+// REPLACING holds the node-ref of an arc pulled in from the display pane. It is
+// the difference between "attach this" and "put this here instead": with it set,
+// the relation slot is not yours to choose -- the arc already decided -- and the
+// commit goes to /api/editor/replace.
+const pane = { focus: null, relation: null, target: null,
+               replacing: null, pulledTarget: null };
 
 const OPPOSITE = d => (d === 'reverse' ? 'forward' : 'reverse');
 // The focus's current arcs, as the display pane last showed them. Kept so that
@@ -199,6 +204,10 @@ function onGraphConceptClick(ref, text) {
 function setSlot(which, value) {
   pane[which] = value;
   if (which === 'focus') { pane.target = null; pane.relation = null; }
+  // A pull is a statement about one arc of one focus. Move the focus and it is
+  // no longer about anything; change the relation and it is a different claim,
+  // which is an add, not a replace.
+  if (which !== 'target') { pane.replacing = pane.pulledTarget = null; }
 }
 
 // ── editor pane ──────────────────────────────────────────────────────────────
@@ -281,8 +290,19 @@ function paintEditor() {
   paintSlot(slotRel,    pane.relation, 'relation',      'relation');
   paintSlot(slotTarget, pane.target,   'concept',       'target');
   paintArrows();
+  // A pulled arc commits as a replacement, and says so: the same button doing
+  // two different things silently is how you delete a branch you meant to keep.
+  // It stays disabled until the target actually differs from what is there now,
+  // since replacing a concept with itself is a destructive no-op.
+  const pulled = pane.replacing !== null && pane.replacing !== undefined;
+  const changed = pulled && pane.target
+                  && !(pane.target.ref !== undefined && pane.target.ref !== null
+                       && pane.target.ref === pane.pulledTarget);
+  $('add').textContent = pulled ? 'Replace' : 'Add';
+  $('add').classList.toggle('replacing', pulled);
   $('add').disabled = !(pane.focus && pane.focus.ref !== undefined
-                        && pane.relation && pane.target);
+                        && pane.relation && pane.target
+                        && (!pulled || changed));
 }
 
 [arrowLeft, arrowRight].forEach(a => a.addEventListener('click', () => {
@@ -293,6 +313,7 @@ function paintEditor() {
 
 $('clear').addEventListener('click', () => {
   pane.focus = pane.relation = pane.target = null;
+  pane.replacing = pane.pulledTarget = null;
   armedSlot = null;
   refresh();
 });
@@ -381,7 +402,12 @@ function onConceptTypeClick(type) {
   let notice = null;
   if (armedSlot) {
     const slot = pane[armedSlot];
-    if (slot && slot.ref !== undefined && slot.ref !== null) {
+    // Overwriting a slot that holds a real node is normally a mistake -- it
+    // looks like retyping the concept and is not. During a pull it is the whole
+    // point: the target slot shows what the arc points at NOW, and picking a
+    // type is how you say what it should point at instead.
+    const replacingTarget = armedSlot === 'target' && pane.replacing !== null;
+    if (slot && slot.ref !== undefined && slot.ref !== null && !replacingTarget) {
       // Passed through REFRESH rather than set directly: refresh now clears the
       // status line, so a message set beforehand would be wiped on the way out.
       notice = ['That concept already exists in the graph; '
@@ -804,44 +830,109 @@ function paintDisplay(arcs) {
   }
   for (const a of arcs) {
     const line = document.createElement('div');
-    line.className = 'arc-line';
+    line.className = 'arc-line' + (pane.replacing === a.relationRef ? ' pulled' : '');
     const text = document.createElement('span');
     text.className = 'text';
-    text.textContent = a.direction === 'reverse'
-      ? `←(${a.relation})←${a.concept}`
-      : `→(${a.relation})→${a.concept}`;
-    // Clicking the concept in a line focuses it — how you move around, and how
-    // you remove the current focus (focus a neighbour first).
-    text.style.cursor = 'pointer';
-    text.addEventListener('click', () => {
+
+    // The line has two click zones, on the same rule the graph pane uses: the
+    // part you click is the part you get. The RELATION pulls the arc into the
+    // editor to have its far end replaced; the CONCEPT focuses it, which is how
+    // you move around and how you get off the current focus.
+    const rev = a.direction === 'reverse';
+    const rel = document.createElement('span');
+    rel.className = 'zone-arc';
+    rel.textContent = rev ? `←(${a.relation})←` : `→(${a.relation})→`;
+    rel.title = 'replace the concept on this arc';
+    rel.addEventListener('click', ev => {
+      ev.stopPropagation();
+      pullArc(a);
+    });
+
+    const con = document.createElement('span');
+    con.className = 'zone-con';
+    con.textContent = a.concept;
+    con.title = 'focus this concept';
+    con.addEventListener('click', ev => {
+      ev.stopPropagation();
       pane.focus = { ref: a.conceptRef, text: a.concept };
       pane.relation = pane.target = null;
+      pane.replacing = null;
       refresh();
     });
+    text.append(rel, con);
+    // What the line costs. The pane shows one hop and removal acts on every hop
+    // behind it, so an arc to a leaf and an arc holding a whole branch look
+    // alike without this -- as does an arc whose far end is coreferent and
+    // survives, which is the case a mere arc-count would flag hardest and
+    // wrongest. Silence means the removal is free.
+    const cost = a.pruneCount || 0;
+    const toll = document.createElement('span');
+    toll.className = 'toll';
+    if (cost) {
+      toll.textContent = `⌫${cost}`;
+      toll.title = cost === 1 ? 'removing this arc drops 1 concept'
+                              : `removing this arc drops ${cost} concepts`;
+    }
+
     const x = document.createElement('span');
     x.className = 'x';
     x.textContent = '✕';
-    x.title = 'remove this arc';
+    x.title = cost ? toll.title : 'remove this arc';
     x.addEventListener('click', () => removeArc(a.relationRef));
-    line.append(text, x);
+    line.append(text, toll, x);
     displayBody.append(line);
   }
+}
+
+// Load an existing arc into the editor so its far end can be swapped. The
+// relation comes along and is NOT editable here: what is being replaced is the
+// concept, not the claim. The old target is left showing in the slot so the row
+// reads as the arc as it stands -- pick a type or a concept and it becomes the
+// arc as it will stand. Nothing is committed, and nothing is destroyed, until
+// Replace; Clear puts you back.
+function pullArc(a) {
+  pane.replacing = a.relationRef;
+  pane.pulledTarget = a.conceptRef;   // what Replace stays disabled against
+  pane.relation = { label: a.relation, direction: a.direction, legal: null };
+  pane.target = { ref: a.conceptRef, text: a.concept };
+  armedSlot = 'target';               // the next type click lands where it means to
+  refresh();
 }
 
 // ── operations ───────────────────────────────────────────────────────────────
 
 $('add').addEventListener('click', async () => {
   const t = pane.target;
+  const replacing = pane.replacing;
   try {
-    const data = await call(`/api/editor/add?${q({
-      session: SESSION,
-      focus: pane.focus.ref,
-      relation: pane.relation.label,
-      direction: pane.relation.direction,
-      target: (t.ref !== undefined && t.ref !== null) ? t.ref : null,
-      target_type: t.type || null
-    })}`, { method: 'POST' });
-    pane.relation = pane.target = null;
+    const data = await call(
+      replacing
+        ? `/api/editor/replace?${q({
+            session: SESSION,
+            focus: pane.focus.ref,
+            relation: replacing,
+            target: (t.ref !== undefined && t.ref !== null) ? t.ref : null,
+            target_type: t.type || null
+          })}`
+        : `/api/editor/add?${q({
+            session: SESSION,
+            focus: pane.focus.ref,
+            relation: pane.relation.label,
+            direction: pane.relation.direction,
+            target: (t.ref !== undefined && t.ref !== null) ? t.ref : null,
+            target_type: t.type || null
+          })}`, { method: 'POST' });
+    // The concept just built STAYS in the target slot, now carrying the ref the
+    // server minted for it. A referent can only be edited on a node that
+    // exists, so clearing the slot here -- which is what this used to do --
+    // meant every new concept had to be hunted down again before it could be
+    // named. The relation slot is cleared, which is what keeps Add disabled and
+    // a second click from making a duplicate arc.
+    pane.replacing = null;
+    pane.relation = null;
+    pane.target = (data.created !== undefined && data.created !== null)
+      ? { ref: data.created, text: slotText(t) }
+      : null;
     renderGraph(data.withRefs);
     paintDisplay(data.focus);
     refreshEnglish();

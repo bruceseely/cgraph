@@ -45,6 +45,11 @@
     button:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
     button:disabled { color: #ccc; cursor: default; }
     #update { border-color: #a9bde8; background: #e0e9fb; color: #33507a; }
+    /* Replace destroys where Add only builds, so it does not get to look like
+       Add. Muted while disabled, like every other button here. */
+    #add.replacing:not(:disabled) {
+      border-color: #d9a9a9; background: #fbe6e0; color: #7a3a33;
+    }
 
     /* ── frame: left stack | right type columns ── */
     #frame { display: flex; flex: 1 1 auto; min-height: 0; }
@@ -230,6 +235,29 @@
       padding: 0.1rem 0;
     }
     .arc-line .text { flex: 1 1 auto; }
+    /* Two click zones, the same rule the concept slots use: the relation pulls
+       the arc in to have its far end replaced, the concept focuses it. Both are
+       live, so neither gets a pointer cursor by default — the underline on
+       hover is what says which one you are about to get. */
+    .arc-line .zone-arc, .arc-line .zone-con { cursor: pointer; }
+    .arc-line .zone-arc:hover { background: #e8f0fb; text-decoration: underline; }
+    .arc-line .zone-con:hover { text-decoration: underline; }
+    /* The arc currently sitting in the editor, waiting on a Replace. */
+    .arc-line.pulled { background: #f0f4fb; }
+    .arc-line.pulled .zone-arc { color: #4a90d9; font-weight: 600; }
+    /* Reads as a price next to the control that charges it. Deliberately quiet:
+       it is there to be found when you look at the ✕, not to shout on every
+       line. An empty span still holds its column so the ✕ does not shift. */
+    .arc-line .toll {
+      flex: 0 0 auto;
+      min-width: 1.7rem;
+      text-align: right;
+      color: #c0392b;
+      opacity: 0.6;
+      font-size: 11px;
+      cursor: default;
+    }
+    .arc-line:hover .toll { opacity: 0.85; }
     .arc-line .x {
       color: #c0392b;
       cursor: pointer;

@@ -96,28 +96,35 @@
 ;;; These mutate the working graph in place so node-refs stay stable for the
 ;;; life of the session -- the browser's click map depends on it.
 
-(defun editor-graph-json (session &optional focus)
+(defun editor-graph-json (session &optional focus created)
   "The working graph plus, when FOCUS is given, its neighbourhood.
 
    PARENT rides along because the page has no other way to learn it is a nested
    editor: it is loaded from a URL carrying only its own session id, and what
    UPDATE should do -- veil, or return to the graph above -- depends on the
-   answer."
-  (format nil "{\"ok\":true,\"withRefs\":\"~a\",\"plain\":\"~a\"~@[,\"parent\":~a~]~@[,\"focus\":~a~]}"
+   answer.
+
+   CREATED is the node-ref of a concept the operation just made. The page needs
+   it to keep that concept in the target slot afterwards: a referent can only be
+   edited on a node that exists, so without the ref the only way to name what
+   you just built is to go and find it again."
+  (format nil "{\"ok\":true,\"withRefs\":\"~a\",\"plain\":\"~a\"~@[,\"created\":~a~]~@[,\"parent\":~a~]~@[,\"focus\":~a~]}"
           (json-escape (session-render session))
           (json-escape (session-plain-render session))
+          created
           (let ((p (session-parent session)))
             (and p (session-id p)))
           (when focus
             (with-output-to-string (out)
               (write-char #\[ out)
               (loop for (entry . rest) on (editor-focus-arcs session focus) do
-                (format out "{\"relationRef\":~a,\"relation\":\"~a\",\"direction\":\"~(~a~)\",\"conceptRef\":~a,\"concept\":\"~a\"}"
+                (format out "{\"relationRef\":~a,\"relation\":\"~a\",\"direction\":\"~(~a~)\",\"conceptRef\":~a,\"concept\":\"~a\",\"pruneCount\":~a}"
                         (getf entry :relation-ref)
                         (json-escape (getf entry :relation))
                         (getf entry :direction)
                         (getf entry :concept-ref)
-                        (json-escape (getf entry :concept)))
+                        (json-escape (getf entry :concept))
+                        (getf entry :prune-count))
                 (when rest (write-char #\, out)))
               (write-char #\] out)))))
 
@@ -143,15 +150,35 @@
 ;;; targetType-> a NEW concept of that type.
 (define-editor-post (handle-editor-add "/api/editor/add")
     (session focus relation target target_type direction)
-  (editor-add-arc s
-                  :focus focus
-                  :relation relation
-                  :target (and target (plusp (length target)) target)
-                  :target-type (and target_type (plusp (length target_type))
-                                    target_type)
-                  :direction (if (string-equal (or direction "forward") "reverse")
-                                 :reverse :forward))
-  (editor-graph-json s focus))
+  (multiple-value-bind (new-rel new-target)
+      (editor-add-arc s
+                      :focus focus
+                      :relation relation
+                      :target (and target (plusp (length target)) target)
+                      :target-type (and target_type (plusp (length target_type))
+                                        target_type)
+                      :direction (if (string-equal (or direction "forward") "reverse")
+                                     :reverse :forward))
+    (declare (ignore new-rel))
+    (editor-graph-json s focus (node-ref new-target))))
+
+;;; POST /api/editor/replace?session=N&focus=REF&relation=REF
+;;;      &target=REF | &target_type=LABEL
+;;;
+;;; Change which concept an existing arc points at, keeping the relation and
+;;; its direction. Not remove-then-add: see EDITOR-REPLACE-TARGET for why the
+;;; two are not interchangeable.
+(define-editor-post (handle-editor-replace "/api/editor/replace")
+    (session focus relation target target_type)
+  (multiple-value-bind (new-rel new-target)
+      (editor-replace-target s
+                             :focus focus
+                             :relation relation
+                             :target (and target (plusp (length target)) target)
+                             :target-type (and target_type (plusp (length target_type))
+                                               target_type))
+    (declare (ignore new-rel))
+    (editor-graph-json s focus (node-ref new-target))))
 
 ;;; POST /api/editor/remove?session=N&focus=REF&relation=REF
 (define-editor-post (handle-editor-remove "/api/editor/remove")
