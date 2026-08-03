@@ -256,6 +256,27 @@
            (referent-edit-error
             "~a has no referent to measure; give it an identity first"
             (label (concept-type concept))))
+          ;; STOPGAP. `@N' is a count of a set whose members are not all
+          ;; named -- `{*}@4', or `{Fido, Spot, *}@4' for two named and two
+          ;; not. On a fully specified set the count is implied by the members,
+          ;; so `{Fido, Spot}@4' is a set of two asserting it has four.
+          ;;
+          ;; The real fix is in the model: the reader drops the `*' placeholder
+          ;; (a lone `{*}' survives, but a trailing one after named members
+          ;; does not reach BUILD-SET-FROM-SPECS at all), so an open set cannot
+          ;; presently be told from a closed one and `{Fido, Spot, *}@4' already
+          ;; formats back as the contradiction. Until openness is representable
+          ;; the editor cannot offer the legitimate form, so it declines to
+          ;; produce the illegitimate one either.
+          ;;
+          ;; Clearing is always allowed: refusing to remove a bad value would
+          ;; strand any graph that arrived carrying one.
+          ((and measure (set-p content) (members content))
+           (referent-edit-error
+            "a set with named members already says how many there are; ~
+             ~a would contradict it. A count belongs on a set with unnamed ~
+             members, which this editor cannot yet express."
+            (format nil "@~a" (first measure))))
           ((set-p content)
            (if measure
                (setf (getf (properties referent) :measure) measure)

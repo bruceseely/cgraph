@@ -571,6 +571,11 @@ function paintReferent() {
 
   const m = $('ref-measure');
   m.value = refView.measure ? `${refView.measure[0]} ${refView.measure[1]}`.trim() : '';
+  // A count on a fully specified set contradicts its own members — see the
+  // stopgap in set-referent-measure. Hidden rather than offered, unless one is
+  // already set, in which case hiding it would hide the only way to remove it.
+  m.hidden = isSet && (refView.members || []).length > 0 && !refView.measure;
+  m.title = m.hidden ? '' : 'how many, for a set whose members are not all named';
 
   const tail = $('ref-tail');
   tail.replaceChildren();

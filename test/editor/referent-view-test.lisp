@@ -282,16 +282,26 @@
                (equal '("Fido" "Spot")
                       (mapcar (lambda (m) (getf m :name))
                               (rview-members (describe-referent c)))))
-        ;; Cardinality is a modifier, and must survive membership changes.
-        (set-referent-measure c '(4 ""))
-        (check "a cardinality rides alongside the members"
-               (string= "[DOG: {Fido, Spot}@4]" (format-concept c)))
+        ;; A count on a fully specified set contradicts its own members:
+        ;; {Fido, Spot}@4 is a set of two asserting it has four. The count
+        ;; belongs on a set with UNNAMED members ({*}@4, {Fido, Spot, *}@4),
+        ;; which the model cannot yet express because the reader drops the `*'
+        ;; placeholder -- so the editor refuses rather than produce the one
+        ;; form it can spell.
+        (check "a count on a fully specified set is refused"
+               (handler-case (progn (set-referent-measure c '(4 "")) nil)
+                 (referent-edit-error () t)))
+        (check "and nothing was written"
+               (string= "[DOG: {Fido, Spot}]" (format-concept c)))
         (remove-referent-set-member c 0)
         (check "removing by position drops the right one"
-               (string= "[DOG: {Spot}@4]" (format-concept c)))
+               (string= "[DOG: {Spot}]" (format-concept c)))
         (remove-referent-set-member c 0)
         (check "emptying leaves a generic plural, not a generic singular"
-               (string= "[DOG: {}@4]" (format-concept c)))
+               (string= "[DOG: {}]" (format-concept c)))
+        (check "a count IS allowed once no member is named"
+               (progn (set-referent-measure c '(4 ""))
+                      (string= "[DOG: {}@4]" (format-concept c))))
         (check "an out-of-range member is refused"
                (handler-case (progn (remove-referent-set-member c 9) nil)
                  (referent-edit-error () t))))
