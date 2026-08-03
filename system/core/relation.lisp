@@ -18,7 +18,7 @@
   (make-instance 'relation :type rtype))
 
 (defmethod make-relation ((label string))
-  (make-relation (intern (string-upcase label))))
+  (make-relation (intern (string-upcase label) :cg)))
 
 (defmethod make-relation ((rtype symbol))
   (let ((relation-type (get-relation-type rtype)))

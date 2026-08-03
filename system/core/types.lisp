@@ -1125,8 +1125,13 @@
     (cond (cached-relation-type)
           (t (error 'relation-type-lookup-failed :text (princ-to-string type-name))))))
 
+;;; The string case LOOKS UP, like every other method on this generic function,
+;;; rather than returning the interned symbol and leaving the caller to finish
+;;; the job. RELATION-READER was the only caller relying on that, and it got
+;;; away with it because MAKE-RELATION resolves a symbol itself. Mirrors
+;;; GET-CONCEPT-TYPE's string method, down to the explicit package.
 (defmethod get-relation-type ((relation-type string))
-  (intern (string-upcase relation-type)))
+  (get-relation-type (intern (string-upcase relation-type) :cg)))
 
 (defmethod get-relation-type ((relation-type relation-type))
   relation-type)
@@ -1320,7 +1325,14 @@
 
 (defmethod make-relation-type ((label string)  &rest keys &key (source-types nil) (dest-type nil) description)
   (declare (ignore source-types dest-type description))
-  (apply #'make-relation-type (intern (string-upcase label)) keys))
+  ;; :CG explicitly, never the ambient *PACKAGE*. This interns the key the
+  ;; relation-type catalog is stored under, and the catalog is an EQL table, so
+  ;; a label interned somewhere else is a different key and simply is not
+  ;; there. Loading the type files with *PACKAGE* set to anything but :CG --
+  ;; calling SETUP-CGRAPH straight from a cl-user REPL will do it -- used to
+  ;; build a catalog that every explicit (INTERN ... :CONCEPTUAL-GRAPHS) lookup
+  ;; then missed. Same fix, and the same reason, as the concept-type side.
+  (apply #'make-relation-type (intern (string-upcase label) :cg) keys))
 
 (defmethod make-relation-type ((label symbol)  &rest keys &key (source-types nil) (dest-type nil) description)
   (assert (or (null source-types) (every #'concept-type-p source-types))
