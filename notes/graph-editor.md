@@ -5,8 +5,9 @@ against the live catalog: focus, contextual filtering in both columns, add,
 the removal cascade, the reverse control, and automatic coreference all behave
 as described below. The non-graph referent editor is built through stage 3 —
 identity, modifiers and sets — and so is the descent into a graph referent.
-What is left is stage 4, which is a decision rather than a feature, and two
-loose ends the set work left behind — see "Open".
+What is left is stage 4, which is a decision rather than a feature — see
+"Open". The panel has been driven in a browser against a live session, which
+is where the members row was found showing on concepts that were not sets.
 
 A web-page editor for conceptual graphs, separate from the concept-type
 browser. Where the type browser edits the *lattice*, this edits *graphs*.
@@ -525,12 +526,18 @@ The rule in `set-referent-measure` is now the real one: refuse a count only on a
 carrying a bad value would be stranded — and graphs will, since the reader made
 them.
 
-Two loose ends remain, and they are one fact apart. `describe-referent` reports
-a set's members but not its openness, so the browser still hides the measure box
-on any set with a named member — the blunt pre-fix rule, now stricter than the
-server's. And the `{…}` button still produces `{}` rather than `{*}`, so the
-panel cannot reach `{Fido, Spot, *}@4` even though the notation and the server
-now both accept it. Putting `set-open-p` in the view closes both.
+The panel took one more pass to catch up, and both halves of it were the same
+missing fact: `describe-referent` reported a set's members but not its
+openness, so the page could not tell a closed set from an open one either. It
+hid the measure box on any set with a named member, and `{…}` made `{}`. With
+`open` in the view both follow the server's rule, and `{…}` makes `{*}`.
+
+Making that button produce `{*}` needed a third piece, which is the part worth
+remembering: it would otherwise have made closed sets **unreachable**, since
+nothing in the panel could close one. A field that decides whether other
+controls are legal has to be settable itself — hence the `*` toggle beside the
+members, and `set-referent-open` refusing to close a set that carries a count,
+which is `set-referent-measure`'s refusal arriving from the other side.
 
 #### Descending into a graph referent
 
@@ -736,12 +743,16 @@ submission; returning a session handle to poll would be much worse to use.
   rather than re-emission, `*x` is not offerable, tense/aspect/voice are gated
   on whether the concept heads a clause rather than on its type, and a set's
   openness was not representable at all until the reader was fixed.
-- **A set's openness is not in the view** — `describe-referent` reports members
-  but not `set-open-p`, which leaves two small things wrong on the page: the
-  measure box is hidden on any set with a named member (the stopgap rule, now
-  stricter than the server's), and `{…}` makes `{}` where it should make `{*}`,
-  putting `{Fido, Spot, *}@4` out of the panel's reach. See "Sets, and the
-  openness the reader was dropping".
+- ~~**A set's openness is not in the view**~~ — done. `referent-view` carries
+  `open`, so the count box now hides on a *closed* set with members, which is
+  `set-referent-measure`'s own rule, and `{…}` makes `{*}`. That second change
+  needed a third piece the bullet did not foresee: flipping the button alone
+  would have made closed sets unreachable, since nothing could close one. So
+  openness gained a control — the `*` toggle after the member chips — and
+  `set-referent-open` refuses to close a set carrying a count, which is
+  `set-referent-measure`'s refusal from the other side. Driven in a browser,
+  where the realizer settled the semantics: `{Baltimore, Annapolis, *}@4` reads
+  back as "…to Baltimore, Annapolis, and two other cities."
 - **A cleared referent hides the id that would undo it** — Clear all detaches
   the individual, and giving the id back re-attaches it with its properties,
   but the panel stops showing that id the moment it clears. A breadcrumb
