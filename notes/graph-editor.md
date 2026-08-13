@@ -28,31 +28,32 @@ arrow points. Everything is picked, nothing is typed as CG notation.
 ## Frame
 
 ```
-┌─ English pane ────────────────────────────────────────────────┐
-│ An old dog eats food.                                         │
-└───────────────────────────────────────────────────────────────┘
-┌─ LEFT ──────────────────────────┬─ RIGHT ─────────────────────┐
-│ ┌─ graph pane ────────────────┐ │ concept-types │ relation-   │
-│ │ linear display of the graph │ │               │ types       │
-│ │ being built; concepts are   │ │ [filter…]     │ [filter…]   │
-│ │ click-selectable            │ │               │             │
-│ └─────────────────────────────┘ │ ANIMAL        │ (agnt)→     │
-│ ┌─ editor pane ───────────────┐ │  DOG          │ ←(agnt)     │
-│ │ ⟨[EAT]⟩ →(agnt)→ ⟨[DOG]⟩    │ │  CAT          │ (obj)→      │
-│ │  ▲focus   └─ to add ─┘      │ │ EAT           │ (loc)→      │
-│ │  [Add] [Remove] [UPDATE]    │ │               │             │
-│ └─────────────────────────────┘ │ both lists filtered and     │
-│ ┌─ referent pane (on demand) ─┐ │ sorted by context           │
-│ │ IDENTITY  — ?x name #n      │ │                             │
-│ │ MODIFIERS quant tense …     │ │                             │
-│ │ CARRIED   collar: red       │ │                             │
-│ └─────────────────────────────┘ │                             │
-│ ┌─ display pane (read-only) ──┐ │                             │
-│ │ →(agnt)→[DOG]             ✕ │ │                             │
-│ │ ←(obj)←[CAKE]             ✕ │ │ two columns for now; may    │
-│ │ →(loc)→[KITCHEN]          ✕ │ │ collapse to one later       │
-│ └─────────────────────────────┘ │                             │
-└─────────────────────────────────┴─────────────────────────────┘
+┌─ bar ────────────────────────────────────────  [UPDATE] [Cancel] ┐
+└──────────────────────────────────────────────────────────────────┘
+┌─ English pane ───────────────────────────────────────────────────┐
+│ An old dog eats food.                                            │
+└──────────────────────────────────────────────────────────────────┘
+┌─ LEFT ──────────────────────────┬─ RIGHT ────────────────────────┐
+│ ┌─ graph pane ────────────────┐ │ relation-     │ concept-       │
+│ │ linear display of the graph │ │ types         │ types          │
+│ │ being built; concepts are   │ │ [filter…] ✕   │ [filter…] ✕    │
+│ │ click-selectable            │ │               │                │
+│ └─────────────────────────────┘ │ (agnt)→       │ ANIMAL         │
+│ ┌─ editor pane ──[Add][Clear]─┐ │ ←(agnt)       │  DOG           │
+│ │ ⟨[EAT]⟩ →(agnt)→ ⟨[DOG]⟩    │ │ (obj)→        │  CAT           │
+│ │  ▲focus   └─ to add ─┘      │ │ (loc)→        │ EAT            │
+│ └─────────────────────────────┘ │               │                │
+│ ┌─ referent pane (on demand) ─┐ │ both lists filtered and        │
+│ │ IDENTITY  — ?x name #n {…}  │ │ sorted by context, then by     │
+│ │ MODIFIERS quant tense …     │ │ whatever is in the filters     │
+│ │ CARRIED   collar: red       │ │                                │
+│ └─────────────────────────────┘ │                                │
+│ ┌─ display pane (read-only) ──┐ │                                │
+│ │ →(agnt)→[DOG]             ✕ │ │                                │
+│ │ ←(obj)←[CAKE]             ✕ │ │ two columns for now; may       │
+│ │ →(loc)→[KITCHEN]          ✕ │ │ collapse to one later          │
+│ └─────────────────────────────┘ │                                │
+└─────────────────────────────────┴────────────────────────────────┘
 ```
 
 - **Graph pane** — the graph as linear notation, reformatted after every edit.
@@ -70,10 +71,12 @@ arrow points. Everything is picked, nothing is typed as CG notation.
 - **English pane** — read-only. `GRAPH-TO-TEXT` on the working graph. Full
   width and above the frame, because the sentence is about the whole graph
   rather than about the focus, so it belongs to neither column.
-- **Referent pane** — one concept's referent, opened by clicking the referent
-  zone of a concept slot and closed again by hand. Hidden otherwise: it is
-  about ONE concept, so leaving it up while the focus moves elsewhere would be
-  showing a field that is no longer the one you are looking at.
+- **Referent pane** — one concept's referent, opened by clicking the **focus
+  slot** and closed again by hand. Hidden otherwise: it is about ONE concept,
+  so leaving it up while the focus moves elsewhere would be showing a field
+  that is no longer the one you are looking at. (It was originally opened from
+  a *referent zone* within a slot; slots have one click target each now — see
+  "Concepts have one click target each".)
 
 ### The English pane is refreshed by edits, not by clicks
 
@@ -807,7 +810,7 @@ submission; returning a session handle to poll would be much worse to use.
 | `rel-use` | `types.lisp:1136` | relation filtering |
 | `graph-compatible-p` | `concept-type` slot | which referents are graphs |
 | `:desc` leading token | relation-type | long-name filter matching |
-| armed one-shot pick | `graph.js:800` | type-zone clicks |
+| armed one-shot pick | `graph.js:800` | the type editor's supertype pick; the editor tried it for slots and dropped it — see "Concepts have one click target each" |
 | `/api/*`, no-store static serving, kill-ring bridge | `system/web/` | server plumbing |
 
 ## Open
