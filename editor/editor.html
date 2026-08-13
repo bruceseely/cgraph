@@ -103,7 +103,13 @@
     #english .none { color: #bbb; font-style: italic; font-size: 13px; }
 
     /* ── graph pane ── */
-    #graph-pane { flex: 1 1 45%; }
+    /* Sized by its content, not by a fixed share. A three-arc graph used to
+       hold 45% of the column and leave most of it blank, which pushed the
+       editor, the referent panel and the arc list into a strip at the bottom —
+       squeezing the three panes you actually work in so the one you only read
+       could keep space it was not using. It still gives way at 45%, after
+       which the body scrolls, so a large graph cannot take the window over. */
+    #graph-pane { flex: 0 1 auto; max-height: 45%; }
     #graph {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 13px;
@@ -237,7 +243,10 @@
     }
 
     /* ── display pane ── */
-    #display-pane { flex: 1 1 30%; }
+    /* Takes whatever the graph pane leaves. It is the pane that grows without
+       bound in use — one line per arc on the focus — so it is the right place
+       for the slack. */
+    #display-pane { flex: 1 1 auto; }
     /* Indented: the arcs hang off the focus concept named in the editor row
        above, and the left margin is what says so now that the head is gone. */
     #display-body { padding: 0.4rem 0.6rem 0.4rem 1.6rem; }
