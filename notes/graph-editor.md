@@ -6,8 +6,10 @@ the removal cascade, the reverse control, and automatic coreference all behave
 as described below. The non-graph referent editor is built through stage 3 —
 identity, modifiers and sets — and so is the descent into a graph referent.
 What is left is stage 4, which is a decision rather than a feature — see
-"Open". The panel has been driven in a browser against a live session, which
-is where the members row was found showing on concepts that were not sets.
+"Open". The editor has been driven end to end in a browser against a live
+session — focus, the referent panel, the set controls, pulling an arc and
+replacing its far end — which is also where the members row was caught showing
+on concepts that were not sets.
 
 A web-page editor for conceptual graphs, separate from the concept-type
 browser. Where the type browser edits the *lattice*, this edits *graphs*.
@@ -110,9 +112,21 @@ shared concepts unambiguous without extra UI.
 |---|---|---|
 | concept in graph pane | focus empty | becomes the focus |
 | concept in graph pane | focus occupied | becomes the target — an arc to an **existing** node |
+| concept in graph pane | focus occupied, already joined to it | becomes the target, the relation fills itself in, and the row is a **replacement** of that arc |
 | concept type in right column | either | creates a **new** concept |
 
 Clicking in the graph *references*; clicking in the type list *creates*.
+
+That third row is `adopt-matching-arc`, and it exists because the second row
+was one click from a silent duplicate. Two roads reach a row that reproduces an
+arc the focus already has — pulling the arc from the display pane, or building
+the row by hand and letting the relation fill in — and only the first landed in
+Replace. Nothing else would have caught it: `paint-editor` checks only that the
+three slots are full, and `editor-add-arc` type-checks without looking for a
+duplicate. Duplicates are not refused in general (`(part)→[WHEEL]` and
+`(part)→[DOOR]` are both wanted, and the lattice carries no cardinality to tell
+that from a second `(agnt)`); what is refused is the one this can recognise —
+same relation, same direction, same concept on the far end.
 
 ### Relation clicks
 
@@ -267,18 +281,41 @@ Two consequences worth stating, because the rest of the design leans on them:
   mistake into a dead end. Clearing the status on every refresh is what makes
   the correcting messages above readable as feedback rather than as wreckage.
 
-## Concepts have two click zones
+## Concepts have one click target each, not two zones
 
-A concept is a type *and* a referent. Neither is edited as free text.
+A concept is a type *and* a referent, and neither is edited as free text. This
+section originally split each concept slot into two click zones — the type
+arming the concept-type list for a one-shot pick, the referent opening the
+referent editor — reusing `#nt-add-super`'s armed pick from the type editor
+(`graph.js:800`).
 
-| Zone | Click opens |
+The type zone is gone, and what removed it was noticing what it was for:
+**retyping a concept in place, which is not an operation this editor has.** A
+concept may be the far end of several arcs, so retyping it edits every path
+that reaches it — `editor-replace-target`'s docstring had said so all along.
+The zone offered an edit whose blast radius the gesture concealed.
+
+So each slot is one click target, and the two slots mean different things,
+which is the point:
+
+| Slot | Click does |
 |---|---|
-| type | arms the concept-type list for a one-shot pick |
-| referent | the referent editor, or a nested graph editor |
+| focus | opens the referent — the focus is the cursor, and the referent is what that concept *is*, so the edit lands on every path to it |
+| target | raises the highlight: "this is the one I am replacing". The replacement itself comes from the concept column or the graph |
 
-The "arm the list for one pick" pattern already exists in the type editor —
-`#nt-add-super` (`graph.js:800`) arms a one-shot supertype pick so ordinary
-clicks keep exploring the graph. Reuse it.
+The armed one-shot became a plain cue (`armedTarget`) rather than a mode: with
+a focus set, a pick lands in the target whether or not the highlight is up. A
+pull raises it to say which slot is about to change, and clicking the slot
+raises it to say the same thing.
+
+Driven in a browser on a live session: focus by graph click, the focus slot
+opening the referent panel, pulling an arc by its relation on a display line
+(row reads as the arc, target raised, Replace disabled until the target
+actually changes), and Replace committing — `(dest)→[CITY: Baltimore]` became
+`(dest)→[CITY]`, the old node dropped, the pull ended and the row fell back to
+Add. Both columns narrow as this goes: with `DRIVE` focused and a `CITY`
+targeted, the concept column offered `city / geological-landform / mat / place`
+and nothing else.
 
 ### Referent editors
 
