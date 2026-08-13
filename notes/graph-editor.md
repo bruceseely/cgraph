@@ -807,10 +807,21 @@ submission; returning a session handle to poll would be much worse to use.
 - **One type column or two** — still two. Nothing so far argues for collapsing
   them; relations on the left and concepts on the right runs in the order you
   fill the editor pane.
-- **Vertical proportions** — the graph pane holds a fixed share while a
-  three-arc graph uses a fraction of it, pushing the editor pane and the focus
-  list into the bottom third. The two panes you actually work in are the ones
-  being squeezed.
+- ~~**Vertical proportions**~~ — done. The graph pane is sized by its content
+  with the old 45% share as a ceiling rather than a floor, and the display pane
+  takes the slack. The type columns went the same way on the other axis: as
+  wide as their contents, between a 7rem floor and a 16rem cap, and shrinking
+  for nobody — narrowing the window takes its space from the left.
+- **The formatter cannot be asked for a narrower graph** — `format-cgraph`
+  derives each level's indent from the width of the line above (`layout-width`,
+  formatter.lisp:212) and has no notion of a maximum width, so a pane too
+  narrow for the longest line can only scroll it or shrink the type. Wrapping
+  in CSS was tried and is worse than either: it breaks lines mid-concept and
+  destroys the indentation that says which arcs hang off which concept, which
+  is most of what the linear form is for. The real version is a width-aware
+  layout — the breadth-first walk choosing different break points when a line
+  would exceed the width — and it is unbuilt. Only bites below about 700px, so
+  it waits for a window that narrow to matter to someone.
 - **Type-in filters** — the per-column text fields described under "Type-list
   filtering" are not built. The lattice-computed narrowing is.
 
