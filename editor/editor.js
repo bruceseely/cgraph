@@ -22,7 +22,6 @@ const conceptList = $('concept-list');
 const relationList= $('relation-list');
 const displayBody = $('display-body');
 const statusEl    = $('status');
-const focusLabel  = $('focus-label');
 const englishEl   = $('english');
 
 $('session-label').textContent = SESSION ? `session ${SESSION}` : '(no session)';
@@ -46,10 +45,11 @@ const OPPOSITE = d => (d === 'reverse' ? 'forward' : 'reverse');
 // picking a target already joined to the focus can fill the relation in for
 // you — the link exists, so there is nothing to choose.
 let focusArcs = [];
-// A concept slot whose type zone was clicked: the next type-list click fills
-// that slot instead of creating a new concept. Same one-shot arming the type
-// editor uses for supertypes.
-let armedSlot = null;
+// The target slot is highlighted as the place the next pick will land. Purely a
+// cue: with a focus set, a concept type or a graph concept goes to the target
+// whether or not this is on. It is what a pull raises to say "this is the one
+// you are changing", and clicking the slot raises it to say the same thing.
+let armedTarget = false;
 
 // Declared up here, ahead of its first reader, rather than beside the rest of
 // the orphan handling below: setStatus is called from everywhere and a `let'
@@ -181,16 +181,17 @@ function renderGraph(withRefs) {
 // an EXISTING node, which is how two paths come to share one.
 function onGraphConceptClick(ref, text) {
   const label = text.replace(/\s+/g, ' ').trim();
-  if (armedSlot) {
-    setSlot(armedSlot, { ref, text: label });
-    armedSlot = null;
-  } else if (!pane.focus) {
-    pane.focus = { ref, text: label };
+  if (!pane.focus) {
+    setFocus({ ref, text: label });
   } else {
+    armedTarget = false;               // the pick has landed; stop pointing at it
     pane.target = { ref, text: label };
     // If the two are already joined, fill the relation in rather than making
     // you re-pick what the graph already says. `legal' is filled by the next
     // choices fetch, which is what decides whether the arrows can be flipped.
+    // Filling it is also what lets ADOPTMATCHINGARC see that this row is an arc
+    // the graph already has, so this shortcut lands in Replace rather than one
+    // click away from a duplicate.
     const existing = focusArcs.find(a => a.conceptRef === ref);
     if (existing && !pane.relation) {
       pane.relation = { label: existing.relation,
@@ -201,13 +202,16 @@ function onGraphConceptClick(ref, text) {
   refresh();
 }
 
-function setSlot(which, value) {
-  pane[which] = value;
-  if (which === 'focus') { pane.target = null; pane.relation = null; }
-  // A pull is a statement about one arc of one focus. Move the focus and it is
-  // no longer about anything; change the relation and it is a different claim,
-  // which is an add, not a replace.
-  if (which !== 'target') { pane.replacing = pane.pulledTarget = null; }
+// Moving the focus empties the rest of the pane. A relation and a target belong
+// to the arc you were building FROM the old focus, and a pull is a statement
+// about one arc of one focus — move it and none of that is about anything. The
+// three roads to a new focus all come through here, so the reset is stated once
+// rather than remembered three times.
+function setFocus(node) {
+  pane.focus = node;
+  pane.relation = pane.target = null;
+  pane.replacing = pane.pulledTarget = null;
+  armedTarget = false;
 }
 
 // ── editor pane ──────────────────────────────────────────────────────────────
@@ -218,51 +222,74 @@ function slotText(slot) {
   return `[${slot.type.toUpperCase()}]`;
 }
 
+// The two concept slots are one click target each, and they mean different
+// things — which is the point. A concept can be reached by more than one path,
+// so "change the driver" and "change Dave" are different edits and must not
+// share a gesture:
+//
+//   FOCUS   opens the referent. The focus is the cursor; the referent is what
+//           that concept IS, and editing it shows up on every path that reaches
+//           it — [PERSON: dave] renamed is renamed for the poss arc too.
+//   TARGET  is the far end of the arc being built or changed. Clicking it says
+//           "this is the one I am replacing" — it raises the highlight; the
+//           replacement itself comes from the concept-type column or the graph.
+//
+// Neither slot retypes a concept. There is no such operation, deliberately:
+// see EDITOR-REPLACE-TARGET's docstring — a concept may be the far end of
+// several arcs, so retyping edits every path that reaches it.
 function paintSlot(el, slot, placeholder, kind) {
   el.replaceChildren();
   el.classList.toggle('empty', !slot);
-  el.classList.toggle('armed', armedSlot === kind);
+  el.classList.toggle('armed', kind === 'target' && armedTarget);
+  // Cleared here, set below by whichever branch has something to say: an
+  // emptied slot that kept the last one's cursor and tooltip would go on
+  // advertising an edit that left with its concept.
+  el.classList.remove('live');
+  el.title = '';
   if (!slot) { el.textContent = placeholder; return; }
 
   if (kind === 'relation') { el.textContent = `(${slot.label})`; return; }
 
-  // A concept has two click zones: the type arms the type list, the referent
-  // opens the referent pane. The referent zone is live only for a concept that
-  // EXISTS — a slot holding a type the graph has not been given yet has no
-  // node-ref, so there is nothing for the pane to edit until Add creates it.
+  // The focus slot is live only for a concept that EXISTS — a slot holding a
+  // type the graph has not been given yet has no node-ref, so there is nothing
+  // for the referent pane to edit until Add creates it. Then it says so and
+  // does nothing, rather than looking clickable and going nowhere.
   const text = slotText(slot);
+  const live = kind === 'target' || (slot.ref !== undefined && slot.ref !== null);
+  if (live) el.classList.add('live');
+  el.title = kind === 'target'
+    ? 'the concept this arc points at — pick a concept type, or a concept in the graph, to put a different one here'
+    : (live ? 'edit the referent'
+            : 'add this concept to the graph before editing its referent');
+
   const m = /^\[([^\]:]+)(?::(.*))?\]$/.exec(text);
   if (!m) { el.textContent = text; return; }
 
-  el.append(document.createTextNode('['));
-  const type = document.createElement('span');
-  type.className = 'zone-type';
-  type.textContent = m[1].trim();
-  type.title = 'click to pick a different type';
-  type.addEventListener('click', ev => {
-    ev.stopPropagation();
-    armedSlot = (armedSlot === kind) ? null : kind;
-    refresh();
-  });
-  el.append(type);
+  el.append(document.createTextNode(`[${m[1].trim()}`));
 
-  const live = slot.ref !== undefined && slot.ref !== null;
   const ref = document.createElement('span');
-  ref.className = 'zone-ref' + (live ? '' : ' disabled');
-  // An empty referent still needs something to click, or a generic concept
-  // would be the one case you could not give a referent to.
+  ref.className = 'zone-ref';
+  // An empty referent is still shown as one, or a generic concept would be the
+  // one case with nothing there to tell you what the click is going to open.
   ref.textContent = m[2] !== undefined ? `: ${m[2].trim()}` : ': —';
-  ref.title = live ? 'edit the referent'
-                   : 'add this concept to the graph before editing its referent';
-  if (live) {
-    ref.addEventListener('click', ev => {
-      ev.stopPropagation();
-      openReferent(slot.ref, text);
-    });
-  }
   el.append(ref);
   el.append(document.createTextNode(']'));
 }
+
+// Bound once, not in PAINTSLOT — that runs on every refresh and would stack up
+// a listener per repaint. Both read the pane at click time rather than closing
+// over the slot they were painted with.
+slotFocus.addEventListener('click', () => {
+  const slot = pane.focus;
+  if (!slot || slot.ref === undefined || slot.ref === null) return;
+  openReferent(slot.ref, slotText(slot));
+});
+
+slotTarget.addEventListener('click', () => {
+  if (!pane.target) return;
+  armedTarget = !armedTarget;
+  paintEditor();
+});
 
 // The arrows ARE the reverse control. They are live whenever the OPPOSITE
 // direction is legal -- not merely when both are, which was the original test.
@@ -312,9 +339,7 @@ function paintEditor() {
 }));
 
 $('clear').addEventListener('click', () => {
-  pane.focus = pane.relation = pane.target = null;
-  pane.replacing = pane.pulledTarget = null;
-  armedSlot = null;
+  setFocus(null);          // an empty focus empties everything else with it
   refresh();
 });
 
@@ -349,6 +374,13 @@ function relationRow(r) {
     el.append(long);
   }
   el.addEventListener('click', () => {
+    // A different relation is a different claim, so picking one ends any pull.
+    // /api/editor/replace keeps the arc's OWN relation type — it replaces the
+    // concept, not the claim — so a pull that survived this would commit the
+    // relation still in the graph while the pane showed the one you just
+    // picked. If the pick happens to restore the arc the row came from,
+    // ADOPTMATCHINGARC picks the pull back up on the way through refresh.
+    pane.replacing = pane.pulledTarget = null;
     // Seed `legal' from what this very list says, so the arrows are right on
     // the first paint rather than after the next fetch corrects them.
     pane.relation = { label: r.label, direction: r.direction,
@@ -396,33 +428,16 @@ function paintRelationList(rels) {
   }
 }
 
-// Clicking a type CREATES a concept — unless a slot is armed, in which case it
-// re-types that slot instead.
+// A type click always means a NEW concept of that type, and with a focus set it
+// always lands in the target slot — whether the slot was empty, held a concept
+// you had picked, or holds the far end of an arc you are replacing. Overwriting
+// it is not destructive: nothing has been said to the graph until Add or
+// Replace, and what the slot held was a proposal, not a node.
 function onConceptTypeClick(type) {
-  let notice = null;
-  if (armedSlot) {
-    const slot = pane[armedSlot];
-    // Overwriting a slot that holds a real node is normally a mistake -- it
-    // looks like retyping the concept and is not. During a pull it is the whole
-    // point: the target slot shows what the arc points at NOW, and picking a
-    // type is how you say what it should point at instead.
-    const replacingTarget = armedSlot === 'target' && pane.replacing !== null;
-    if (slot && slot.ref !== undefined && slot.ref !== null && !replacingTarget) {
-      // Passed through REFRESH rather than set directly: refresh now clears the
-      // status line, so a message set beforehand would be wiped on the way out.
-      notice = ['That concept already exists in the graph; '
-                + 'clear the slot to put a new one there.', 'error'];
-    } else {
-      setSlot(armedSlot, { type });
-    }
-    armedSlot = null;
-  } else if (!pane.focus) {
-    createFirstConcept(type);
-    return;
-  } else {
-    pane.target = { type };
-  }
-  refresh({ notice });
+  if (!pane.focus) { createFirstConcept(type); return; }
+  armedTarget = false;                 // the pick has landed
+  pane.target = { type };
+  refresh();
 }
 
 // An empty graph gets its first node this way: the concept is created straight
@@ -431,7 +446,7 @@ async function createFirstConcept(type) {
   try {
     const data = await call(`/api/editor/concept?${q({ session: SESSION, type })}`,
                             { method: 'POST' });
-    pane.focus = { ref: data.ref, text: `[${type.toUpperCase()}]` };
+    setFocus({ ref: data.ref, text: `[${type.toUpperCase()}]` });
     renderGraph(data.withRefs);
     refreshEnglish();
     setStatus('');
@@ -640,9 +655,6 @@ function relabelConcept(ref) {
   }
   for (const a of focusArcs) if (a.conceptRef === ref) a.concept = text;
   if (refConcept === ref) $('ref-subject').textContent = text;
-  // The Focus head is painted by paintDisplay, which the keepGraph refresh
-  // skips — so it has to be told here or it keeps the pre-edit name.
-  if (pane.focus && pane.focus.ref === ref) focusLabel.textContent = text;
 }
 
 async function openReferent(ref, label) {
@@ -679,7 +691,7 @@ async function setRefField(field, value, extra = {}) {
     })}`, { method: 'POST' });
     refView = data.referent;
     renderGraph(data.withRefs);
-    // The editor pane and the pane heads hold a concept's text as it read when
+    // The editor pane and the referent head hold a concept's text as it read when
     // it was CLICKED. Editing its referent changes that text, so without this
     // the graph says [PERSON: Mary] while the slot beside it still says
     // [PERSON: Sue] — the same concept, disagreeing with itself on screen.
@@ -842,7 +854,6 @@ async function refreshEnglish() {
 function paintDisplay(arcs) {
   focusArcs = arcs || [];
   displayBody.replaceChildren();
-  focusLabel.textContent = pane.focus ? slotText(pane.focus) : '';
   if (!pane.focus) {
     displayBody.innerHTML = '<div class="type-empty">no focus concept</div>';
     return;
@@ -877,9 +888,7 @@ function paintDisplay(arcs) {
     con.title = 'focus this concept';
     con.addEventListener('click', ev => {
       ev.stopPropagation();
-      pane.focus = { ref: a.conceptRef, text: a.concept };
-      pane.relation = pane.target = null;
-      pane.replacing = null;
+      setFocus({ ref: a.conceptRef, text: a.concept });
       refresh();
     });
     text.append(rel, con);
@@ -918,8 +927,54 @@ function pullArc(a) {
   pane.pulledTarget = a.conceptRef;   // what Replace stays disabled against
   pane.relation = { label: a.relation, direction: a.direction, legal: null };
   pane.target = { ref: a.conceptRef, text: a.concept };
-  armedSlot = 'target';               // the next type click lands where it means to
+  armedTarget = true;                 // the slot you are about to change
   refresh();
+}
+
+// There are two roads to a row that reproduces an arc the focus already has,
+// and they must end in the same place. One is PULLARC. The other is building
+// the row by hand -- click the focus, then click that concept in the graph, and
+// the relation fills itself in from the arc that joins them. The second used to
+// leave the pane in ADD, one click from giving the focus a second identical
+// arc, which nothing on either side refuses: PAINTEDITOR only checks the three
+// slots are full, and EDITOR-ADD-ARC type-checks without looking for a
+// duplicate. So: when the row IS a line of the display pane, it is that line,
+// and the commit is a replacement.
+//
+// Adopted once, at the moment the row matches. After that PANE.REPLACING is
+// what carries the mode -- which is the whole point, since the next thing you
+// do is change the target, and a rule re-tested on every refresh would drop
+// back to Add the instant it stopped matching.
+//
+// Duplicate relations are NOT refused in general: [CAR]->(part)->[WHEEL] and
+// ->(part)->[DOOR] are both wanted, and the lattice carries no cardinality to
+// tell that case from a second (agnt). What is refused is the duplicate this
+// can actually recognise -- the same relation, the same direction, the same
+// concept on the far end.
+function adoptMatchingArc() {
+  if (pane.replacing !== null && pane.replacing !== undefined) return;
+  const t = pane.target;
+  if (!pane.focus || !pane.relation || !t) return;
+  if (t.ref === undefined || t.ref === null) return;
+  const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+  const match = focusArcs.find(a => a.conceptRef === t.ref
+                                   && same(a.relation, pane.relation.label)
+                                   && a.direction === pane.relation.direction);
+  if (!match) return;
+  pane.replacing = match.relationRef;
+  pane.pulledTarget = match.conceptRef;
+  armedTarget = true;
+}
+
+// The arc under a pull can go out from under it — another edit removes it, or
+// a commit lands and the display pane is rebuilt. Then the mode is about
+// nothing. Only run against a freshly fetched list: FOCUSARCS is a snapshot,
+// and judging a pull against a stale one would cancel a live edit.
+function verifyPull() {
+  if (pane.replacing === null || pane.replacing === undefined) return;
+  if (!focusArcs.some(a => a.relationRef === pane.replacing)) {
+    pane.replacing = pane.pulledTarget = null;
+  }
 }
 
 // ── operations ───────────────────────────────────────────────────────────────
@@ -1064,6 +1119,9 @@ async function refresh(opts = {}) {
   // which meant a failed add's error sat there through every subsequent click --
   // including Clear, making a pane that had in fact been emptied look stuck.
   let notice = opts.notice || null;
+  // Before the first paint, so a row that turns out to be an existing arc never
+  // shows Add for the instant it takes the fetch to come back.
+  adoptMatchingArc();
   paintEditor();
   try {
     if (!opts.keepGraph) {
@@ -1073,6 +1131,11 @@ async function refresh(opts = {}) {
       })}`);
       renderGraph(state.withRefs);
       paintDisplay(state.focus);
+      // FOCUSARCS is now the server's, not a snapshot: the only point at which
+      // a pull can be judged still live, and at which a row assembled against
+      // an older list gets a second look.
+      verifyPull();
+      adoptMatchingArc();
       // The page is loaded from a URL carrying only its own session id, so
       // this is the only way it learns it is a nested editor — and what UPDATE
       // should do depends on the answer.
@@ -1157,6 +1220,11 @@ async function reconcileDirection(choices) {
   const target = slotText(pane.target) || 'that concept';
   if (legal.length === 0) {
     pane.relation = null;
+    // The pull goes with it. A replacement with no relation left in the pane is
+    // a claim about nothing, and leaving it set would show a Replace button
+    // that can never enable — the row cannot commit until a relation is picked,
+    // and picking one ends the pull anyway.
+    pane.replacing = pane.pulledTarget = null;
     return [`(${rel.label}) cannot link ${slotText(pane.focus)} and ${target} `
             + `in either direction — pick another relation.`, 'error'];
   }

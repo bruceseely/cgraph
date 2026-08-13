@@ -139,17 +139,21 @@
       padding: 0.2rem 0.35rem;
       border: 1px dashed transparent;
       border-radius: 3px;
-      cursor: pointer;
+      cursor: default;
       color: #333;
       white-space: nowrap;
     }
     .slot.empty { color: #bbb; border-color: #ddd; }
-    .slot:hover { background: #f0f4fb; }
+    /* A concept slot is one click target — the referent — and it is live only
+       once the concept is in the graph. Hover and cursor follow that, so a slot
+       that would do nothing does not invite the click. */
+    .slot.live { cursor: pointer; }
+    .slot.live:hover { background: #f0f4fb; }
     .slot.armed { background: #4a90d9; color: #fff; }
-    /* the two click zones of a concept slot */
-    .slot .zone-type { border-bottom: 1px dotted #aaa; }
+    /* The referent reads a shade back from the type — the same text, told apart
+       at a glance. Not a separate control: the whole slot is the control. */
     .slot .zone-ref  { color: #777; }
-    .slot .zone-ref.disabled { opacity: 0.5; cursor: not-allowed; }
+    .slot.armed .zone-ref { color: #dce8f7; }
 
     /* arrows show the arc's direction, and ARE the reverse control —
        clickable only when both directions are legal, so a static pair
@@ -166,7 +170,7 @@
     }
     .arrow.flippable:hover { background: #e0e9fb; border-radius: 2px; }
 
-    #editor-actions { margin-left: auto; display: flex; gap: 0.3rem; }
+    #editor-actions { display: flex; gap: 0.3rem; }
 
     /* ── referent pane ── */
     /* Opens under the editor pane when a concept's referent zone is clicked,
@@ -234,7 +238,9 @@
 
     /* ── display pane ── */
     #display-pane { flex: 1 1 30%; }
-    #display-body { padding: 0.3rem 0.6rem; }
+    /* Indented: the arcs hang off the focus concept named in the editor row
+       above, and the left margin is what says so now that the head is gone. */
+    #display-body { padding: 0.4rem 0.6rem 0.4rem 1.6rem; }
     .arc-line {
       display: flex;
       align-items: center;
@@ -365,8 +371,18 @@
         <div class="pane-body"><pre id="graph"></pre></div>
       </div>
 
+      <!-- Add/Clear live in the head, not in the row: the row is the arc being
+           built, and it needs every inch of the width it can get before the
+           focus-relation-concept triple wraps. -->
       <div class="pane" id="editor-pane">
-        <div class="pane-head">Editor</div>
+        <div class="pane-head">
+          Editor
+          <span class="spacer"></span>
+          <span id="editor-actions">
+            <button id="add">Add</button>
+            <button id="clear">Clear</button>
+          </span>
+        </div>
         <div class="pane-body">
           <div id="editor-body">
             <span class="slot empty" id="slot-focus"></span>
@@ -374,10 +390,6 @@
             <span class="slot empty" id="slot-relation"></span>
             <span class="arrow" id="arrow-right"></span>
             <span class="slot empty" id="slot-target"></span>
-            <span id="editor-actions">
-              <button id="add">Add</button>
-              <button id="clear">Clear</button>
-            </span>
           </div>
         </div>
       </div>
@@ -437,12 +449,10 @@
         </div>
       </div>
 
+      <!-- No pane head: the focus concept is already named in the editor row
+           directly above, and a FOCUS label repeating it was one more band of
+           chrome between you and the arcs. -->
       <div class="pane" id="display-pane">
-        <div class="pane-head">
-          Focus
-          <span class="spacer"></span>
-          <span class="muted" id="focus-label"></span>
-        </div>
         <div class="pane-body" id="display-body"></div>
       </div>
 
