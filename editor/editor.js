@@ -581,6 +581,17 @@ let nestedIn = null;
 
 let refConcept = null;   // node-ref of the concept being edited, or null
 let refView    = null;   // its last-known decomposition
+// The id a clear detached, so the clear can be taken back. Clearing DETACHES an
+// individual rather than destroying it — the individual keeps its properties
+// and its id puts the whole thing back — but the panel stopped showing that id
+// at exactly the moment it became the only way to return, which left an edit
+// that was reversible in fact and irreversible in practice.
+//
+// Client-side and deliberately shallow: it lives as long as the panel is open
+// on this concept, and any new identity supersedes it. It restores the
+// INDIVIDUAL, not the referent as it stood — modifiers a Clear all also took
+// belonged to the concept, not to the individual, and do not come back.
+let detachedId = null;
 // A kind chosen in the UI but not yet sent, because it needs a value the
 // concept cannot supply. See chooseKind.
 let refPending = null;
@@ -629,6 +640,18 @@ function paintReferent() {
   refInputB.value = refView.id === null || refView.id === undefined ? '' : String(refView.id);
 
   $('ref-preview').textContent = refView.identityText || '';
+
+  // Only while the concept has no identity of its own: once it has one, the
+  // offer is stale, and an undo button beside a referent it would overwrite is
+  // worse than none.
+  const was = $('ref-was');
+  const offerable = detachedId !== null && refView.kind === 'none';
+  was.hidden = !offerable;
+  if (offerable) {
+    was.textContent = `was #${detachedId}`;
+    was.title = `Put individual #${detachedId} back, with the properties it kept. `
+              + `Modifiers cleared alongside it belonged to the concept and do not return.`;
+  }
 
   // The identity selector is meaningless for a graph referent, and the graph
   // control is meaningless without a type that can hold one, so they trade
@@ -733,6 +756,7 @@ function relabelConcept(ref) {
 async function openReferent(ref, label) {
   refConcept = ref;
   refPending = null;          // a half-chosen kind belongs to the concept it was chosen on
+  detachedId = null;          // and so does a breadcrumb: #2 means nothing here
   $('ref-subject').textContent = label || '';
   try {
     const data = await call(`/api/editor/referent?${q({ session: SESSION, concept: ref })}`);
@@ -747,6 +771,7 @@ function closeReferent() {
   refConcept = null;
   refView = null;
   refPending = null;
+  detachedId = null;
   // A message describes the action that produced it, and closing the panel
   // ends that action. Without this a refusal from the panel outlived the panel
   // itself, sitting at the bottom of a window with nothing left on screen to
@@ -758,6 +783,17 @@ function closeReferent() {
 // the sentence all move together rather than drifting until the next refresh.
 async function setRefField(field, value, extra = {}) {
   if (refConcept === null) return;
+  // Read before the edit, since afterwards the id is exactly what is gone.
+  // A clear leaves a breadcrumb; any other identity edit supersedes one,
+  // because the concept now points somewhere and "was #2" would be offering to
+  // undo something you have already replaced.
+  const clearing = field === 'all' || (field === 'identity' && extra.kind === 'none');
+  if (clearing) {
+    const id = refView && refView.id;
+    detachedId = typeof id === 'number' ? id : null;
+  } else if (field === 'identity' || field.startsWith('set-')) {
+    detachedId = null;
+  }
   try {
     const data = await call(`/api/editor/referent/set?${q({
       session: SESSION, concept: refConcept, field, value, ...extra
@@ -892,6 +928,16 @@ $('ref-open').addEventListener('click', () => {
 $('ref-clear').addEventListener('click', () => {
   refPending = null;
   setRefField('all', '');
+});
+
+// Taking the clear back. Goes through the ordinary identity setter, so the
+// server does what it does for any other id — finds the individual, keeps its
+// properties — and SETREFFIELD then drops the breadcrumb itself, this being an
+// identity edit like any other.
+$('ref-was').addEventListener('click', () => {
+  if (detachedId === null) return;
+  refPending = null;
+  setRefField('identity', '', { kind: 'individual', id: String(detachedId) });
 });
 
 // Descend into a graph referent. The server opens a CHILD session over it and

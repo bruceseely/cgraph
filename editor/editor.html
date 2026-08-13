@@ -251,6 +251,14 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 12px; color: #333;
     }
+    /* Quiet: it is an offer, not a state of the referent, and it sits beside
+       the preview where the identity it would restore used to read. */
+    #ref-was {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px; color: #888; background: none; border: 1px dashed #ccc;
+      border-radius: 3px; padding: 0.05rem 0.35rem; cursor: pointer;
+    }
+    #ref-was:hover { color: #333; border-color: #4a90d9; background: #f0f4fb; }
 
     /* ── display pane ── */
     /* Takes whatever the graph pane leaves. It is the pane that grows without
@@ -467,6 +475,11 @@
               <input type="text" id="ref-input-a" hidden autocomplete="off" spellcheck="false">
               <input type="text" id="ref-input-b" hidden autocomplete="off" spellcheck="false">
               <span id="ref-preview"></span>
+              <!-- What clearing detached. The individual survives the clear and
+                   its id re-attaches it whole, properties and all — but the
+                   panel stopped showing that id the moment it cleared, which
+                   made a reversible edit look final. Click to undo. -->
+              <button id="ref-was" hidden></button>
               <!-- Shown only on a graph-compatible type. A graph referent is
                    not a sixth state of the selector; it is an alternative to
                    the whole of it, so it gets its own control. -->
