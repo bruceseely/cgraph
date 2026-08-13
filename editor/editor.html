@@ -327,9 +327,23 @@
       border-right: 1px solid #eee;
     }
     .type-col:last-child { border-right: none; }
+    /* Under the label rather than beside it. Side by side, the head's own width
+       — label plus box — became a floor under a column that is otherwise as
+       wide as its contents, so adding the filter widened both columns. On its
+       own row it costs a line of height and no width: the box is narrower than
+       the 7rem floor the column already has. */
+    .filter-row { display: flex; padding: 0.25rem 0.4rem; background: #fafafa;
+                  border-bottom: 1px solid #eee; flex-shrink: 0; }
+    /* FLEX-BASIS 0 with MIN-WIDTH 0, not WIDTH 100%. An <input> carries an
+       intrinsic width of about twenty characters, which a percentage width does
+       not suppress — so the box still reported ~170px to the max-content
+       calculation and widened the column it was meant to leave alone (concepts
+       went 148 → 166). Basis 0 contributes nothing and then stretches to
+       whatever the list turns out to need. */
     .type-filter {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 11px; width: 5.5rem; padding: 0.1rem 0.25rem;
+      font-size: 11px; flex: 1 1 0; min-width: 0; box-sizing: border-box;
+      padding: 0.1rem 0.25rem;
       border: 1px solid #ccc; border-radius: 3px; background: #fff;
     }
     /* A filter that is doing something says so, since the column it applies to
@@ -512,18 +526,18 @@
          filter leaves in the list below. -->
     <div id="right">
       <div class="type-col">
-        <div class="pane-head">Relations
-          <span class="spacer"></span>
-          <input type="text" class="type-filter" id="relation-filter"
+        <div class="pane-head">Relations</div>
+        <div class="filter-row">
+          <input type="text" class="type-filter" id="relation-filter" size="1"
                  placeholder="filter" autocomplete="off" spellcheck="false"
                  title="Narrow this list by label or long name. Esc clears it.">
         </div>
         <div class="type-list" id="relation-list"></div>
       </div>
       <div class="type-col">
-        <div class="pane-head">Concepts
-          <span class="spacer"></span>
-          <input type="text" class="type-filter" id="concept-filter"
+        <div class="pane-head">Concepts</div>
+        <div class="filter-row">
+          <input type="text" class="type-filter" id="concept-filter" size="1"
                  placeholder="filter" autocomplete="off" spellcheck="false"
                  title="Narrow this list by type name. Esc clears it.">
         </div>
