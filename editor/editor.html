@@ -306,11 +306,16 @@
        collapsing when the lattice narrows it to three entries, and MAX-WIDTH
        keeps one long description ("exchange/consideration") from taking the
        window. Between those two the width follows the content, which changes
-       as you work — the lists are filtered by what is in the editor row. */
+       as you work — the lists are filtered by what is in the editor row.
+       FLEX-SHRINK is 0 on purpose: these widths answer to their contents and
+       to nothing else, so narrowing the window takes its space from the left
+       side and leaves the lists alone. They were briefly shrinkable, which
+       cost a column a rem or two at 640px and read as the lists reacting to
+       the window — which is precisely what they should not do. */
     .type-col {
       display: flex;
       flex-direction: column;
-      flex: 0 1 auto;
+      flex: 0 0 auto;
       width: max-content;
       min-width: 7rem;
       max-width: 16rem;
