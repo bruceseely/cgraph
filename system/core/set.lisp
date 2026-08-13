@@ -81,9 +81,14 @@
   (make-instance 'set :members member-list))
 
 ;; Convenience alias for creating sets from individuals
-(defun make-set-from-individuals (individual-list)
-  "Create a set from a list of individuals"
-  (make-instance 'set :members individual-list))
+(defun make-set-from-individuals (individual-list &key open)
+  "Create a set from a list of individuals.
+
+   OPEN says there are unnamed members besides those listed -- the `*'
+   placeholder, and the difference between `{Fido}' and `{Fido, *}'. It
+   defaults to NIL because naming the members you have is the closed reading:
+   a caller that means `and others' has to say so."
+  (make-instance 'set :members individual-list :open open))
 
 ;; Type predicate for sets
 (defmethod set-p ((thing set)) t)

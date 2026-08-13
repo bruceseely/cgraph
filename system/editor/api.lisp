@@ -245,7 +245,7 @@
                  \"aspect\":~:[null~;\"~:*~(~a~)\"~],\"voice\":~:[null~;\"~:*~(~a~)\"~],~
                  \"raising\":~:[false~;true~],\"negated\":~:[false~;true~],~
                  \"measure\":~a,\"tail\":~a,\"graphCompatible\":~:[false~;true~],~
-                 \"verbal\":~:[false~;true~],\"members\":~a}"
+                 \"verbal\":~:[false~;true~],\"open\":~:[false~;true~],\"members\":~a}"
             (rview-kind v)
             (rview-label v)
             (rview-defining-p v)
@@ -262,6 +262,11 @@
             (json-tail (rview-tail v))
             (ignore-errors (graph-compatible-p (concept-type concept)))
             (referent-verbal-p concept)
+            ;; Whether the set is open -- `{Fido, *}' rather than `{Fido}'.
+            ;; Sent because the page cannot derive it: the members alone say
+            ;; nothing about whether there are others, and a page that guessed
+            ;; hid the count box on every set with a name in it.
+            (rview-open v)
             ;; Positional: the ✕ beside a member names it by index, so the
             ;; order the page shows has to be the order the server removes by.
             (with-output-to-string (out)
@@ -327,6 +332,12 @@
            (remove-referent-set-member
             node (or (parse-integer (string-trim " " (or value "")) :junk-allowed t)
                      (editor-error "which member? expected a position"))))
+          ;; Openness is a field of the set, not of its membership: it says
+          ;; whether there are members BESIDES the ones listed. Blank closes,
+          ;; same convention as `raising'.
+          ((string= field "set-open")
+           (set-referent-open node (and (not (blank value))
+                                        (not (string-equal value "false")))))
           ((string= field "measure")
            (set-referent-measure
             node (unless (blank value)

@@ -271,21 +271,44 @@
       ;; Which is why stage 3 is mostly wiring -- the claim the staging rested
       ;; on, checked rather than assumed.
       (let ((c (find-if #'concept-p (parse-cgraph "[DOG]"))))
+        ;; The selector makes the GENERIC COLLECTION, `{*}', not the empty set.
+        ;; Both are legitimate and they are different claims; `{*}' is the one
+        ;; "make this a set" means, and the one a count attaches to.
         (set-referent-identity c :set)
-        (check "an empty set is a legitimate referent"
+        (check "the selector makes an open set"
+               (string= "[DOG: {*}]" (format-concept c)))
+        (check "and the view says so, since nothing else can"
+               (rview-open (describe-referent c)))
+        (set-referent-open c nil)
+        (check "closing a memberless set is how the empty one is reached"
                (string= "[DOG: {}]" (format-concept c)))
+        (set-referent-open c t)
         (add-referent-set-member c :name "Fido")
         (add-referent-set-member c :name "Spot")
         (check "members are appended in the order added"
-               (string= "[DOG: {Fido, Spot}]" (format-concept c)))
+               (string= "[DOG: {Fido, Spot, *}]" (format-concept c)))
         (check "the view reports them positionally"
                (equal '("Fido" "Spot")
                       (mapcar (lambda (m) (getf m :name))
                               (rview-members (describe-referent c)))))
-        ;; A count on a fully specified set contradicts its own members:
-        ;; {Fido, Spot}@4 is a set of two asserting it has four. The count
-        ;; belongs on a set with UNNAMED members -- {*}@4, {Fido, Spot, *}@4 --
-        ;; and those are expressible again now that a `*' survives the reader.
+        ;; A count belongs on a set with UNNAMED members -- {*}@4, or
+        ;; {Fido, Spot, *}@4 for two named and two not. Expressible at all only
+        ;; because the `*' now survives the reader.
+        (check "a count is allowed while the set is open"
+               (progn (set-referent-measure c '(4 ""))
+                      (string= "[DOG: {Fido, Spot, *}@4]" (format-concept c))))
+        ;; The refusal from the other side: closing this set would MAKE the
+        ;; contradiction below, so it is declined in the same terms.
+        (check "closing a set that carries a count is refused"
+               (handler-case (progn (set-referent-open c nil) nil)
+                 (referent-edit-error () t)))
+        (check "and nothing was written"
+               (string= "[DOG: {Fido, Spot, *}@4]" (format-concept c)))
+        (set-referent-measure c nil)
+        (set-referent-open c nil)
+        (check "removing the count is the way out"
+               (string= "[DOG: {Fido, Spot}]" (format-concept c)))
+        ;; {Fido, Spot}@4 is a set of two asserting it has four.
         (check "a count on a fully specified set is refused"
                (handler-case (progn (set-referent-measure c '(4 "")) nil)
                  (referent-edit-error () t)))
@@ -295,7 +318,7 @@
         (check "removing by position drops the right one"
                (string= "[DOG: {Spot}]" (format-concept c)))
         (remove-referent-set-member c 0)
-        (check "emptying leaves a generic plural, not a generic singular"
+        (check "emptying leaves a plural, not a generic singular"
                (string= "[DOG: {}]" (format-concept c)))
         (check "a count IS allowed once no member is named"
                (progn (set-referent-measure c '(4 ""))

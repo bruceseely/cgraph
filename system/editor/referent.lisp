@@ -55,6 +55,13 @@
   name             ; individual name string, or NIL
   set              ; the SET object, for :set
   members          ; for :set -- a list of (:id N :name S), in order
+  ;; For :set -- whether there are unnamed members besides the ones listed, the
+  ;; `*' placeholder. Not a detail of how the set prints: it is what decides
+  ;; whether a count means anything, since `{Fido, Spot}' IS its own count and
+  ;; only `{Fido, Spot, *}' leaves something for `@4' to be about. A view
+  ;; without it forces every reader of the view to guess, and the page guessed
+  ;; the blunt way -- no count wherever any member was named.
+  open
   graph            ; the GRAPH object, for :graph
   ;; --- modifiers: independent of the identity and of each other ---
   quantifier tense aspect voice raising
@@ -110,6 +117,7 @@
       ((set-p content)
        (setf (rview-kind view) :set
              (rview-set view) content
+             (rview-open view) (set-open-p content)
              ;; A member is just an identity -- which is what makes sets mostly
              ;; wiring rather than a new mechanism. Only the resolved ones are
              ;; here: a generic member (`*') never becomes an individual, so
@@ -447,10 +455,11 @@
 (defun remove-referent-set-member (concept index)
   "Drop the INDEXth member of CONCEPT's set referent.
 
-   Removing the last one leaves an EMPTY set rather than no referent: `{}' is a
-   generic plural, which is a different claim from a generic singular, and
-   silently collapsing one into the other would lose the plurality. Use the
-   identity selector to stop it being a set at all."
+   Removing the last one leaves an EMPTY set rather than no referent -- `{}' or
+   `{*}', depending on whether the set is open, both of them plural and both a
+   different claim from a generic singular. Silently collapsing one into the
+   other would lose the plurality. Use the identity selector to stop it being a
+   set at all."
   (let ((set (referent-set concept)))
     (unless set (referent-edit-error "this concept has no set referent"))
     (let ((n (length (members set))))
@@ -460,6 +469,31 @@
           (loop for m in (members set)
                 for i from 0
                 unless (= i index) collect m)))
+  concept)
+
+(defun set-referent-open (concept open)
+  "Open or close CONCEPT's set: whether it has unnamed members besides the ones
+   listed -- the `*' placeholder.
+
+   The one field that decides whether a count means anything, which is why it
+   needs a control of its own rather than being inferred from the members.
+   `{Fido, Spot}' is fully specified and its two members ARE the count;
+   `{Fido, Spot, *}' says there are others, and that is what `@4' counts.
+
+   So closing a set that carries a count would MAKE the contradiction
+   SET-REFERENT-MEASURE exists to refuse -- the same refusal from the other
+   side, and it names the way out rather than just declining. Opening is never
+   refused: it can only give a count something to be about."
+  (let ((set (referent-set concept)))
+    (unless set (referent-edit-error "this concept has no set referent"))
+    (let ((measure (measure-property (referent concept))))
+      (when (and (not open) measure (members set))
+        (referent-edit-error
+         "~a carries ~a, and closing it would leave ~a member~:p asserting ~
+          there are ~a. Remove the count first, or leave the set open."
+         (format-object set) (string-trim " " (format-measure measure))
+         (length (members set)) (first measure))))
+    (setf (set-open-p set) (and open t)))
   concept)
 
 (defun clear-referent (concept)
@@ -527,11 +561,15 @@
             (clear-referent-identity concept)
             (setf (referent concept) (make-referent indiv))
             (setf (concept (referent concept)) concept))))))
-    ;; An empty set -- `{}' -- is a generic PLURAL, and a legitimate referent
-    ;; in its own right. Members are added afterwards, one identity at a time.
+    ;; The set arrives OPEN -- `{*}', the generic collection -- and not `{}'.
+    ;; Both are legitimate referents and they are different claims: `{*}' is
+    ;; "some dogs", which is what pressing this button on a bare [DOG] means
+    ;; and what a count attaches to; `{}' is the empty or unquantified set, and
+    ;; is what you get by closing this one while it has no members. Members are
+    ;; added afterwards, one identity at a time.
     (:set
      (clear-referent-identity concept)
-     (let ((referent (make-referent (make-set-from-individuals nil))))
+     (let ((referent (make-referent (make-set-from-individuals nil :open t))))
        (setf (referent concept) referent)
        (setf (concept referent) concept))))
   concept)

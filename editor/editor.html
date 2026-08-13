@@ -217,6 +217,10 @@
     .member-chip .x:hover { opacity: 1; }
     #ref-members .none { color: #bbb; font-style: italic; font-size: 12px; }
     #ref-member-new { width: 8rem; }
+    /* The `*' toggle wears the identity buttons' clothes — it is a state of the
+       referent you switch on and off, not an action — but sits after the chips,
+       because that is where the `*' reads in `{Fido, Spot, *}'. */
+    #ref-open { margin-right: 0.5rem; }
 
     #ref-tail {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -404,6 +408,11 @@
             <div class="ref-row" id="ref-members-row" hidden>
               <span class="lab">Members</span>
               <span id="ref-members"></span>
+              <!-- Whether there are members besides the ones named. Nothing
+                   else can say it: two named members are either the whole set
+                   or two of several, and only this tells them apart — which is
+                   also what decides whether a count is meaningful. -->
+              <button id="ref-open" class="kind-btn" title="…and others: unnamed members besides those named. A count counts these.">*</button>
               <input type="text" id="ref-member-new" placeholder="name or #id" autocomplete="off" spellcheck="false">
               <button id="ref-member-add">Add</button>
             </div>

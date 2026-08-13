@@ -474,8 +474,10 @@ const REF_KINDS = [
   ['coref',      '?x',     ['label']],
   ['individual', 'name',   ['name']],
   ['individual', '#n',     ['id']],
-  // A set needs no input of its own: `{}' is a generic plural and a legitimate
-  // referent, and members are added afterwards one identity at a time.
+  // A set needs no input of its own: it arrives as `{*}', the generic
+  // collection — "some dogs", which is what pressing this on a bare [DOG]
+  // means, and the form a count attaches to. Members are added afterwards, one
+  // identity at a time; `*' beside them says whether there are others.
   ['set',        '{…}',    []],
 ];
 // `verbal' marks the three that only mean something on a type the realizer
@@ -554,7 +556,10 @@ function paintReferent() {
     if (!ms.length) {
       const em = document.createElement('span');
       em.className = 'none';
-      em.textContent = 'a generic plural — no members named';
+      // `{*}' and `{}' are both memberless and are different referents, so the
+      // line says which one you are looking at rather than one phrase for both.
+      em.textContent = refView.open ? 'a generic plural — no members named'
+                                    : 'the empty set';
       box.append(em);
     }
     ms.forEach((m, i) => {
@@ -569,6 +574,10 @@ function paintReferent() {
       chip.append(x);
       box.append(chip);
     });
+    // On means `{…, *}'. It is a state of the referent rather than an action,
+    // so it is painted from the view every time — pressing it is a request,
+    // and the server may refuse (closing a set that carries a count).
+    $('ref-open').classList.toggle('on', !!refView.open);
   }
 
   const graphy = !!refView.graphCompatible;
@@ -597,10 +606,14 @@ function paintReferent() {
 
   const m = $('ref-measure');
   m.value = refView.measure ? `${refView.measure[0]} ${refView.measure[1]}`.trim() : '';
-  // A count on a fully specified set contradicts its own members — see the
-  // stopgap in set-referent-measure. Hidden rather than offered, unless one is
-  // already set, in which case hiding it would hide the only way to remove it.
-  m.hidden = isSet && (refView.members || []).length > 0 && !refView.measure;
+  // A count on a CLOSED set contradicts its own members: {Fido, Spot}@4 is a
+  // set of two asserting it has four. Open the set — the `*' beside the members
+  // — and the count has something to count, so this mirrors the server's rule
+  // exactly rather than the blunter one it used while openness was invisible.
+  // Hidden rather than offered, unless a count is already set, in which case
+  // hiding it would hide the only way to remove it.
+  m.hidden = isSet && !refView.open
+             && (refView.members || []).length > 0 && !refView.measure;
   m.title = m.hidden ? '' : 'how many, for a set whose members are not all named';
 
   const tail = $('ref-tail');
@@ -755,6 +768,16 @@ function addSetMember() {
 $('ref-member-add').addEventListener('click', addSetMember);
 $('ref-member-new').addEventListener('keydown', ev => {
   if (ev.key === 'Enter') { ev.preventDefault(); addSetMember(); }
+});
+
+// Blank closes, "true" opens — the same convention `raising' uses, since both
+// are booleans arriving as query parameters. The refusal it can meet (closing
+// a set that carries a count) comes back as an error and leaves the toggle
+// where it was, which is why the button is painted from the view rather than
+// flipped on click.
+$('ref-open').addEventListener('click', () => {
+  if (!refView || refView.kind !== 'set') return;
+  setRefField('set-open', refView.open ? '' : 'true');
 });
 
 // One request, not six: the server clears the whole referent, so there is no
