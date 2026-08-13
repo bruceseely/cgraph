@@ -484,7 +484,17 @@ function paintRelationList(rels) {
 for (const [id, repaint] of [['concept-filter',  () => paintConceptList()],
                              ['relation-filter', () => paintRelationList()]]) {
   const box = $(id);
-  const sync = () => { box.classList.toggle('on', !!box.value.trim()); repaint(); };
+  const x = $(`${id}-clear`);
+  // The ✕ comes and goes with the text, unlike the display pane's, which always
+  // has an arc to remove. It is the same rule the slots follow: a control that
+  // cannot do anything should not be offered.
+  const sync = () => {
+    const live = !!box.value.trim();
+    box.classList.toggle('on', live);
+    x.hidden = !live;
+    repaint();
+  };
+  x.addEventListener('click', () => { box.value = ''; sync(); box.focus(); });
   box.addEventListener('input', sync);
   box.addEventListener('keydown', ev => {
     if (ev.key === 'Escape') { box.value = ''; sync(); }

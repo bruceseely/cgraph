@@ -354,6 +354,18 @@
       padding: 0.1rem 0.25rem;
       border: 1px solid #ccc; border-radius: 3px; background: #fff;
     }
+    /* The display pane's ✕, in the one other place something needs clearing.
+       Unlike that one it comes and goes with the text: an arc-line ✕ always has
+       an arc to remove, while an ✕ on an empty box is a control that cannot do
+       anything — the same reason a slot with nothing in it does not invite a
+       click. Kept out of the flex flow's width by having no border or padding
+       of its own, so it does not widen the column. */
+    .filter-clear {
+      border: none; background: none; padding: 0 0.15rem; margin-left: 0.15rem;
+      color: #c0392b; opacity: 0.55; cursor: pointer; font-size: 11px;
+      line-height: 1;
+    }
+    .filter-clear:hover:not(:disabled) { opacity: 1; background: none; border: none; }
     /* A filter that is doing something says so, since the column it applies to
        may be scrolled far from the box — and a list narrowed by a forgotten
        filter looks like a lattice that has run out of answers. */
@@ -544,6 +556,8 @@
           <input type="text" class="type-filter" id="relation-filter" size="1"
                  placeholder="filter" autocomplete="off" spellcheck="false"
                  title="Narrow this list by label or long name. Esc clears it.">
+          <button class="filter-clear" id="relation-filter-clear" hidden
+                  title="Clear this filter">✕</button>
         </div>
         <div class="type-list" id="relation-list"></div>
       </div>
@@ -553,6 +567,8 @@
           <input type="text" class="type-filter" id="concept-filter" size="1"
                  placeholder="filter" autocomplete="off" spellcheck="false"
                  title="Narrow this list by type name. Esc clears it.">
+          <button class="filter-clear" id="concept-filter-clear" hidden
+                  title="Clear this filter">✕</button>
         </div>
         <div class="type-list" id="concept-list"></div>
       </div>
