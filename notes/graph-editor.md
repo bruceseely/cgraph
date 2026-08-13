@@ -222,6 +222,46 @@ Take `desc` up to the first `-` (or all of it when there's no dash). No new
 slot needed. The convention isn't enforced, so a lint check could be added
 later.
 
+**Built**, with two departures from the paragraph above.
+
+*Prefix* turned out to mean prefix of the whole name **or of any
+hyphen-separated part of it*: `stage` finds `LIFE-STAGE`, `exchange` finds
+`COMMERCIAL-EXCHANGE`. Strict whole-string prefix makes the second half of
+every compound name unreachable, and this vocabulary is mostly compounds;
+plain substring goes the other way and files `BREAKFAST-EVENT` under `ast`.
+
+And the long name needed no work here at all — `/api/editor/choices` already
+sends it as `name`, since the rows display it. The `desc`-splitting the design
+prescribed happens server-side and had happened before this was built.
+
+Everything else is as described: it narrows what the lattice already narrowed,
+it never sees CG syntax, and it never asks the server anything — the choices
+are whatever the last fetch produced, so typing is instant and a filter
+survives every refresh. That last part is not a nicety. Almost every gesture in
+this editor refreshes, and a filter cleared by each one would be unusable.
+
+Two things building it added:
+
+- **The two empty states are different sentences.** "The lattice offers
+  nothing" and "your filter matches nothing" look identical on screen and are
+  not the same problem — a filter you have forgotten looks exactly like a
+  lattice that has run out of answers. The second names the text it is
+  filtering on and says Esc clears it.
+- **An ✕, and Esc.** Esc only reaches a box that has focus, and the moment you
+  notice a filter is still on is usually after you have clicked away into the
+  list it is narrowing. The ✕ is the display pane's, with one difference: it
+  appears only when there is text, because an ✕ beside an empty box is a
+  control that cannot do anything — the rule the slots and the arrows follow.
+
+The boxes sit **under** the headings rather than beside them. Beside, the
+head's own width — label plus box — became a floor under a column otherwise
+sized by its contents, so the filters widened both columns. Underneath they
+cost a line of height and no width, but only after `size="1"`: an `<input>`
+carries an intrinsic width of about twenty characters from that attribute, and
+neither `width: 100%` nor `flex-basis: 0` suppresses it, so the box went on
+reporting ~166px to the max-content calculation. The number CSS cannot reach is
+an HTML attribute.
+
 ### Reversing direction — the arrows are the control
 
 There is no separate reverse button. The arrows drawn in the editor pane *are*
@@ -790,10 +830,15 @@ submission; returning a session handle to poll would be much worse to use.
   `set-referent-measure`'s refusal from the other side. Driven in a browser,
   where the realizer settled the semantics: `{Baltimore, Annapolis, *}@4` reads
   back as "…to Baltimore, Annapolis, and two other cities."
-- **A cleared referent hides the id that would undo it** — Clear all detaches
-  the individual, and giving the id back re-attaches it with its properties,
-  but the panel stops showing that id the moment it clears. A breadcrumb
-  ("was #2") would make the reversibility reachable rather than merely true.
+- ~~**A cleared referent hides the id that would undo it**~~ — done, as the
+  breadcrumb this bullet asked for: a clear leaves `was #5` beside the identity
+  and clicking it re-attaches the individual through the ordinary identity
+  setter. It does not outlive the panel or follow it to another concept, and it
+  disappears once the concept has an identity again — an undo button beside a
+  referent it would overwrite is worse than none. It restores the *individual*,
+  not the referent as it stood: modifiers a Clear all also took belong to the
+  concept rather than to the individual and do not come back, which the tooltip
+  says rather than leaving it to be discovered.
 - ~~**Formatter round-trip**~~ — done. `/api/edit-type` now compares against what
   `/api/type-def` served (`canonical-unchanged-p`, `supertypes-unchanged-p`) and
   writes nothing when nothing changed; when something else changed but the graph
@@ -822,8 +867,9 @@ submission; returning a session handle to poll would be much worse to use.
   layout — the breadth-first walk choosing different break points when a line
   would exceed the width — and it is unbuilt. Only bites below about 700px, so
   it waits for a window that narrow to matter to someone.
-- **Type-in filters** — the per-column text fields described under "Type-list
-  filtering" are not built. The lattice-computed narrowing is.
+- ~~**Type-in filters**~~ — built; see the section under "Type-list filtering"
+  for the two places the design and the result differ, and for what the boxes
+  cost in column width (nothing, eventually).
 
 ## First slice
 
@@ -832,6 +878,11 @@ Done: the non-recursive loop on a live graph object from the REPL,
 entry point, which arrived with it since a session parses to a working graph
 either way.
 
-Since done: the **referent editor**, stages 0–3 under §Referent editors, and
-the **nesting** that waited on it for the shared contract. Still to come: the
-**type-in filters**, which wait on nothing.
+Since done: the **referent editor**, stages 0–3 under §Referent editors; the
+**nesting** that waited on it for the shared contract; and the **type-in
+filters**, which waited on nothing and were the last of the original design
+still outstanding.
+
+What is left of this design is stage 4 — whether the unrecognised tail ever
+needs editing — and that is a question use will answer, not a piece of work
+waiting for a turn.
