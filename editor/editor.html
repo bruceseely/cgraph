@@ -177,6 +177,11 @@
     #referent-pane[hidden] { display: none; }
     #referent-body { display: flex; flex-direction: column; gap: 0.4rem; }
     .ref-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+    /* An author `display' beats the UA sheet's `[hidden] { display: none }',
+       so a row that sets HIDDEN in JS goes on showing unless it is told again
+       here -- which is why the members row appeared on every concept, set or
+       not. Same re-assertion #referent-pane and #veil already make. */
+    .ref-row[hidden] { display: none; }
     .ref-row > .lab {
       font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
       color: #999; width: 5rem; flex-shrink: 0;
