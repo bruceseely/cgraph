@@ -345,13 +345,51 @@ $('clear').addEventListener('click', () => {
 
 // ── type columns ─────────────────────────────────────────────────────────────
 
+// The filters narrow the list the LATTICE already narrowed, and they ask the
+// server nothing: the choices are whatever the last fetch produced, so typing
+// is instant and a filter survives every refresh — which matters, because
+// almost everything you do here refreshes.
+//
+// Matching is by prefix, on the whole name or on any hyphen-separated part of
+// it: `exchange' finds COMMERCIAL-EXCHANGE and `stage' finds LIFE-STAGE. Plain
+// substring matching would file BREAKFAST-EVENT under `ast', which is noise in
+// a vocabulary this hyphenated; whole-string prefix alone would make the second
+// half of every compound name unreachable.
+//
+// A relation matches on either half of what its row shows, the label or the
+// long name, because `agnt' and `agent' are both things you would type for the
+// same row.
+let lastConcepts = [];
+let lastRelations = [];
+
+function filterQuery(id) { return $(id).value.trim().toLowerCase(); }
+
+function matchesFilter(text, q) {
+  if (!q) return true;
+  const s = String(text || '').toLowerCase();
+  return s.startsWith(q) || s.split(/[-\s/]+/).some(part => part.startsWith(q));
+}
+
+// Called with data by REFRESH, and with none by the filter box — the list is
+// repainted from the same choices either way.
 function paintConceptList(types) {
+  if (types) lastConcepts = types;
+  const q = filterQuery('concept-filter');
+  const shown = lastConcepts.filter(t => matchesFilter(t, q));
   conceptList.replaceChildren();
-  if (!types.length) {
+  if (!lastConcepts.length) {
     conceptList.innerHTML = '<div class="type-empty">no consistent types</div>';
     return;
   }
-  for (const t of types) {
+  // Distinct from the line above on purpose: "the lattice offers nothing" and
+  // "your filter matches nothing" are different problems, and a filter you have
+  // forgotten looks exactly like the first one.
+  if (!shown.length) {
+    conceptList.innerHTML =
+      `<div class="type-empty">nothing here starts with “${q}” — Esc clears the filter</div>`;
+    return;
+  }
+  for (const t of shown) {
     const el = document.createElement('div');
     el.className = 'type-item';
     el.textContent = t;
@@ -404,9 +442,20 @@ function relationRow(r) {
 // same glyph the editor pane will show, and it survives scrolling past the
 // heading.
 function paintRelationList(rels) {
+  if (rels) lastRelations = rels;
+  const q = filterQuery('relation-filter');
+  // Either half of the row: the label you would type from memory, or the long
+  // name you would type if you did not remember the label.
+  const shown = lastRelations.filter(r => matchesFilter(r.label, q)
+                                       || matchesFilter(r.name, q));
   relationList.replaceChildren();
-  if (!rels.length) {
+  if (!lastRelations.length) {
     relationList.innerHTML = '<div class="type-empty">no consistent relations</div>';
+    return;
+  }
+  if (!shown.length) {
+    relationList.innerHTML =
+      `<div class="type-empty">nothing here starts with “${q}” — Esc clears the filter</div>`;
     return;
   }
 
@@ -417,7 +466,7 @@ function paintRelationList(rels) {
   ];
 
   for (const [direction, heading] of groups) {
-    const rows = rels.filter(r => r.direction === direction)
+    const rows = shown.filter(r => r.direction === direction)
                      .sort((a, b) => a.label.localeCompare(b.label));
     if (!rows.length) continue;      // no heading for a group with nothing in it
     const head = document.createElement('div');
@@ -426,6 +475,23 @@ function paintRelationList(rels) {
     relationList.append(head);
     for (const r of rows) relationList.append(relationRow(r));
   }
+}
+
+// Repaint on every keystroke — no round trip, so there is nothing to debounce.
+// Escape clears, which is the one gesture worth having: a filter is the sort of
+// thing you leave behind, and the column it applies to may be scrolled well
+// away from the box by then.
+for (const [id, repaint] of [['concept-filter',  () => paintConceptList()],
+                             ['relation-filter', () => paintRelationList()]]) {
+  const box = $(id);
+  const sync = () => { box.classList.toggle('on', !!box.value.trim()); repaint(); };
+  box.addEventListener('input', sync);
+  box.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') { box.value = ''; sync(); }
+    // The lists commit nothing, so Enter has nothing to submit. Swallow it
+    // rather than let it reach anything else that might be listening.
+    if (ev.key === 'Enter') ev.preventDefault();
+  });
 }
 
 // A type click always means a NEW concept of that type, and with a focus set it

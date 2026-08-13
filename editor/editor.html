@@ -327,6 +327,15 @@
       border-right: 1px solid #eee;
     }
     .type-col:last-child { border-right: none; }
+    .type-filter {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px; width: 5.5rem; padding: 0.1rem 0.25rem;
+      border: 1px solid #ccc; border-radius: 3px; background: #fff;
+    }
+    /* A filter that is doing something says so, since the column it applies to
+       may be scrolled far from the box — and a list narrowed by a forgotten
+       filter looks like a lattice that has run out of answers. */
+    .type-filter.on { border-color: #4a90d9; background: #f0f4fb; }
     .type-list { overflow: auto; flex: 1 1 auto; background: #fff; }
     .type-item {
       padding: 0.15rem 0.5rem;
@@ -497,13 +506,27 @@
          relation and then a target concept, so the columns run in the order
          the editor pane fills — and left-to-right matches
          [focus] →(relation)→ [concept]. -->
+    <!-- The filter sits in the head rather than above the list, so it reads as
+         part of the column's label rather than as a row of its contents. It
+         also steadies the width: the head holds title plus box whatever the
+         filter leaves in the list below. -->
     <div id="right">
       <div class="type-col">
-        <div class="pane-head">Relation types</div>
+        <div class="pane-head">Relations
+          <span class="spacer"></span>
+          <input type="text" class="type-filter" id="relation-filter"
+                 placeholder="filter" autocomplete="off" spellcheck="false"
+                 title="Narrow this list by label or long name. Esc clears it.">
+        </div>
         <div class="type-list" id="relation-list"></div>
       </div>
       <div class="type-col">
-        <div class="pane-head">Concept types</div>
+        <div class="pane-head">Concepts
+          <span class="spacer"></span>
+          <input type="text" class="type-filter" id="concept-filter"
+                 placeholder="filter" autocomplete="off" spellcheck="false"
+                 title="Narrow this list by type name. Esc clears it.">
+        </div>
         <div class="type-list" id="concept-list"></div>
       </div>
     </div>
