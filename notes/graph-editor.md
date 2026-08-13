@@ -3,8 +3,10 @@
 **Status:** built and working. Driven end to end in a browser on 2026-08-01
 against the live catalog: focus, contextual filtering in both columns, add,
 the removal cascade, the reverse control, and automatic coreference all behave
-as described below. The non-graph referent editor is the one designed-but-
-unbuilt piece — see "Open".
+as described below. The non-graph referent editor is built through stage 3 —
+identity, modifiers and sets — and so is the descent into a graph referent.
+What is left is stage 4, which is a decision rather than a feature, and two
+loose ends the set work left behind — see "Open".
 
 A web-page editor for conceptual graphs, separate from the concept-type
 browser. Where the type browser edits the *lattice*, this edits *graphs*.
@@ -348,7 +350,7 @@ reformatted one. Don't rewrite what you didn't edit.
 | 0 | decompose and re-emit losslessly | makes every later stage non-destructive; needs no UI | **built** — as a decomposition plus in-place setters, not re-emission; see below |
 | 1 | identity, minus sets — empty, `*`, `*x`, `?x`, `#`, `#123`, `Fido` | the exclusive spine, and most referents are identity-only | **built**, minus `*x` — see "A variable is not offered" |
 | 2 | modifiers — quantifier and measure first, then tense/aspect/voice gated on the concept type | orthogonal to 1, so it cannot destabilise it | **built** — the gate is not on the concept type; see "What actually gates tense" |
-| 3 | sets — `{Fido, #123, *}`, with optional `@ N` | recurses on stage 1's selector minus `:set`, so it is cheapest last | open |
+| 3 | sets — `{Fido, #123, *}`, with optional `@ N` | recurses on stage 1's selector minus `:set`, so it is cheapest last | **built** — the prediction held; the reader did not, see "Sets, and the openness the reader was dropping" |
 | 4 | decide the tail | by then use will have shown whether one ever needs editing | open — the pane shows the tail read-only, which may be all it ever needs |
 
 Graph referents were expected to "plug in at stage 1 as an alternative to the
@@ -479,6 +481,56 @@ clearing *detaches* them rather than destroying them. The individual survives
 and giving the concept that id back re-attaches the lot. The catch is that the
 panel stops showing the id at that point, so the thing that makes it reversible
 is the thing it hides.
+
+#### Sets, and the openness the reader was dropping
+
+The staging rested on a claim: a set member is *just an identity*, so sets are
+mostly wiring once the identity selector exists. It held.
+`resolve-editor-individual` is shared between the `:individual` identity and
+set membership, and the panel's member row is a list of the same things the
+selector makes. `{…}` joins the identity selector and needs no input of its
+own, because an empty set is a legitimate referent in its own right — `{}` is a
+generic *plural*, a different claim from a generic singular. Members are added
+afterwards, one at a time, each with its own ✕. No text field anywhere holds
+braces: the user picks members, the editor decides where the commas go.
+
+Two consequences worth stating because they are not free. Removal is by
+**position**, so the order the page shows must be the order the server holds —
+members are appended rather than pushed, since a list that reshuffled itself as
+it grew would make the ✕ beside each one a guess. And emptying a set leaves
+`{}` rather than no referent: collapsing it into a generic singular would
+silently drop the plurality, which is the one thing the braces are there to
+say. Stopping it being a set at all is what the identity selector is for.
+
+What the design did not foresee is that the **reader** could not represent the
+form the editor needed to offer. `asterisk-reader` returns `NIL` for a bare
+`*`, and `set-reader`'s loop read that `NIL` as end-of-input, so `{Fido, Spot,
+*}` reached `build-set-from-specs` as two named members and nothing else — with
+anything after the `*` dropped too. A placeholder was then fabricated whenever
+the contents came out empty, which is why `{}` and `{*}` were indistinguishable:
+neither had ever read a `*`. So `{Fido, Spot, *}@4` already formatted back as
+`{Fido, Spot}@4` — a set of two asserting it has four — **with no editor
+involved**.
+
+That is the same shape as stage 0's findings, one level down. An editor that
+offers only legal states has to be able to *tell* which states are legal, and
+here the model could not: openness was not representable, so the legitimate
+partially specified set and the self-contradicting one looked alike. The editor
+first declined to produce either (a stopgap: refuse `@N` whenever any member is
+named), and the model was then fixed — `set-reader` peeks before reading, to
+tell "a generic marker was consumed" from "there is nothing left"; `set` gained
+an `open` slot; `format-set` emits the `*` whenever there are unnamed members.
+The rule in `set-referent-measure` is now the real one: refuse a count only on a
+**closed** set. Clearing is always allowed either way, or a graph that arrived
+carrying a bad value would be stranded — and graphs will, since the reader made
+them.
+
+Two loose ends remain, and they are one fact apart. `describe-referent` reports
+a set's members but not its openness, so the browser still hides the measure box
+on any set with a named member — the blunt pre-fix rule, now stricter than the
+server's. And the `{…}` button still produces `{}` rather than `{*}`, so the
+panel cannot reach `{Fido, Spot, *}@4` even though the notation and the server
+now both accept it. Putting `set-open-p` in the view closes both.
 
 #### Descending into a graph referent
 
@@ -676,13 +728,20 @@ submission; returning a session handle to poll would be much worse to use.
 
 ## Open
 
-- ~~**The non-graph referent editor**~~ — built through stage 2, plus graph
-  referents. What remains is stage 3 (sets) and stage 4 (whether the tail ever
-  needs editing, as opposed to the read-only display it has now). Three things
-  the design got wrong and building corrected are recorded in place: the write
-  side is in-place mutation rather than re-emission, `*x` is not offerable, and
-  tense/aspect/voice are gated on whether the concept heads a clause rather
-  than on its type.
+- ~~**The non-graph referent editor**~~ — built through stage 3, plus graph
+  referents. What remains is stage 4: whether the tail ever needs editing, as
+  opposed to the read-only display it has now. That is a question for use to
+  answer, not work waiting to be done. Four things the design got wrong and
+  building corrected are recorded in place: the write side is in-place mutation
+  rather than re-emission, `*x` is not offerable, tense/aspect/voice are gated
+  on whether the concept heads a clause rather than on its type, and a set's
+  openness was not representable at all until the reader was fixed.
+- **A set's openness is not in the view** — `describe-referent` reports members
+  but not `set-open-p`, which leaves two small things wrong on the page: the
+  measure box is hidden on any set with a named member (the stopgap rule, now
+  stricter than the server's), and `{…}` makes `{}` where it should make `{*}`,
+  putting `{Fido, Spot, *}@4` out of the panel's reach. See "Sets, and the
+  openness the reader was dropping".
 - **A cleared referent hides the id that would undo it** — Clear all detaches
   the individual, and giving the id back re-attaches it with its properties,
   but the panel stops showing that id the moment it clears. A breadcrumb
@@ -714,6 +773,6 @@ Done: the non-recursive loop on a live graph object from the REPL,
 entry point, which arrived with it since a session parses to a working graph
 either way.
 
-Still to come: the **referent editor**, staged 0–4 under §Referent editors;
-**nesting**, which waits on it only for the shared contract, since the graph
-half is already settled; and the **type-in filters**, which wait on nothing.
+Since done: the **referent editor**, stages 0–3 under §Referent editors, and
+the **nesting** that waited on it for the shared contract. Still to come: the
+**type-in filters**, which wait on nothing.

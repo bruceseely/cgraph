@@ -490,9 +490,10 @@
 (defun set-referent-identity (concept kind &key label id name)
   "Give CONCEPT the identity KIND, replacing whatever it had.
 
-   KIND is :NONE, :VARIABLE (LABEL), :COREF (LABEL) or :INDIVIDUAL (ID and/or
-   NAME). Sets and graph referents are not handled here -- a set is stage 3 and
-   a graph referent opens a nested graph editor instead of this panel.
+   KIND is :NONE, :VARIABLE (LABEL), :COREF (LABEL), :INDIVIDUAL (ID and/or
+   NAME) or :SET, which makes an EMPTY set -- members are added afterwards, one
+   identity at a time, by ADD-REFERENT-SET-MEMBER. Graph referents are not
+   handled here: one opens a nested graph editor instead of this panel.
 
    Pointing a concept at a different individual does NOT carry the previous
    individual's tail across, and should not: those properties describe the
