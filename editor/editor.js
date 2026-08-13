@@ -552,7 +552,14 @@ function paintReferent() {
   refInputA.value = refPending ? ''
                   : needs.includes('label') ? (refView.label || '')
                   : (refView.name || '');
-  refInputB.placeholder = 'id';
+  // The armed box says what leaving it empty will do, because that is the one
+  // thing the `#n' button no longer does by itself.
+  refInputB.placeholder = refPending ? 'id, or empty for #' : 'id';
+  // Unlike the name box, an armed id box keeps the concept's own id rather than
+  // clearing: it is the same individual either way, so prefilling makes "show
+  // this by id instead of by name" one keystroke instead of a retype — and an
+  // empty box here would mint a new individual on commit, silently dropping the
+  // one the concept had.
   refInputB.value = refView.id === null || refView.id === undefined ? '' : String(refView.id);
 
   $('ref-preview').textContent = refView.identityText || '';
@@ -720,24 +727,44 @@ function currentNeeds() {
 }
 
 // A NAME is the one value the button cannot invent. `*x' and `?x' default to
-// the conventional `x', and `#' is itself a legitimate referent ("specific but
-// unidentified"), but there is no sensible default name — the first version
-// used "unnamed", which minted a real individual called that and made the
-// sentence read "Unnamed eats a pie."
+// the conventional `x', but there is no sensible default name — the first
+// version used "unnamed", which minted a real individual called that and made
+// the sentence read "Unnamed eats a pie."
 //
 // So the button selects the KIND and the field supplies the VALUE: choosing
 // `name' with nothing to go on arms the input and sends nothing until you type.
+//
+// An ID arms for a different reason. There IS a value to invent — a bare `#'
+// is a legitimate referent, "specific but unidentified" — but inventing it on
+// the press means every stray click on `#n' mints an individual and burns an
+// id, and the concept you meant to point at #5 has to be corrected afterwards.
+// So `#' becomes what a deliberate empty commit means rather than what a press
+// means: press arms the box, Enter on a number attaches that individual, Enter
+// on an empty box is the bare `#'. Both readings survive; only the accident is
+// gone.
 function chooseKind(kind, needs, key) {
   const was = currentNeeds();
   const keeps = role => was.includes(role);      // same slot as before?
-  const typed = refInputA.value.trim();
 
-  if (needs.includes('name') && !(keeps('name') && typed)) {
+  // Which box this kind fills, if any. Armed unless the box is already holding
+  // a value for the SAME role — retyping a name or correcting an id goes
+  // straight through, since the value is right there.
+  //
+  // `refPending !== key' is what tells a PRESS from the COMMIT that follows it.
+  // Both arrive here; without it an empty box re-arms forever and the bare `#'
+  // becomes unreachable, since the one way to ask for it is to commit nothing.
+  const wants = needs.includes('name') ? 'name'
+              : needs.includes('id')   ? 'id'
+              : null;
+  const box = wants === 'id' ? refInputB : refInputA;
+  if (wants && refPending !== key && !(keeps(wants) && box.value.trim())) {
     refPending = key;
     paintReferent();
-    refInputA.focus();
+    box.focus();
     return;
   }
+
+  const typed = refInputA.value.trim();
 
   const extra = { kind };
   if (needs.includes('label')) extra.label = (keeps('label') && typed) || 'x';
@@ -756,10 +783,11 @@ for (const el of [refInputA, refInputB]) {
     const active = refPending || refRowLabel(refView);
     const entry = REF_KINDS.find(([k, l]) =>
       (k === 'individual' ? `individual:${l}` : k) === active);
-    // An armed kind with the field still empty stays armed: leaving a name box
-    // blank is not a request to be named "".
+    // An armed NAME with the box still empty stays armed: leaving a name box
+    // blank is not a request to be named "". An armed ID committed empty is a
+    // request, and a meaningful one — the bare `#' — so it goes through.
     if (!entry) return;
-    if (refPending && !refInputA.value.trim()) return;
+    if (refPending && entry[2].includes('name') && !refInputA.value.trim()) return;
     chooseKind(entry[0], entry[2], active);
   });
 }
