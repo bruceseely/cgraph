@@ -55,11 +55,16 @@
     #frame { display: flex; flex: 1 1 auto; min-height: 0; }
     /* The three left panes share one width, so capping the column scales all
        three together. Tune this single value if they want to be wider or
-       narrower; the type columns absorb whatever is left over rather than
-       leaving dead space. */
+       narrower.
+       The left side takes the slack now, because the type columns stopped
+       doing so: they size to their contents (see .type-col), and space they no
+       longer claim has to go somewhere or it shows as a dead gutter beside the
+       lists. Hence the cap moved 40rem → 56rem — enough that a full-width
+       window is used up on a 13" screen, and a bound on much wider ones, where
+       a graph line running the whole desk is not easier to read. */
     #left  { display: flex; flex-direction: column; flex: 1 1 auto;
-             min-width: 0; max-width: 40rem; }
-    #right { display: flex; flex: 1 1 22rem; min-width: 20rem;
+             min-width: 0; max-width: 56rem; }
+    #right { display: flex; flex: 0 1 auto; min-width: 0;
              border-left: 1px solid #ddd; }
 
     .pane {
@@ -293,11 +298,22 @@
     .arc-line:hover { background: #fafafa; }
 
     /* ── right: two type columns ── */
+    /* Each column is as wide as its widest row, within a band. Half the pane
+       each was giving both of them about 17rem when the relation list needed
+       11 and the concept list 8 — the lists are one short name per line, so a
+       share of the window is the wrong unit for them.
+       The band matters as much as the fit: MIN-WIDTH keeps a column from
+       collapsing when the lattice narrows it to three entries, and MAX-WIDTH
+       keeps one long description ("exchange/consideration") from taking the
+       window. Between those two the width follows the content, which changes
+       as you work — the lists are filtered by what is in the editor row. */
     .type-col {
       display: flex;
       flex-direction: column;
-      flex: 1 1 50%;
-      min-width: 0;
+      flex: 0 1 auto;
+      width: max-content;
+      min-width: 7rem;
+      max-width: 16rem;
       border-right: 1px solid #eee;
     }
     .type-col:last-child { border-right: none; }
