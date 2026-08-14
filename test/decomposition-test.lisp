@@ -118,6 +118,39 @@
       (check "a graph with no seam comes back as itself"
              (= 1 (length (decompose-cgraph (parse-cgraph "[EAT]→(agnt)→[DOG].")))))
 
+      ;; --- and it is spoken as a sentence each ------------------------------
+      ;; The point of the whole exercise. The second sentence must say the
+      ;; repeated concept is the SAME one -- "A dog eats a cake. A dog is old"
+      ;; is two dogs to a reader, whatever the graph says.
+      ;; Cut at DOG deliberately, not at whichever seam comes first. The first
+      ;; is EAT, and cutting a graph at its PREDICATE gives "An old dog eats. A
+      ;; cake is eaten." -- two grammatical sentences that read as two eatings,
+      ;; because English pronominalizes things far more readily than events.
+      ;; That is a question for the policy stage: which seam is worth cutting.
+      (let* ((nodes  (parse-cgraph "[EAT]-
+                                      (agnt)→[DOG]→(attr)→[OLD]
+                                      (obj)→[CAKE]."))
+             (dog    (find 'dog (cut-concepts nodes)
+                           :key (lambda (c) (label (concept-type c)))))
+             (pieces (decompose-cgraph nodes :at dog)))
+        (check "the pieces are spoken as two sentences, the second anaphoric"
+               (string= "A dog eats a cake. It is old." (graphs-to-text pieces)))
+        (check "cross-coref off names it again instead"
+               (string= "A dog eats a cake. A dog is old."
+                        (graphs-to-text pieces :cross-coref nil))))
+
+      (let* ((nodes (parse-cgraph "[CHEVY-VEHICLE]-
+                                     (attr)→[OLD]
+                                     (inst)←[DRIVE]-
+                                        (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
+                                        (dest)→[CITY: Baltimore #502],
+                                     (poss)←[PERSON: dave #501 *x]."))
+             (cut (find 'person (cut-concepts nodes)
+                        :key (lambda (c) (label (concept-type c))))))
+        (check "an individual is pronominalized on the second sentence"
+               (string= "Dave drives with Dave's old chevy-vehicle to Baltimore. He is young."
+                        (graphs-to-text (decompose-cgraph nodes :at cut)))))
+
       (when verbose
         (format t "~&DECOMPOSITION-TEST ~:[failed~;passed~]~%" ok))
       ok)))

@@ -172,13 +172,18 @@
    without one the pieces assert as many dogs as there are copies, which is not
    what the graph said. This is the whole soundness condition of the cut."
   (let ((first-copy (first copies)))
+    ;; Linked whether or not a label is needed. The label is what NOTATION
+    ;; requires to carry identity; the link is what the realizer's anaphora
+    ;; pass reads to know a second mention is a second mention, and an
+    ;; individual needs the second without needing the first.
+    (dolist (other (rest copies))
+      (link-coreference first-copy other))
     (unless (concept-individual first-copy)
       (let* ((name  (string (next-variable-name)))
              (label (intern (string-upcase name) :keyword)))
         (set-coref-label first-copy label)
         (dolist (other (rest copies))
-          (setf (coref-bound-label other) label)
-          (link-coreference first-copy other))))
+          (setf (coref-bound-label other) label))))
     copies))
 
 (defun decompose-cgraph (graph &key at)

@@ -264,14 +264,24 @@
 (defun realize-copula-clause (topic state)
   "Render a verbless graph as TOPIC + 'is/are' + complements.
    Used when the graph has no subject-introducing relation (Phase 6)."
-  (let ((copula (if (eq (concept-number topic) :plural) "are" "is")))
+  (let ((copula (if (eq (concept-number topic) :plural) "are" "is"))
+        ;; Asked BEFORE marking, since marking is what makes it false. Within
+        ;; one graph the topic of a copular clause is always its first mention,
+        ;; so this was moot; across a decomposition it is not -- the pieces
+        ;; share a concept by construction, and the sentence that mentions it
+        ;; second was saying "A dog is old" about the dog just named.
+        (revisit (uttered-or-coref-uttered-p state topic)))
     (mark-uttered state topic)
     ;; Mark predicate-bearing relations traversed BEFORE rendering the
     ;; topic NP, so they don't get folded in as pre-modifiers of the noun.
     (dolist (rel (concept-relations topic))
       (when (member (relation-role rel) '(:adj :pp))
         (mark-traversed state rel)))
-    (let* ((topic-np    (realize-full-np topic state))
+    (let* ((topic-np    (if revisit
+                            ;; Rule 5's anaphoric expression: a pronoun, or the
+                            ;; short definite NP REALIZE-NP falls back to.
+                            (realize-np topic state :case :nominative)
+                            (realize-full-np topic state)))
            (complements (realize-copula-complements topic state)))
       (cond ((null complements) topic-np)
             (t (format nil "~a ~a ~{~a~^ and ~}"

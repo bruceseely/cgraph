@@ -248,14 +248,48 @@
 
 (defun graph-to-text (graph)
   "Convert a conceptual graph to an English sentence."
+  (graph-to-text-in-state graph (make-walk-state)))
+
+(defun graph-to-text-in-state (graph state)
+  "GRAPH as a sentence, uttered into an existing STATE.
+
+   Separated from GRAPH-TO-TEXT so that several graphs can be uttered in
+   sequence with one state between them -- which is what makes the second
+   sentence able to say `he' about something the first sentence named. A fresh
+   state per graph would make every sentence a first mention."
   (let* ((nodes  (graph-nodes graph))
          (head   (and (typep graph 'graph) (head graph)))
-         (state  (make-walk-state))
          (clause (realize-graph-clause nodes state head)))
     (cond ((zerop (length clause)) "")
           (t (let* ((leftover (unexpressed-poss-relations nodes state))
                     (tail     (realize-leftover-poss leftover state)))
                (finalize-sentence (concatenate 'string clause tail)))))))
+
+(defun graphs-to-text (graphs &key (cross-coref t))
+  "Several graphs as several sentences, in order, as one piece of text.
+
+   The realization half of Rule 6: a graph broken into simpler graphs is
+   spoken as a sentence each. Deliberately not a method on GRAPH-TO-TEXT --
+   in this codebase a LIST already means one graph, being what PARSE-CGRAPH
+   returns, so a list of graphs cannot be told from a graph by its type. The
+   plural name is the distinction.
+
+   One walk state runs through all of them, which is what lets a later
+   sentence say `he' about someone an earlier one named; with a state each,
+   every sentence would be a first mention and the text would repeat the noun
+   at every turn.
+
+   CROSS-COREF defaults on, unlike *ANAPHORA-CROSS-COREF* itself, and for a
+   reason particular to this: the repeated concept in decomposed pieces is
+   THE SAME REFERENT by construction -- that is what makes the decomposition
+   sound -- so the ambiguity the conservative default guards against cannot
+   arise between the pieces. Pass NIL to have each sentence name it again."
+  (let ((*anaphora-cross-coref* cross-coref)
+        (state (make-walk-state)))
+    (format nil "~{~a~^ ~}"
+            (remove-if (lambda (sentence) (zerop (length sentence)))
+                       (mapcar (lambda (graph) (graph-to-text-in-state graph state))
+                               graphs)))))
 
 (defun finalize-sentence (clause)
   (capitalize-first (string-trim " " (format nil "~a." clause))))
