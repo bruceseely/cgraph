@@ -69,6 +69,10 @@
                                            (:file "graph-combination")
                                            (:file "projection")
                                            (:file "maximal-join")
+                                           ;; After MAXIMAL-JOIN: decomposition
+                                           ;; is join run backwards, and the
+                                           ;; join is what checks it.
+                                           (:file "decomposition")
 			                   (:file "cg-env")
                                            (:file "type-definition")
                                            (:file "query")))
