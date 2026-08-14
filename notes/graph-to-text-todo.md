@@ -60,40 +60,42 @@ passive. This is bikeshedding-prone — the threshold is subjective. Worth
 sketching only when there's a real graph that produces a sentence
 people find awkward.
 
-### 3. Pronoun salience — when a pronoun is safe
+### 3. ~~Pronoun salience — when a pronoun is safe~~ — done
 
-Every second mention that the realizer recognises becomes a pronoun, and it
-recognises them by identity alone: is this the same referent as something
-already uttered. Nothing asks whether the pronoun will be *understood*.
+`pronoun-safe-p` in `system/generation/anaphora.lisp`, beside
+`uttered-or-coref-uttered-p`, which answers the other half of the question.
+Behaviour and examples: §8 of `graph-to-text-features.md`.
 
-    Dave drives with his chevy-vehicle to Baltimore. He has an ancient bag
-    containing a cake. He is young. It is old.
+The rule is the smallest one that answers it. A competitor is another
+referent already uttered that would surface as the **same word** — surfaces
+compared rather than gender and number, since the word is what a reader
+hears, and `her` collides with itself across cases. The pronoun is safe when
+no competitor has been mentioned more recently: the nearest antecedent is
+the one a reader reaches for, so the most recent mention wins the pronoun
+and everything else is named again. Losing means Rule 5's other option, the
+short definite NP — `the dog`, or the name for someone who has one.
 
-That reads correctly, and only because Dave is the only masculine referent
-in it. Put a second man in the graph and the realizer emits exactly the same
-pronouns, with no idea it has introduced an ambiguity — `he` would have two
-candidates and the text would no longer say which. The same holds for `it`
-once there are two inanimate things.
+`walk-state` gained a clock for this: `uttered` records the tick rather than
+`T`, so "most recently mentioned" is a fact rather than a guess. Existing
+callers still read it as a flag, a tick never being zero.
 
-What is missing is a salience model: for each pronoun, which referents
-compete for it (same gender, same number, still recent), and how recently
-each was mentioned. With that, the choice between naming a referent again and
-pronominalizing it becomes answerable — pronoun when it wins clearly, the
-noun again when it does not. Sowa's Rule 5 asks for exactly this and says so:
-"a pronoun **or** a short noun phrase that has the minimum number of
-qualifiers needed for a unique reference in the current context." The second
-half of that sentence is the part not built.
+Still not modelled, and both real:
 
-Two reasons it is worth doing properly rather than approximating. It is
-wrong in the dangerous direction — the output looks fine and misleads,
-rather than looking broken. And decomposition made it reachable: within one
-sentence the competing candidates are usually few, but a graph spoken as
-four sentences keeps a much longer list of things a pronoun might mean.
+- **Syntactic prominence.** A subject outranks an object at the same
+  distance, and this counts only distance.
+- **Decay.** An antecedent far enough back is gone whether or not anything
+  competes for it; here a pronoun stays available indefinitely as long as it
+  is uncontested.
 
-Where it would live: `system/generation/anaphora.lisp`, beside
-`uttered-or-coref-uttered-p`, which is the function that currently answers
-"is this a second mention" and would grow a companion answering "and is a
-pronoun safe here".
+Two things learned in the building, both recorded where they happened.
+`realize-np`'s revisit branch never marked the concept uttered — the
+*referent* had been, through some other node, but that node had not, so a
+third mention through a third node introduced the thing over again. And a
+first attempt to test this from the generation table was fake: inside one
+sentence the competitor usually has not been uttered yet when the pronoun is
+chosen (`Dave gives his cake to Bob` picks `his` before Bob is said), so
+competition is a cross-sentence phenomenon and the tests live with
+decomposition.
 
 ## Smaller follow-ups
 
@@ -155,3 +157,6 @@ For grep/diff against future versions, the items below are *implemented*:
   `graph-to-text-decomposed`.
 - Possessive anaphora: a possessor already mentioned surfaces as 'his' /
   'her' / 'its' / 'their'.
+- Pronoun salience: a pronoun only when no other referent uttered more
+  recently would surface as the same word; otherwise the short definite NP
+  or the name.

@@ -243,14 +243,27 @@ to ask nothing — it was the one place a second mention was still uttered in
 full, and the one place a mention did not count, so a later sentence was free to
 introduce the same thing over again.
 
-**A pronoun is chosen on identity alone.** The test is "same referent as
-something already uttered", and nothing asks whether the pronoun can be
-*understood* — how many referents of that gender and number compete for it, or
-how far back the antecedent was. With one man in the text `he` is unambiguous
-and the output is right; with two the realizer produces the same `he` and has
-no idea it has introduced an ambiguity. Rule 5 asks for a pronoun *or* a short
-noun phrase, whichever refers uniquely, and the second half of that is unbuilt:
-see item 3 of `graph-to-text-todo.md`.
+**A pronoun is used only when it could mean one thing** (`pronoun-safe-p`).
+Being a second mention is not enough: another referent already uttered that
+would surface as the *same word* competes for it, and the pronoun goes to
+whichever was mentioned most recently. Everything else is named again — Rule
+5's other option, a short definite NP (`the dog`) or the name.
+
+Surfaces are compared rather than gender and number, since the word is what a
+reader hears, and `her` collides with itself across cases. Recency is real
+rather than assumed: `walk-state` carries a clock and `uttered` records the
+tick.
+
+| Text | Why |
+|---|---|
+| `Dave drives with his chevy-vehicle to Baltimore. He has an ancient bag containing a cake. He is young.` | one man — nothing competes for `he` |
+| `Young Dave drives with a chevy-vehicle to Baltimore. Bob has an ancient bag containing a cake and the chevy-vehicle. It is old.` | two men — neither may be `he`; the vehicle keeps `it`, being the most recent of the neuter things |
+
+Not modelled: syntactic prominence (a subject outranks an object at the same
+distance) and decay (an antecedent far enough back is gone even uncontested).
+Competition is mostly a **cross-sentence** matter — inside one sentence the
+competitor is often not uttered yet when the pronoun is chosen, as in `Dave
+gives his cake to Bob`.
 
 The `*anaphora-cross-coref*` flag (default NIL) controls whether two
 distinct concepts linked via a `coreference` slot count as the same
