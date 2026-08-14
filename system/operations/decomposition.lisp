@@ -188,16 +188,22 @@
           (setf (coref-bound-label other) label))))
     copies))
 
-(defun decompose-cgraph (graph &key at)
+(defun decompose-cgraph (graph &key at (copy t))
   "Break GRAPH into the separate graphs that AT holds together.
 
    Returns a list of graphs. AT defaults to the first cut concept; a graph with
    none comes back as itself in a list of one, which is an answer -- some graphs
    are one sentence and that is that.
 
-   The original is not touched. The work happens in a copy, and COPY-CGRAPH
+   The original is not touched: the work happens in a copy, and COPY-CGRAPH
    hands back the copy of the very node it was given, which is how the cut
    concept is found again on the other side.
+
+   COPY NIL cuts GRAPH where it stands, for a caller that owns it already --
+   which DECOMPOSE-FULLY does from its second cut onwards, and must. Copying
+   again there loses something: COPY-NODE does not carry the COREFERENCE slot,
+   so a second cut silently unlinked the concepts the first cut had joined, and
+   the sentence about them stopped knowing it was a second mention.
 
    Each piece keeps a copy of AT, since that is what the pieces have in common
    and what a reader needs in order to put them back together -- as a repeated
@@ -211,7 +217,7 @@
                  copy a concept without separating anything. CUT-CONCEPTS ~
                  lists the places that do."
                 (format-node cut-here)))
-       (let* ((cut (copy-cgraph cut-here))
+       (let* ((cut (if copy (copy-cgraph cut-here) cut-here))
               (components (graph-components-without cut cut))
               (copies (list cut)))
          (dolist (component (rest components))
@@ -296,7 +302,7 @@
                                 (cut-concepts graph)))))
     (cdr (first (sort ranked #'< :key #'car)))))
 
-(defun decompose-fully (graph &key (threshold *decomposition-threshold*))
+(defun decompose-fully (graph &key (threshold *decomposition-threshold*) (copy t))
   "Break GRAPH up while it is worth breaking up, and return the pieces.
 
    Recursive, because one cut off a large graph leaves a piece that may still
@@ -310,8 +316,10 @@
            ((null seam) (list graph))
            (t (predicate-piece-first
                (mapcan (lambda (piece)
-                         (decompose-fully piece :threshold threshold))
-                       (decompose-cgraph graph :at seam)))))))))
+                         ;; The pieces are ours; cutting them again in place is
+                         ;; what keeps the coreference links this cut made.
+                         (decompose-fully piece :threshold threshold :copy nil))
+                       (decompose-cgraph graph :at seam :copy copy)))))))))
 
 (defun predicate-piece-first (pieces)
   "PIECES with a piece that carries a predicate at the front.

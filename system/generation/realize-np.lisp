@@ -155,22 +155,51 @@
                (let ((owner (other-end rel concept)))
                  (when owner
                    (mark-traversed state rel)
-                   (push (format nil "~a's"
-                                 (if (eq (concept-definiteness owner) :proper)
-                                     (cap (base-lemma owner))
-                                     (base-lemma owner)))
-                         poss-mods)))))))
+                   ;; A possessor already spoken of becomes a possessive
+                   ;; PRONOUN -- `his car', not `Dave's car' in a sentence that
+                   ;; has just said Dave. Rule 5 applies here as it does to any
+                   ;; other revisit; this path simply never asked, so a
+                   ;; possessive was the one place a second mention was still
+                   ;; uttered in full. The owner is marked in either case: a
+                   ;; possessive mentions it just as surely as a subject does,
+                   ;; and leaving it unmarked let a LATER sentence introduce it
+                   ;; over again.
+                   (push (or (and (uttered-or-coref-uttered-p state owner)
+                                  (pronoun-for owner :case :possessive :state state))
+                             (format nil "~a's"
+                                     (if (eq (concept-definiteness owner) :proper)
+                                         (cap (base-lemma owner))
+                                         (base-lemma owner))))
+                         poss-mods)
+                   (mark-uttered state owner)))))))
     ;; English pre-modifier order: possessive precedes adjectives. The
     ;; ordering is fixed grammatically and must NOT depend on the order
     ;; the arcs happen to appear in concept-relations (which can vary
     ;; with parse history).
     (append (nreverse poss-mods) (nreverse adj-mods))))
 
+(defun possessive-pronoun-p (word)
+  "True when WORD is one of the possessive pronouns the anaphora pass emits.
+
+   Read off *PRONOUN-TABLE* rather than listed again here, so a pronoun added
+   there cannot go missing from this test."
+  (and (stringp word)
+       (member word (loop for ((nil nil case) surface) in *pronoun-table*
+                          when (eq case :possessive) collect surface)
+               :test #'string-equal)))
+
 (defun np-article-with-mods (concept mods-pre head)
   "Choose the surface article for CONCEPT given its pre-modifiers and head.
-   A possessive prefix ('Mary's') suppresses the article — English
-   doesn't allow 'a Mary's pie', the possessive is sufficient."
-  (cond ((some (lambda (m) (search "'s" m)) mods-pre) nil)
+   A possessive prefix suppresses the article — English doesn't allow
+   'a Mary's pie', and the possessive is sufficient on its own.
+
+   Both spellings of a possessive count. Testing for \"'s\" alone was enough
+   while a possessor was always uttered in full; once an already-mentioned one
+   could surface as `his', the test stopped recognising it and produced
+   `a his chevy-vehicle'."
+  (cond ((some (lambda (m) (or (search "'s" m) (possessive-pronoun-p m)))
+               mods-pre)
+         nil)
         (t (article-for concept (or (first mods-pre) head)))))
 
 (defun realize-full-np (concept state)

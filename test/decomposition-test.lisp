@@ -148,7 +148,7 @@
              (cut (find 'person (cut-concepts nodes)
                         :key (lambda (c) (label (concept-type c))))))
         (check "an individual is pronominalized on the second sentence"
-               (string= "Dave drives with Dave's old chevy-vehicle to Baltimore. He is young."
+               (string= "Dave drives with his old chevy-vehicle to Baltimore. He is young."
                         (graphs-to-text (decompose-cgraph nodes :at cut)))))
 
       ;; --- policy: whether, and where ---------------------------------------
