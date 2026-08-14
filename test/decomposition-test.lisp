@@ -151,6 +151,34 @@
                (string= "Dave drives with Dave's old chevy-vehicle to Baltimore. He is young."
                         (graphs-to-text (decompose-cgraph nodes :at cut)))))
 
+      ;; --- policy: whether, and where ---------------------------------------
+      (let* ((dave "[CHEVY-VEHICLE]-
+                      (attr)→[OLD]
+                      (inst)←[DRIVE]-
+                         (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
+                         (dest)→[CITY: Baltimore #502],
+                      (poss)←[PERSON: dave #501 *x].")
+             (nodes (parse-cgraph dave)))
+        ;; Six things, seven nodes: Dave is mentioned twice and is one thing to
+        ;; keep track of, which is what makes a sentence hard.
+        (check "complexity counts referents, not concept nodes"
+               (= 6 (graph-referent-count nodes)))
+        (check "under the threshold nothing is cut"
+               (= 1 (length (decompose-fully nodes :threshold 7))))
+        (check "over the threshold it is"
+               (> (length (decompose-fully nodes :threshold 3)) 1))
+        ;; DRIVE is a seam and is the worst one: cutting a graph at its
+        ;; predicate leaves a piece with no head.
+        (check "the seam chosen is never an act"
+               (not (act-or-event-concept-p (best-seam nodes))))
+        (check "the main predicate is refused as a seam"
+               (null (seam-rank (find-main-predicate (decomposition-concepts nodes))
+                                nodes)))
+        (check "the piece carrying the clause is spoken first"
+               (let ((pieces (decompose-fully nodes :threshold 3)))
+                 (some #'act-or-event-concept-p
+                       (decomposition-concepts (first pieces))))))
+
       (when verbose
         (format t "~&DECOMPOSITION-TEST ~:[failed~;passed~]~%" ok))
       ok)))

@@ -32,10 +32,12 @@
 ;;  says where it can come apart, which is why this file starts with finding
 ;;  those places rather than with a complexity heuristic.
 ;;
-;;  WHEN TO DO IT AT ALL is deliberately not here yet. See
-;;  notes/graph-to-text-todo.md: thresholds are bikeshedding-prone, and the
-;;  honest order is to make the operation available and explicit first, and let
-;;  real sentences that read badly say where it should fire.
+;;  WHEN TO DO IT AT ALL, and WHICH seam, is the last section of this file and
+;;  is kept apart from everything above it. The difference is not tidiness:
+;;  everything above is answerable from the graph, and the policy is a
+;;  judgement about English. Nothing calls it on your behalf -- GRAPH-TO-TEXT
+;;  still returns one sentence for one graph, and GRAPH-TO-TEXT-DECOMPOSED is
+;;  the door in.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defmethod concept-neighbours ((concept concept))
@@ -226,3 +228,115 @@
              (push piece copies)))
          (share-identity (setf copies (nreverse copies)))
          (mapcar #'make-cgraph copies))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  Policy: which seam, and whether to cut at all.
+;;
+;;  Kept apart from the operation above on purpose. Everything before this
+;;  point is answerable from the graph -- where it comes apart, and what a cut
+;;  must preserve. Everything from here down is a judgement about English, and
+;;  judgements should be easy to find, easy to change, and off by default.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defparameter *decomposition-threshold* 7
+  "How many concepts a graph may hold before it is worth breaking up.
+
+   A guess, and labelled as one. The number that matters is not a property of
+   graphs but of sentences, and the only way to set it honestly is to read
+   output that came out badly -- which is why the operation stays explicit and
+   nothing calls it on your behalf. Raise it and nothing is ever decomposed;
+   lower it and every second graph becomes two sentences.")
+
+(defun graph-referent-count (graph)
+  "How many distinct THINGS GRAPH is about.
+
+   Not how many concept nodes it has. Dave mentioned twice is one thing to
+   follow, and a sentence is hard in proportion to what a reader must keep
+   track of -- the same reason the cut analysis above works in referents."
+  (let ((counted (list)))
+    (dolist (concept (decomposition-concepts graph) (length counted))
+      (unless (some (lambda (seen) (concepts-corefer-p seen concept)) counted)
+        (push concept counted)))))
+
+(defun graph-complicated-p (graph &key (threshold *decomposition-threshold*))
+  "True when GRAPH is about more things than THRESHOLD."
+  (> (graph-referent-count graph) threshold))
+
+(defun seam-rank (concept graph)
+  "How good a place CONCEPT is to cut GRAPH, smaller being better, or NIL for
+   somewhere not to cut at all.
+
+   Two rules, both learned from output rather than assumed:
+
+   Never the MAIN PREDICATE. Rule 6's first half has the utterance path
+   returning to it, and cutting there leaves a piece with no head: [DRIVE]
+   separated from its destination realizes as `Is driven to Baltimore.'
+
+   Prefer a THING to an EVENT. English pronominalizes things readily and
+   events barely at all, so a seam at an act gives two sentences a reader
+   cannot rejoin -- `An old dog eats. A cake is eaten.' reads as two eatings,
+   where the graph had one.
+
+   Among the seams that remain, prefer the one that peels off the least. A
+   short second sentence carrying one modifier -- `He is young.' -- is the
+   shape this is for; splitting a graph down the middle produces two halves
+   that each want the other."
+  (let ((main (find-main-predicate (decomposition-concepts graph))))
+    (cond
+      ((and main (concepts-corefer-p concept main)) nil)
+      ((act-or-event-concept-p concept) nil)
+      (t (reduce #'min (mapcar #'length (graph-components-without graph concept)))))))
+
+(defun best-seam (graph)
+  "The seam worth cutting in GRAPH, or NIL when none is."
+  (let ((ranked (remove nil
+                        (mapcar (lambda (concept)
+                                  (let ((rank (seam-rank concept graph)))
+                                    (and rank (cons rank concept))))
+                                (cut-concepts graph)))))
+    (cdr (first (sort ranked #'< :key #'car)))))
+
+(defun decompose-fully (graph &key (threshold *decomposition-threshold*))
+  "Break GRAPH up while it is worth breaking up, and return the pieces.
+
+   Recursive, because one cut off a large graph leaves a piece that may still
+   be too much for one sentence. Terminates on either answer -- a piece under
+   the threshold, or a piece with no seam worth cutting -- and a graph that was
+   never complicated comes back as itself in a list of one."
+  (cond
+    ((not (graph-complicated-p graph :threshold threshold)) (list graph))
+    (t (let ((seam (best-seam graph)))
+         (cond
+           ((null seam) (list graph))
+           (t (predicate-piece-first
+               (mapcan (lambda (piece)
+                         (decompose-fully piece :threshold threshold))
+                       (decompose-cgraph graph :at seam)))))))))
+
+(defun predicate-piece-first (pieces)
+  "PIECES with a piece that carries a predicate at the front.
+
+   Components come back in whatever order the walk found them, which is no
+   order at all to a reader -- the main clause turned up third in `Dave has an
+   ancient bag. He drives to Baltimore. He is young.' The clause the graph is
+   about goes first and the modifiers peeled off it follow, which is also what
+   makes the anaphora fall the right way round: the first sentence is where a
+   thing is worth naming in full.
+
+   Asked of each piece rather than carried down from the original, because
+   DECOMPOSE-CGRAPH works in copies -- the original's main predicate is not EQ
+   to anything in the pieces, and looking for it there silently found nothing."
+  (let ((lead (find-if (lambda (piece)
+                         (some #'act-or-event-concept-p
+                               (decomposition-concepts piece)))
+                       pieces)))
+    (if lead
+        (cons lead (remove lead pieces))
+        pieces)))
+
+(defun graph-to-text-decomposed (graph &key (threshold *decomposition-threshold*))
+  "GRAPH as English, broken into several sentences when it is too much for one.
+
+   The whole of Rule 6 in one call, and still not what GRAPH-TO-TEXT does: a
+   caller that wants one sentence per graph should keep getting one."
+  (graphs-to-text (decompose-fully graph :threshold threshold)))
