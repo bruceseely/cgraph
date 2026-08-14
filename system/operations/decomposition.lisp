@@ -63,31 +63,72 @@
     (cons       (remove-if-not #'concept-p graph))
     (t (error "~s is not a graph, a graph node, or a list of nodes." graph))))
 
-(defun concepts-reachable-from (start &key avoid)
+(defmethod concept-individual ((concept concept))
+  "The individual CONCEPT refers to, or NIL for anything else."
+  (let* ((referent (referent concept))
+         (content  (and referent (content referent))))
+    (and (individual-p content) content)))
+
+(defmethod concepts-corefer-p ((c1 concept) (c2 concept))
+  "True when C1 and C2 are two mentions of ONE thing.
+
+   Two ways to be one thing, and the walk below has to honour both. A
+   coreference link -- what `*x' and `?x' leave behind -- and one individual
+   mentioned twice, which needs no label because the id is the identity."
+  (or (eq c1 c2)
+      (member c2 (coreference c1) :test #'eq)
+      (member c1 (coreference c2) :test #'eq)
+      (let ((i1 (concept-individual c1))
+            (i2 (concept-individual c2)))
+        (and i1 i2 (id i1) (eql (id i1) (id i2))))))
+
+(defun referent-group (concept concepts)
+  "The members of CONCEPTS that are mentions of the same thing as CONCEPT.
+
+   Coreference makes two nodes one REFERENT without making them one NODE, so
+   an arc walk sees a tree where the meaning has a cycle. Everything here works
+   in groups for that reason: `Sue eats the pie she owns' is a ring, and a ring
+   has nothing that holds it together, but only if the two mentions of the pie
+   are understood to be the pie."
+  (remove-if-not (lambda (other) (concepts-corefer-p concept other)) concepts))
+
+(defun concepts-reachable-from (start &key avoid concepts)
   "The concepts reachable from START without passing through AVOID.
 
-   Concept-to-concept reachability, hopping over the relations between them.
-   AVOID is the concept being tested as a cut: removing it from the walk is
-   what makes the remaining components visible."
-  (let ((seen (list))
-        (pending (list start)))
-    (loop while pending
-          for concept = (pop pending)
-          unless (or (member concept seen) (eq concept avoid))
-            do (push concept seen)
-               (dolist (neighbour (concept-neighbours concept))
-                 (unless (or (member neighbour seen) (eq neighbour avoid))
-                   (push neighbour pending))))
+   Reachability over referents rather than nodes: arriving at any mention of a
+   thing arrives at all of them, and AVOID removes every mention of what it
+   names. CONCEPTS is the graph's concept list, needed because two mentions of
+   one individual are related by nothing but that fact -- there is no link
+   between them to follow."
+  (let* ((all (or concepts (list start)))
+         (blocked (when avoid (referent-group avoid all)))
+         (seen (list))
+         (pending (referent-group start all)))
+    (flet ((blockedp (c) (member c blocked :test #'eq)))
+      (loop while pending
+            for concept = (pop pending)
+            unless (or (member concept seen :test #'eq) (blockedp concept))
+              do (push concept seen)
+                 ;; Both steps out of a concept: along its arcs, and across to
+                 ;; its other mentions.
+                 (dolist (next (append (concept-neighbours concept)
+                                       (referent-group concept all)))
+                   (unless (or (member next seen :test #'eq) (blockedp next))
+                     (push next pending)))))
     (nreverse seen)))
 
 (defun graph-components-without (graph concept)
   "The connected components GRAPH falls into when CONCEPT is removed, as lists
    of concepts. One component means CONCEPT holds nothing together."
-  (let ((remaining (remove concept (decomposition-concepts graph)))
-        (components (list)))
+  (let* ((all (decomposition-concepts graph))
+         ;; Every mention of it, not just the node named: removing one mention
+         ;; of a thing and leaving another would be removing nothing.
+         (remaining (set-difference all (referent-group concept all)))
+         (components (list)))
     (loop while remaining
           do (let ((component (concepts-reachable-from (first remaining)
-                                                       :avoid concept)))
+                                                       :avoid concept
+                                                       :concepts all)))
                (push component components)
                (setf remaining (set-difference remaining component))))
     (nreverse components)))
@@ -108,5 +149,12 @@
    opposed to anywhere a concept happens to be shared. A graph with none --
    a chain of one clause, a ring -- cannot be decomposed at all, and that is
    an answer rather than a failure."
-  (remove-if-not (lambda (concept) (cut-concept-p concept graph))
-                 (decomposition-concepts graph)))
+  (let ((all (decomposition-concepts graph))
+        (found (list)))
+    (dolist (concept all (nreverse found))
+      ;; One entry per referent, not per mention. Two mentions of Dave are one
+      ;; place the graph comes apart, and offering it twice would invite
+      ;; cutting the same seam twice.
+      (when (and (cut-concept-p concept graph)
+                 (notany (lambda (kept) (concepts-corefer-p kept concept)) found))
+        (push concept found)))))
