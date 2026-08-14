@@ -26,25 +26,34 @@ Fixing it properly means deciding what it is *for* — isomorphism, or
 equivalence up to relabelling — and then either fixing it or deleting it in
 favour of projection. Nothing currently depends on the answer.
 
-## Individual ids are global, and the editor fixtures claim low ones
+## ~~Individual ids are global, and the editor fixtures claim low ones~~ — fixed
 
 Ids come from one counter for the whole image, so **any test that mints an
-individual shifts every id allocated after it**. The editor suite hard-codes
-low ids for its own fixtures (`#7` is Felix, and there are others), so:
+individual shifts every id allocated after it**. Several suites name
+individuals by id — `#7` is Felix in the editor tests, `#91`–`#95` are various
+dogs — so a suite that ran first and minted anything took the ids the next
+one's fixtures claimed:
 
-    (test-cgraph)    ; passes
-    (generation-test); passes, mints individuals
-    (editor-test)    ; FAILS -- "Referent #7 is already named ..."
+    (generation-test) ; passes, mints individuals
+    (editor-test)     ; FAILED -- "Referent #7 is already named ..."
 
-`editor-test` passes alone and fails after either of the others. Confirmed in
-a clean worktree at a commit before any of the decomposition work, so it is
-pre-existing rather than introduced by it.
+`editor-test` passed alone and failed after either of the others. Confirmed in
+a clean worktree to predate the decomposition work.
 
-The workaround in place is that `decomposition-test` gives its individuals
-explicit ids in the 500s, out of the way. That protects the suites from *that*
-test; it does not fix the fragility, and the next test to mint an individual
-will meet it again.
+Fixed 2026-08-14 by resetting the registry rather than by renumbering the
+fixtures, which is the same courtesy `generation-test` had always paid itself
+by way of `reset-cgraph`:
 
-A real fix is either fixtures that do not hard-code ids, or a per-suite reset
-of the counter. The second is easier and probably right: tests that assert on
-`#7` are asserting on something no test should own.
+- `editor-test` calls `initialize-individuals` before it runs;
+- `test-one` calls it before **each** test in `test-cgraph`, so the suite no
+  longer passes merely because of the order it happens to be written in.
+
+Checked over all seven orderings of the three suites, and by running
+`test-cgraph`'s tests in reverse. `decomposition-test` still keeps its
+individuals in the 500s; that is now belt and braces rather than the only
+thing holding it together.
+
+The underlying design is unchanged and still a little sharp: a test *can*
+still assert on a specific id, and will get away with it only because nothing
+runs before it in its own suite. Fixtures that captured the id they were given
+rather than naming one would need no protection at all.

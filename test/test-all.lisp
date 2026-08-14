@@ -22,6 +22,13 @@
          (pass (and (not missing)
                     (ignore-errors
                      (let ((*standard-output* sb-impl::*null-broadcast-stream*))
+                       ;; Each test starts from a clean individual registry.
+                       ;; Ids come from one counter for the whole image, so a
+                       ;; test that mints individuals moves every id the next
+                       ;; test would be given -- and several tests name
+                       ;; individuals by id. Without this the suite passes
+                       ;; because of the order it happens to be written in.
+                       (initialize-individuals)
                        (funcall name))))))
 
     (when (or verbose (not pass))

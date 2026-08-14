@@ -195,7 +195,17 @@
 
 (defun editor-test (&optional verbose)
   "Run the editor system's tests. Not reached by TEST-CGRAPH -- see the
-   comment at the top of this file."
+   comment at the top of this file.
+
+   Starts from a clean individual registry, and must. These suites name
+   individuals by id -- #7 is Felix, #91 through #95 are various dogs -- and
+   ids come from ONE counter for the whole image, so any suite that ran first
+   and minted an individual took the ids these fixtures claim. The symptom was
+   `Referent #7 is already named \"Baltimore\"', two suites away from its
+   cause and only in one running order. GENERATION-TEST has always begun this
+   way, by way of RESET-CGRAPH; this is the same courtesy, and the narrower
+   call because the types do not need reloading."
+  (initialize-individuals)
   (let ((results (list (cons "editor-operations-test"
                              (editor-operations-test verbose))
                        (cons "referent-view-test"
