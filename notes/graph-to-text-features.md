@@ -237,6 +237,12 @@ for the type, then `*given-name-genders*`, then a human/non-human default.
 Singular human of unknown gender uses singular-they ("they have", not
 "they has" — `verb-agreement-number` returns `:plural` for this case).
 
+A possessor already spoken of becomes a possessive pronoun: *Young Dave drives
+with **his** old chevy-vehicle*, not *Dave's old chevy-vehicle*. That path used
+to ask nothing — it was the one place a second mention was still uttered in
+full, and the one place a mention did not count, so a later sentence was free to
+introduce the same thing over again.
+
 The `*anaphora-cross-coref*` flag (default NIL) controls whether two
 distinct concepts linked via a `coreference` slot count as the same
 referent for pronoun selection. Off by default to keep nested
@@ -435,7 +441,53 @@ annotations can be combined on a single concept (e.g. `[EAT: @passive
 | `@raising`                          | Active raising / ECM (with `:raising` lexicon flag) |
 | `@<number>` / `@<number> <unit>`    | Cardinal / measure                |
 
-## 17. Where to look next
+## 17. Decomposition (Sowa Rule 6, second half)
+
+Rule 6's first half — the utterance path visiting every node and returning to
+the main predicate — is what the realizer does anyway. The second half is *"if
+a graph is complicated, rules of inference may break it into multiple simpler
+graphs before expressing it in a sentence"*, and that lives in
+`system/operations/decomposition.lisp`.
+
+Nothing does it on your behalf. `graph-to-text` still returns one sentence for
+one graph; `graph-to-text-decomposed` is the way in.
+
+| Input | Output |
+|---|---|
+| a 6-referent graph (under the threshold) | `Young Dave drives with his old chevy-vehicle to Baltimore.` |
+| the same plus an ancient bag holding a cake | `Dave drives with his chevy-vehicle to Baltimore. Dave has an ancient bag containing a cake. He is young. It is old.` |
+
+**Breaking up is join run backwards.** Two graphs sharing a concept join into
+one, so one graph cut at a shared concept gives two, and the pieces conjoined
+say what the original said — provided the cut concept keeps its identity in
+both. An individual carries its own; a generic gets a coreference label, or the
+pieces would assert two dogs where the graph had one. The contract is therefore
+checkable rather than argued, and `decomposition-test` checks it: rejoin the
+pieces with `maximal-join` and require mutual projection with the original.
+
+**Where a cut is legitimate** is the graph's own business: only at a *cut
+concept*, one whose removal disconnects it. Elsewhere the pieces stay joined by
+another path — nothing simplified, one concept duplicated. That analysis works
+in **referents rather than nodes**: coreference makes two nodes one thing
+without making them one node, so *Sue eats the pie she owns* is a ring and has
+no seam at all, though an arc walk sees a path.
+
+**Which cut is worth making** is a judgement about English, kept in its own
+section of the file:
+
+- never the main predicate — Rule 6's first half returns to it, and cutting
+  there leaves a piece with no head (`Is driven to Baltimore.`);
+- prefer a thing to an event — English pronominalizes things readily and events
+  barely at all, so a seam at an act gives `An old dog eats. A cake is eaten.`,
+  which reads as two eatings;
+- among the rest, peel off the least;
+- and speak the piece carrying the clause first.
+
+`*decomposition-threshold*` (referents, not concept nodes) decides *whether*,
+and is openly a guess — the number that matters is a property of sentences, and
+only bad output can set it honestly.
+
+## 18. Where to look next
 
 - **Architecture**: `memory/project_generation_architecture.md` — file
   split, dispatch order, extension-point rationale, anaphora toggle,
@@ -444,6 +496,6 @@ annotations can be combined on a single concept (e.g. `[EAT: @passive
   realizer is built around.
 - **Tests**: `test/generation-test.lisp` — every example above is a
   regression case.
-- **What's missing**: `notes/graph-to-text-todo.md` — graph
-  decomposition by inference (Rule 6 second half), animacy/topicality
-  active-vs-passive heuristic, mixed AND/OR chains.
+- **What's missing**: `notes/graph-to-text-todo.md` — animacy/topicality
+  active-vs-passive heuristic, mixed AND/OR chains, verb-agreement edge
+  cases.

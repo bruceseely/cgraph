@@ -1,6 +1,7 @@
 # Graph-to-text — what's left
 
-A snapshot of remaining work in the generation pipeline as of 2026-05-06.
+A snapshot of remaining work in the generation pipeline, from 2026-05-06
+and updated 2026-08-14 when Rule 6 landed.
 Big picture status: the realizer covers Sowa's six rules in their common
 forms, plus tense/aspect, voice annotations, n-ary AND/OR coordination,
 shared-subject collapse, phrasal-verb particles (with pronoun-driven
@@ -10,21 +11,35 @@ Architecture and extension points live in
 
 ## Deferred from the original phase plan
 
-### 1. Graph decomposition by inference (Sowa Rule 6 second half)
+### 1. ~~Graph decomposition by inference (Sowa Rule 6 second half)~~ — done
 
-The biggest deferred item. Rule 6's first half — "leave one occurrence of
-the referent and replace others with coreference labels" — is implicit
-in the realizer's existing anaphora handling. The second half pushes into
-actual *inference*: rewriting a graph into an equivalent simpler graph
-before realization, e.g. eliminating redundant predications or collapsing
-chains that follow inference rules.
+Built as `system/operations/decomposition.lisp` plus `graphs-to-text`; see
+§17 of `graph-to-text-features.md` for what it does and
+`test/decomposition-test.lisp` for the contract.
 
-This is probably its own sub-project rather than a generation feature.
-The hard part is deciding which rewrites are sound, and whether they
-should be opt-in or always applied. A first-pass version could simply
-implement a small library of rewrite rules (like existing Sowa rules:
-copy, restrict, join, simplify) and let users invoke them explicitly
-before passing the graph to `graph-to-text`.
+The worry recorded here was "the hard part is deciding which rewrites are
+sound." That turned out to have a clean answer, and it is the reason this
+was tractable at all: **breaking up is join run backwards.** One rewrite,
+not a library of them — cut at a concept, keep its identity in both pieces
+— and its soundness is checkable rather than argued, since rejoining the
+pieces must reproduce the original.
+
+The advice to make it explicit first was right and is still in force:
+nothing decomposes on your behalf, and `graph-to-text` still returns one
+sentence for one graph.
+
+Two things it taught, both recorded where they belong rather than here.
+Cut analysis has to work in **referents, not nodes**, or a ring closed by
+coreference looks like a path. And *which* seam to cut is a question about
+English rather than about graphs — never the predicate, prefer a thing to
+an event — which is why the policy sits in its own section of the file with
+a threshold that admits to being a guess.
+
+Still open, and now the most visible infelicity in decomposed output: the
+choice between naming a referent again and pronominalizing it depends on how
+far back the antecedent is, and nothing measures that. `Dave drives with his
+chevy-vehicle. Dave has an ancient bag. He is young.` — the second and third
+sentences disagree about Dave, and both are defensible.
 
 ### 2. Active/passive heuristic when neither annotation nor head settles it
 
@@ -97,3 +112,8 @@ For grep/diff against future versions, the items below are *implemented*:
 - Raising (Sowa Rule 4 second half): passive ('Ivan is believed to be
   in a place') from `:raising` lexicon flag; active / ECM ('Mary
   believes Ivan to be smart') opt-in via `@raising` annotation.
+- Decomposition (Sowa Rule 6 second half): cut a graph at a concept that
+  holds it together, speak the pieces as a sentence each, explicitly via
+  `graph-to-text-decomposed`.
+- Possessive anaphora: a possessor already mentioned surfaces as 'his' /
+  'her' / 'its' / 'their'.
