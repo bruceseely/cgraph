@@ -6,13 +6,14 @@
 ;;; the join: cut a graph, put the pieces back with MAXIMAL-JOIN, and require
 ;;; the result to be equivalent to what was cut.
 ;;;
-;;; Equivalence here is MUTUAL PROJECTION -- each graph projects into the other
-;;; -- and not GRAPHS-EQUAL, which compares concept labels while ignoring
-;;; relations, and whose GRAPH method hands a node to a method expecting a
-;;; list. Mutual projection is also the right notion rather than a convenient
-;;; one: rejoining is free to hand back a different head, a different arc
-;;; order, and different variable names, none of which are differences in what
-;;; the graph says.
+;;; Equivalence here is MUTUAL PROJECTION -- each graph projects into the
+;;; other. Not GRAPHS-EQUAL, and not because that function was broken when this
+;;; was written (it was, and is not now): it answers a different question.
+;;; GRAPHS-EQUAL asks whether two graphs are the same STRUCTURE, concept for
+;;; concept and relation for relation. Rejoining is free to hand back a
+;;; different head, a different arc order and different variable names, none of
+;;; which are differences in what the graph SAYS, and saying the same thing is
+;;; the contract a decomposition has to keep.
 ;;;
 ;;; Individuals here carry EXPLICIT ids in the 500s. Ids come from one global
 ;;; counter, so a test that mints them shifts every id allocated after it --

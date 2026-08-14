@@ -1,8 +1,12 @@
 # Known issues
 
 Defects that are on no feature list, because they are not missing features.
-Both were found on 2026-08-13/14 while building decomposition, and both are
-older than that work.
+New ones belong here; fixed ones stay, struck through, because what a thing
+was wrong about is worth as much as the fix.
+
+Both entries below were found on 2026-08-13/14 while building decomposition,
+were older than that work, and were fixed on 2026-08-14. Nothing is currently
+outstanding.
 
 ## ~~`graphs-equal` does not compare graphs~~ — fixed
 
