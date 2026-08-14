@@ -35,11 +35,14 @@ English rather than about graphs — never the predicate, prefer a thing to
 an event — which is why the policy sits in its own section of the file with
 a threshold that admits to being a guess.
 
-Still open, and now the most visible infelicity in decomposed output: the
-choice between naming a referent again and pronominalizing it depends on how
-far back the antecedent is, and nothing measures that. `Dave drives with his
-chevy-vehicle. Dave has an ancient bag. He is young.` — the second and third
-sentences disagree about Dave, and both are defensible.
+One thing this note got wrong for a day, kept because the mistake is
+instructive. The decomposed output disagreed with itself about Dave —
+`Dave has an ancient bag. He is young.` — and that was written up here as a
+question of antecedent distance. It was not. Three clause paths rendered
+their subject with `realize-full-np` and so never asked whether it was a
+revisit: the copula, the have-clause, and the possessive modifier. All three
+are fixed, the output is consistent, and what looked like a missing model
+was a missing question. The real model is item 3.
 
 ### 2. Active/passive heuristic when neither annotation nor head settles it
 
@@ -56,6 +59,41 @@ proper-name-ness; if the patient is "heavier" by some margin, flip to
 passive. This is bikeshedding-prone — the threshold is subjective. Worth
 sketching only when there's a real graph that produces a sentence
 people find awkward.
+
+### 3. Pronoun salience — when a pronoun is safe
+
+Every second mention that the realizer recognises becomes a pronoun, and it
+recognises them by identity alone: is this the same referent as something
+already uttered. Nothing asks whether the pronoun will be *understood*.
+
+    Dave drives with his chevy-vehicle to Baltimore. He has an ancient bag
+    containing a cake. He is young. It is old.
+
+That reads correctly, and only because Dave is the only masculine referent
+in it. Put a second man in the graph and the realizer emits exactly the same
+pronouns, with no idea it has introduced an ambiguity — `he` would have two
+candidates and the text would no longer say which. The same holds for `it`
+once there are two inanimate things.
+
+What is missing is a salience model: for each pronoun, which referents
+compete for it (same gender, same number, still recent), and how recently
+each was mentioned. With that, the choice between naming a referent again and
+pronominalizing it becomes answerable — pronoun when it wins clearly, the
+noun again when it does not. Sowa's Rule 5 asks for exactly this and says so:
+"a pronoun **or** a short noun phrase that has the minimum number of
+qualifiers needed for a unique reference in the current context." The second
+half of that sentence is the part not built.
+
+Two reasons it is worth doing properly rather than approximating. It is
+wrong in the dangerous direction — the output looks fine and misleads,
+rather than looking broken. And decomposition made it reachable: within one
+sentence the competing candidates are usually few, but a graph spoken as
+four sentences keeps a much longer list of things a pronoun might mean.
+
+Where it would live: `system/generation/anaphora.lisp`, beside
+`uttered-or-coref-uttered-p`, which is the function that currently answers
+"is this a second mention" and would grow a companion answering "and is a
+pronoun safe here".
 
 ## Smaller follow-ups
 

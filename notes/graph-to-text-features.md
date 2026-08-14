@@ -243,6 +243,15 @@ to ask nothing — it was the one place a second mention was still uttered in
 full, and the one place a mention did not count, so a later sentence was free to
 introduce the same thing over again.
 
+**A pronoun is chosen on identity alone.** The test is "same referent as
+something already uttered", and nothing asks whether the pronoun can be
+*understood* — how many referents of that gender and number compete for it, or
+how far back the antecedent was. With one man in the text `he` is unambiguous
+and the output is right; with two the realizer produces the same `he` and has
+no idea it has introduced an ambiguity. Rule 5 asks for a pronoun *or* a short
+noun phrase, whichever refers uniquely, and the second half of that is unbuilt:
+see item 3 of `graph-to-text-todo.md`.
+
 The `*anaphora-cross-coref*` flag (default NIL) controls whether two
 distinct concepts linked via a `coreference` slot count as the same
 referent for pronoun selection. Off by default to keep nested
