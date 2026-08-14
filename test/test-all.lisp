@@ -62,6 +62,7 @@
                       graph-every-test
                       type-definition-test
                       query-test
+                      graph-equality-test
                       decomposition-test
                       ;; The lint suites. All four are built by cgraph.asd and
                       ;; none of them were run: the list named

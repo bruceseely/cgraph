@@ -23,7 +23,11 @@
 (defmethod nodes-equal ((anything t) (rel relation)) nil)
 
 (defmethod nodes-equal ((rel1 relation) (rel2 relation))
-  (relatins-equal rel1 rel2))
+  ;; RELATIONS-EQUAL. The name was misspelled and so named nothing: this method
+  ;; signalled `undefined function' for as long as it existed, and nothing
+  ;; noticed because the only caller that could reach it -- GRAPHS-EQUAL --
+  ;; filtered relations out before comparing.
+  (relations-equal rel1 rel2))
 
 
 
@@ -816,21 +820,88 @@
 
 
 
+(defun induced-relations (concepts)
+  "The relations of CONCEPTS that lie WITHIN it: every endpoint among CONCEPTS.
+
+   A linked list of concepts is a whole graph here -- the arcs are populated,
+   LINKUP being what does that for an unlinked one -- so the relations hang off
+   the concepts rather than appearing in the list. They have to be gathered
+   from the arcs.
+
+   Gathered, but not by walking. Walking reaches too far: the result of
+   COMBINE-CONCEPTUAL-GRAPH-LISTS is still attached to the graphs it was built
+   from, so a traversal from its concepts collects those too and reports six
+   concepts where the answer has four. The list is the claim about what the
+   graph IS; the arcs say how those concepts are joined. A relation with one
+   end outside the list belongs to some other graph's business."
+  (let ((relations (list)))
+    (dolist (concept concepts (nreverse relations))
+      (dolist (relation (arcs concept))
+        (when (and (relation-p relation)
+                   (not (member relation relations :test #'eq))
+                   (every (lambda (end) (member end concepts :test #'eq))
+                          (remove-if-not #'concept-p (arcs relation))))
+          (push relation relations))))))
+
+(defun same-members-p (list1 list2 test)
+  "True when LIST1 and LIST2 hold the same things by TEST, counting duplicates.
+
+   SET-EXCLUSIVE-OR would do most of this and does not count: two copies of a
+   concept and one are the same set, and are not the same graph."
+  (and (= (length list1) (length list2))
+       (let ((remaining (copy-list list2)))
+         (dolist (item list1 t)
+           (let ((match (find item remaining :test test)))
+             (unless match (return nil))
+             (setf remaining (remove match remaining :count 1 :test #'eq)))))))
+
 (defmethod graphs-equal ((g1 list) (g2 list) &optional debug)
-  (let* ((concepts1 (remove-if-not #'concept-p g1))
-         (concepts2 (remove-if-not #'concept-p g2))
-         (concepts-equalp (null (set-exclusive-or concepts1 concepts2 :test #'nodes-equal)))
-         (pass concepts-equalp))
-    pass))
+  "True when G1 and G2 hold the same concepts AND the same relations between
+   them, each compared by what it says rather than by object identity.
+
+   The relations are the correction. This compared the CONCEPTS alone, and by
+   SET-EXCLUSIVE-OR, so two graphs built from the same concepts were equal
+   however they were wired together and however many times each appeared:
+
+     [DOG]→(agnt)→[EAT]  and  [DOG]←(obj)←[EAT]
+
+   were equal, and a graph was equal to one holding a second copy of one of its
+   concepts. Relations are compared with their arcs IN ORDER, which is what
+   carries direction, so those two are now told apart.
+
+   What this is NOT is an isomorphism test. Two graphs whose concepts and
+   relations agree one for one can still differ in which of two identical-
+   looking concepts a relation attaches to; distinguishing those means a
+   search, and PROJECT is the function that does searches. For `do these two
+   graphs SAY the same thing', use mutual projection -- each projects into the
+   other -- which is the CG notion of equivalence and is what
+   `test/decomposition-test.lisp' uses. This one answers the narrower
+   structural question its callers ask, chiefly CONTEXT's bookkeeping."
+  (let* ((concepts1  (remove-if-not #'concept-p g1))
+         (concepts2  (remove-if-not #'concept-p g2))
+         (relations1 (induced-relations concepts1))
+         (relations2 (induced-relations concepts2))
+         (same-concepts  (same-members-p concepts1 concepts2 #'nodes-equal))
+         (same-relations (same-members-p relations1 relations2 #'nodes-equal)))
+    (when (and debug (not (and same-concepts same-relations)))
+      (format t "~&graphs-equal: concepts ~:[differ~;agree~], relations ~:[differ~;agree~]~%"
+              same-concepts same-relations))
+    (and same-concepts same-relations)))
 
 (defmethod graphs-equal (g1 g2 &optional debug)
-  (let ((nodes1 (typecase g1
-                  (graph-node (collect-nodes g1))
-                  (graph (head g1))))
-        (nodes2 (typecase g2
-                  (graph-node (collect-nodes g2))
-                  (graph (head g2)))))
-    (graphs-equal nodes1 nodes2 debug)))
+  "GRAPHS-EQUAL on anything that can be turned into a list of nodes.
+
+   The GRAPH branch used to hand back (HEAD G1) -- a node where the list method
+   expects a list -- so comparing two GRAPH objects filtered a single node with
+   REMOVE-IF-NOT and answered on the wreckage. It walks from the head now, as
+   the GRAPH-NODE branch always did."
+  (flet ((node-list (g)
+           (typecase g
+             (graph      (collect-nodes (head g)))
+             (graph-node (collect-nodes g))
+             (list       g)
+             (t          nil))))
+    (graphs-equal (node-list g1) (node-list g2) debug)))
 
 
 

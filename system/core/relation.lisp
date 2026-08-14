@@ -45,7 +45,10 @@
   (or (nodes-eq rel1 rel2)
       (and
        (types-equal rel1 rel2)
-       (equal (num-arcs rel1) (num-arcs rel1))
+       ;; REL2, not REL1 again. With both sides the same the test was vacuous,
+       ;; and EVERY stops at the shorter list -- so a two-arc relation and a
+       ;; three-arc one comparing equal on their first two arcs were equal.
+       (equal (num-arcs rel1) (num-arcs rel2))
        ;; arcs should be in the same order
        (every (lambda (con1 con2)
                 (objects-equal con1 con2))

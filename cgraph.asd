@@ -111,6 +111,7 @@
                              (:file "segment-test")
                              (:file "variable-test")
                              (:file "individual-test")
+                             (:file "graph-equality-test")
                              (:file "decomposition-test")
                              (:file "referent-test")
                              (:file "graph-referent-test")

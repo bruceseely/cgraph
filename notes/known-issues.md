@@ -4,27 +4,40 @@ Defects that are on no feature list, because they are not missing features.
 Both were found on 2026-08-13/14 while building decomposition, and both are
 older than that work.
 
-## `graphs-equal` does not compare graphs
+## ~~`graphs-equal` does not compare graphs~~ — fixed
 
-`system/core/graph-utils.lisp:819`. Two faults, one on top of the other:
+`system/core/graph-utils.lisp`. Three faults, stacked, and no test on the
+function at all — which is how three could live there at once.
 
-- The **list method** compares concept labels and **ignores relations
-  entirely**. Two graphs with the same concepts wired up completely
-  differently are equal to it.
-- The **general method** does `(typecase g1 (graph (head g1)))` and passes
-  that *node* to the list method, which expects a list. So calling it on two
-  `graph` objects filters a node with `remove-if-not` and answers on nonsense.
+- The **list method** compared the concepts and **ignored relations
+  entirely**, by `set-exclusive-or`, so `[EAT]→(agnt)→[DOG]` and
+  `[EAT]→(obj)→[DOG]` were equal, and so was a graph holding a second copy of
+  one of its concepts.
+- The **general method** handed `(head g)` — a node — to the list method,
+  which expects a list. Comparing two `graph` objects therefore filtered a
+  single node and answered on the wreckage.
+- `nodes-equal` on two **relations** called `relatins-equal`, which is a
+  misspelling and names nothing. It could only be reached through
+  `graphs-equal`, which filtered relations out before it got there.
 
-It is not much used, which is presumably how it survived. When decomposition
-needed "is this rejoined graph the same as the original", the answer was to
-avoid it: **mutual projection** (each graph projects into the other) is both
-correct and the right notion, since a rejoin may legitimately return a
-different head, a different arc order and different variable names.
-`graphs-equivalent-p` in `test/decomposition-test.lisp` is those two lines.
+Fixed 2026-08-14, with `test/graph-equality-test.lisp` to hold it. Also
+`relations-equal` compared `(num-arcs rel1)` with itself, and `every` stops at
+the shorter list, so a two-arc and a three-arc relation agreeing on their
+first two arcs were equal.
 
-Fixing it properly means deciding what it is *for* — isomorphism, or
-equivalence up to relabelling — and then either fixing it or deleting it in
-favour of projection. Nothing currently depends on the answer.
+The comparison now takes the concepts as given and the relations **induced**
+by them — every endpoint among those concepts. Not by walking the arcs, which
+was the first attempt and reaches too far: the result of
+`combine-conceptual-graph-lists` is still attached to the graphs it was built
+from, so a walk collected six concepts where the answer had four. The list is
+the claim about what the graph is; the arcs say how those concepts are joined.
+
+What it still is **not** is an isomorphism test: two graphs whose concepts and
+relations agree one for one can differ in which of two identical-looking
+concepts a relation attaches to. Telling those apart needs a search, and
+`project` is the function that searches. For "do these two graphs say the same
+thing", mutual projection is the CG notion and is what `decomposition-test`
+uses.
 
 ## ~~Individual ids are global, and the editor fixtures claim low ones~~ — fixed
 
