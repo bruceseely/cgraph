@@ -870,6 +870,9 @@ submission; returning a session handle to poll would be much worse to use.
   layout — the breadth-first walk choosing different break points when a line
   would exceed the width — and it is unbuilt. Only bites below about 700px, so
   it waits for a window that narrow to matter to someone.
+- **Not features, but wrong** — `graphs-equal` does not actually compare
+  graphs, and individual ids are global in a way that makes the editor suite
+  fail when it runs after another. Both in `notes/known-issues.md`.
 - ~~**Type-in filters**~~ — built; see the section under "Type-list filtering"
   for the two places the design and the result differ, and for what the boxes
   cost in column width (nothing, eventually).
