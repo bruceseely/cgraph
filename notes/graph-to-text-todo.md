@@ -8,6 +8,8 @@ shared-subject collapse, phrasal-verb particles (with pronoun-driven
 splitting), and raising in both passive and active (ECM) variants.
 Architecture and extension points live in
 `memory/project_generation_architecture.md`; this file is the punch list.
+Defects that are not missing features -- things that are wrong rather than
+absent -- are in `notes/known-issues.md`.
 
 ## Deferred from the original phase plan
 
