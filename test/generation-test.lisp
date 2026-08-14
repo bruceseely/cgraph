@@ -181,6 +181,12 @@
     ("[BOY: *z]<-(agnt)<-[GIVE]->(rcpt)->[BOY: *z]."     . "A boy gives to him.")
     ("[GIRL: *z]<-(agnt)<-[GIVE]->(rcpt)->[GIRL: *z]."   . "A girl gives to her.")
     ("[PERSON: *z]<-(agnt)<-[GIVE]->(rcpt)->[PERSON: *z]." . "A person gives to them.")
+    ;; Salience lives in DECOMPOSITION-TEST rather than here, and the reason is
+    ;; worth writing down: a pronoun is refused when another referent competes
+    ;; for it, and inside ONE sentence the competitor usually has not been
+    ;; uttered yet when the pronoun is chosen -- "Dave gives his cake to Bob"
+    ;; picks "his" before Bob is said. Competition is a thing that happens
+    ;; across sentences, which is where the test for it belongs.
     ;; Phase 4: relative clauses (Sowa Rule 3). The dobj/iobj NP is itself
     ;; the agent of an unrealized act, which becomes a "that"/"who" clause.
     ("[BOY]<-(agnt)<-[GIVE]->(obj)->[DOG]<-(agnt)<-[EAT]->(obj)->[PIE]."

@@ -133,6 +133,58 @@
            (some (lambda (c) (uttered-p state c))
                  (coreference concept)))))
 
+(defun uttered-concepts (state)
+  "Every concept STATE has uttered, in no particular order."
+  (loop for concept being the hash-keys of (walk-state-uttered state)
+        collect concept))
+
+(defun mention-tick (state concept)
+  "When the thing CONCEPT refers to was last uttered, or NIL.
+
+   The thing, not the node: a referent mentioned through several concepts was
+   last mentioned at the latest of them, which is what a reader remembers."
+  (let ((ticks (loop for other in (uttered-concepts state)
+                     when (or (eq other concept)
+                              (same-individual-p other concept)
+                              (and *anaphora-cross-coref*
+                                   (member other (coreference concept) :test #'eq)))
+                       collect (uttered-p state other))))
+    (when ticks (reduce #'max ticks))))
+
+(defun pronoun-safe-p (concept state &key (case :nominative))
+  "True when a pronoun for CONCEPT could only mean CONCEPT.
+
+   The realizer has always chosen a pronoun on IDENTITY alone -- is this the
+   same referent as something already uttered -- and never asked whether the
+   pronoun would be UNDERSTOOD. With one man in the text `he\' is unambiguous;
+   with two it was still `he\', and nothing noticed. That is the failure mode
+   worth guarding: the output looks fine and misleads.
+
+   The rule is the smallest one that answers the question. A competitor is
+   another referent already uttered that would surface as the SAME word --
+   comparing surface forms rather than gender and number, since that is what a
+   reader actually hears, and `her\' collides with itself across cases. The
+   pronoun is safe when no competitor has been mentioned more recently: the
+   nearest antecedent is the one a reader reaches for, so the most recent
+   mention wins the pronoun and everything else must be named.
+
+   Deliberately not modelled: syntactic prominence (a subject outranks an
+   object at equal distance), and decay (an antecedent long enough ago is gone
+   whether or not anything competes). Both are real, and neither is needed to
+   stop the realizer saying `he\' about two men."
+  (let ((mine (pronoun-for concept :case case :state state))
+        (my-tick (mention-tick state concept)))
+    (and mine
+         my-tick
+         (notany (lambda (other)
+                   (and (not (or (eq other concept)
+                                 (same-individual-p other concept)))
+                        (let ((theirs (pronoun-for other :case case :state state)))
+                          (and theirs
+                               (string-equal mine theirs)
+                               (> (uttered-p state other) my-tick)))))
+                 (uttered-concepts state)))))
+
 (defun pronoun-for (concept &key (case :nominative) state)
   "Return a pronoun for CONCEPT in the given grammatical case. When STATE
    is supplied and *anaphora-cross-coref* is on, look up gender/number on

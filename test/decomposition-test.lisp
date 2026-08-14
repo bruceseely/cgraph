@@ -172,6 +172,27 @@
                                            (cntns)→[CAKE].")
                        :threshold 7)))
 
+      ;; The same graph with a second man in it. Nothing may be called "he"
+      ;; now: two candidates compete for it and the text would say neither.
+      ;; The vehicle still refers back, having no competitor until the cake and
+      ;; the bag arrive -- and by the last sentence it is the most recent of
+      ;; them, so "it" is still safe.
+      (check "a second man in the graph costs everyone the pronoun"
+             (string= (concatenate 'string
+                                   "Young Dave drives with a chevy-vehicle to Baltimore. "
+                                   "Bob has an ancient bag containing a cake and "
+                                   "the chevy-vehicle. It is old.")
+                      (graph-to-text-decomposed
+                       (parse-cgraph "[CHEVY-VEHICLE]-
+                                        (attr)→[OLD]
+                                        (inst)←[DRIVE]-
+                                           (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
+                                           (dest)→[CITY: Baltimore #502],
+                                        (poss)←[PERSON: bob #504]→(poss)→[BAG]-
+                                           (attr)→[ANCIENT]
+                                           (cntns)→[CAKE].")
+                       :threshold 7)))
+
       ;; --- policy: whether, and where ---------------------------------------
       (let* ((dave "[CHEVY-VEHICLE]-
                       (attr)→[OLD]

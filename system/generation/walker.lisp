@@ -12,12 +12,22 @@
 
 (defstruct walk-state
   (uttered (make-hash-table :test 'eq))
-  (traversed (make-hash-table :test 'eq)))
+  (traversed (make-hash-table :test 'eq))
+  ;; Ticks once per thing uttered, so UTTERED can record WHEN as well as
+  ;; whether. A pronoun is only safe if its referent is the most recent of the
+  ;; ones competing for it, and "most recent" needs an order to be a fact.
+  (clock 0))
 
 (defun mark-uttered (state concept)
-  (setf (gethash concept (walk-state-uttered state)) t))
+  "Record that CONCEPT has been uttered, and when.
+
+   The value is the tick rather than T. Every existing caller treats it as a
+   flag and still may -- a tick is never zero, so it is true wherever T was."
+  (setf (gethash concept (walk-state-uttered state))
+        (incf (walk-state-clock state))))
 
 (defun uttered-p (state concept)
+  "The tick at which CONCEPT was uttered, or NIL. True when it was."
   (gethash concept (walk-state-uttered state)))
 
 (defun mark-traversed (state relation)

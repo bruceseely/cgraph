@@ -25,13 +25,28 @@
                (pluralize lemma)))
           (t lemma))))
 
+(defun short-definite-np (concept)
+  "Rule 5's other way of referring back: `the dog', or the name for someone who
+   has one. What a pronoun falls back to when it would not refer uniquely."
+  (cond ((eq (concept-definiteness concept) :proper) (noun-form concept))
+        (t (format nil "the ~a" (noun-form concept)))))
+
 (defun realize-np (concept state &key (case :nominative))
   "Emit a noun phrase for CONCEPT. On the first visit, build the full NP
    (adjectives, possessive, determiner, possibly trailing relative clauses).
    On revisits (Sowa Rule 5), emit the pronoun in the given grammatical CASE."
   (cond ((uttered-or-coref-uttered-p state concept)
-         (or (pronoun-for concept :case case :state state)
-             (format nil "the ~a" (noun-form concept))))
+         (let ((np (or (and (pronoun-safe-p concept state :case case)
+                            (pronoun-for concept :case case :state state))
+                       (short-definite-np concept))))
+           ;; Marked on this branch too. It was already true that the REFERENT
+           ;; had been uttered -- through some other node -- but this node had
+           ;; not, so a third mention through a third node could not see the
+           ;; second and introduced the thing again. Marking also refreshes the
+           ;; tick, which is what makes "most recently mentioned" mean the last
+           ;; time it was SAID rather than the first.
+           (mark-uttered state concept)
+           np))
         (t
          (mark-uttered state concept)
          (realize-full-np concept state))))
@@ -165,6 +180,7 @@
                    ;; and leaving it unmarked let a LATER sentence introduce it
                    ;; over again.
                    (push (or (and (uttered-or-coref-uttered-p state owner)
+                                  (pronoun-safe-p owner state :case :possessive)
                                   (pronoun-for owner :case :possessive :state state))
                              (format nil "~a's"
                                      (if (eq (concept-definiteness owner) :proper)
