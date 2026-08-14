@@ -105,6 +105,53 @@
      (common-subtype-p (get-concept-type 'robot) (get-concept-type 'machine) (get-concept-type 'animate)))))
 
 
+;;; Saving the relation catalog and reading it back must produce the same
+;;; catalog. It did not, and the failure was the quiet kind: SOURCE-TYPES was
+;;; written as a string of a list, which the reader turned into an unfindable
+;;; type name and replaced with ⊤. Every relation came back accepting every
+;;; source, and nothing anywhere signalled -- REL-USE simply started saying yes
+;;; to everything. A test is the only thing that catches that class of bug,
+;;; since the output looks right and the load succeeds.
+
+(defvar *relation-roundtrip-mismatches* nil
+  "What TYPE-TEST4 last found different, as (BEFORE AFTER) pairs.
+
+   The suite runs each test with output going nowhere, so a failure would
+   otherwise report only that something is wrong. This leaves the difference
+   somewhere it can be read afterwards.")
+
+(defun relation-catalog-snapshot ()
+  "The relation catalog as comparable data: label, source labels, dest label,
+   description. Labels rather than objects, since a reload mints new objects
+   and identity is not what is being compared."
+  (sort (loop for name in (all-relation-types)
+              for rt = (get-relation-type name)
+              collect (list (label rt)
+                            (mapcar #'label (relation-source-list rt))
+                            (label (dest-type rt))
+                            (desc rt)))
+        #'string< :key (lambda (entry) (string (first entry)))))
+
+(defun type-test4 ()
+  (let ((file (merge-pathnames "cgraph-relation-roundtrip.text"
+                               (uiop:temporary-directory)))
+        (before (relation-catalog-snapshot)))
+    (save-relation-types file)
+    ;; Read into a catalog of its own. Loading over the live one would install
+    ;; whatever the round trip produced -- which, when it is broken, is exactly
+    ;; the damage this test exists to detect, done to the image running it.
+    (let* ((after (let ((*relation-type-catalog* (make-hash-table :test 'eql)))
+                    (load-relation-types file t)
+                    (relation-catalog-snapshot)))
+           (diff (loop for b in before
+                       for a in after
+                       unless (equal a b) collect (list b a))))
+      (setf *relation-roundtrip-mismatches* diff)
+      (delete-file file)
+      (and (plusp (length before))         ; an empty catalog proves nothing
+           (= (length before) (length after))
+           (null diff)))))
+
 (defun type-test (&optional verbose)
   (with-test-types
     (when verbose (format t "~&TYPE-TEST~%"))
@@ -113,6 +160,7 @@
                         (and
                          (type-test1)
                          (type-test2)
-                         (type-test3))))))
+                         (type-test3)
+                         (type-test4))))))
       (when verbose (format t "~&TYPE-TEST ~:[failed~;passed~]~%" result))
       result)))

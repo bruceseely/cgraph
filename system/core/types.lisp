@@ -1349,7 +1349,16 @@
 				      :label label
 				      :source-types source-types
 				      :dest-type dest-type
-				      :desc description)))
+                                      ;; The slot is :TYPE STRING with an
+                                      ;; initform of "", and a catalog entry
+                                      ;; that omits :desc arrives here as NIL,
+                                      ;; which then overrides that initform and
+                                      ;; leaves a non-string in a string slot.
+                                      ;; Found by the save/load round trip: INIT
+                                      ;; held NIL going out and "" coming back,
+                                      ;; the reload being the thing that told
+                                      ;; the truth.
+				      :desc (or description ""))))
     (record-relation-type relation-type)
     ;;(make-relation-predicate label)
     relation-type))
@@ -1411,20 +1420,57 @@
     (values count *undefined-concept-types*)))
 
 
-;;; TODO: needs updating
+(defun relation-source-list (relation-type)
+  "SOURCE-TYPES as a list, whatever the slot happens to hold.
+
+   The slot's initform is a bare *CONCEPT-TYPE-TOP* rather than a list of one,
+   so a relation type that was never given sources holds a concept type where
+   everything else holds a list."
+  (let ((sources (source-types relation-type)))
+    (if (listp sources) sources (list sources))))
+
+(defun relation-source-text (relation-type)
+  "SOURCE-TYPES as the catalog file writes them: a bare name for one,
+   a parenthesised list for several -- `act', `(entity entity)'.
+
+   Both forms are what PARSE-RELATION-TYPE-DEF reads: it wraps a non-list and
+   interns each name. What it cannot read is a STRING of a list, which is what
+   this function exists to stop being emitted."
+  (let ((names (mapcar (lambda (s) (string-downcase (string (label s))))
+                       (relation-source-list relation-type))))
+    (if (= 1 (length names))
+        (first names)
+        (format nil "(~{~a~^ ~})" names))))
+
 (defun save-relation-types (filename)
+  "Write the relation-type catalog in the form LOAD-RELATION-TYPES reads back.
+
+   The contract is a round trip, and it was broken in one field. SOURCE-TYPES
+   went out as a quoted string of a list -- `\"(ACT)\"' -- and the reader's path
+   for that is: not a list, so wrap it; intern `|(ACT)|'; fail to find a
+   concept type of that name; fall back to the top type. So saving the catalog
+   and loading it again widened EVERY relation's source constraint to ⊤,
+   silently, and that constraint is what REL-USE and the editor's contextual
+   filtering rest on -- nothing would signal, the type columns would simply
+   begin offering every relation for every concept.
+
+   DEST-TYPE survived the same treatment by luck: it holds one concept type
+   rather than a list, and a concept type prints as its own label, so the
+   quoted form read back correctly.
+
+   Names are written bare and lower-case, matching the files this reads and
+   default-types/relation-types.text. TYPE-TEST4 holds the round trip."
   (with-open-file (stream filename
 			  :direction :output
 			  :if-does-not-exist :create
 			  :if-exists :supersede)
     (flet ((format-relation-type (node)
-	     (unless (eql node *concept-type-bottom*)
-	       (format stream "~&(:label \"~a\"" (label node))
-               (format stream "~15t:source-types \"~a\"" (source-types node))
-               (format stream "~40t:dest-type \"~a\"" (dest-type node))
-	       (when (description node)
-		 (format stream "~75t:desc \"~a\""
-			 (description node)))
+	     (progn
+	       (format stream "~&(:label ~(~a~)" (label node))
+               (format stream "~14t:source-types ~a" (relation-source-text node))
+               (format stream "~46t:dest-type ~(~a~)" (label (dest-type node)))
+               ;; Always written, empty or not, as the catalog files have it.
+               (format stream "~71t:desc \"~a\"" (or (desc node) ""))
 	       (format stream ")"))))
       (let ((relation-types (list)))
 	(maphash #'(lambda (name type)
