@@ -67,6 +67,35 @@ The `(initialize-types)` function parses the type files in `*cgraph-types*` dire
 
 The `*cgraph-data*` directory holds temporary files, like the dot files and png files generated when the concept-types are displayed as a graph, using  `(graph-concept-types)`.
 
+##### writing the catalog back out
+
+`(save-concept-types file)` and `(save-relation-types file)` write the *live*
+catalog in the form the loader reads. Nothing calls either one: they are REPL
+tools, for dumping a catalog you have modified in the image.
+
+The contract is a round trip — what is written must load back into an equal
+catalog — and the relation writer broke it in one field until 2026-08-13.
+`:source-types` was written as a quoted string of a list, `"(ACT)"`, and the
+reader's path for that is: not a list, so wrap it; intern `|(ACT)|`; find no
+concept type of that name; fall back to `⊤`. So saving and reloading widened
+**every relation's source constraint to the top type**, which is the constraint
+`rel-use` and the graph editor's contextual filtering rest on. Nothing
+signalled: the file looked right and the load succeeded — only the answers
+changed, with every relation offered for every concept. `:dest-type` survived
+the identical treatment by luck, holding one concept type rather than a list,
+and a concept type printing as its own label.
+
+`type-test4` now holds that contract, comparing all of the catalog across a
+save and a load, and it loads into a catalog binding of its own so that a
+broken round trip cannot damage the image running the test. Differences are
+left in `*relation-roundtrip-mismatches*`, because the suite runs each test
+with output going nowhere.
+
+**Do not save over a hand-maintained catalog file.** The writer emits the live
+catalog and nothing else, so anything the file carries that is not a type
+definition is lost — `default-types/relation-types.text`, for one, holds
+commented-out entries. Write somewhere else and diff.
+
 ### Emacs connection
 
 CGraph was designed to be run from an Emacs REPL. This allows the definition of aids to facilitate use of the program. The relevant code is in the  `emacs` directory in the `*cgraph*` source directory.   
