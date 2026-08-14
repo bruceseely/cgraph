@@ -158,3 +158,66 @@
       (when (and (cut-concept-p concept graph)
                  (notany (lambda (kept) (concepts-corefer-p kept concept)) found))
         (push concept found)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  The cut itself.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun share-identity (copies)
+  "Make COPIES -- the several copies of one cut concept -- mentions of one
+   thing rather than several things that look alike.
+
+   An individual needs nothing done: every copy holds the same individual, and
+   the id is the identity. Anything else gets a coreference label, and must:
+   without one the pieces assert as many dogs as there are copies, which is not
+   what the graph said. This is the whole soundness condition of the cut."
+  (let ((first-copy (first copies)))
+    (unless (concept-individual first-copy)
+      (let* ((name  (string (next-variable-name)))
+             (label (intern (string-upcase name) :keyword)))
+        (set-coref-label first-copy label)
+        (dolist (other (rest copies))
+          (setf (coref-bound-label other) label)
+          (link-coreference first-copy other))))
+    copies))
+
+(defun decompose-cgraph (graph &key at)
+  "Break GRAPH into the separate graphs that AT holds together.
+
+   Returns a list of graphs. AT defaults to the first cut concept; a graph with
+   none comes back as itself in a list of one, which is an answer -- some graphs
+   are one sentence and that is that.
+
+   The original is not touched. The work happens in a copy, and COPY-CGRAPH
+   hands back the copy of the very node it was given, which is how the cut
+   concept is found again on the other side.
+
+   Each piece keeps a copy of AT, since that is what the pieces have in common
+   and what a reader needs in order to put them back together -- as a repeated
+   noun phrase in the text, and as the join in the graphs."
+  (let ((cut-here (or at (first (cut-concepts graph)))))
+    (cond
+      ((null cut-here) (list graph))
+      (t
+       (unless (cut-concept-p cut-here graph)
+         (error "~a holds nothing together in this graph; cutting it would ~
+                 copy a concept without separating anything. CUT-CONCEPTS ~
+                 lists the places that do."
+                (format-node cut-here)))
+       (let* ((cut (copy-cgraph cut-here))
+              (components (graph-components-without cut cut))
+              (copies (list cut)))
+         (dolist (component (rest components))
+           (let ((piece (copy-concept cut)))
+             ;; Hand this component's arcs over to the piece's own copy. A
+             ;; relation reaching two components cannot arise: it would join
+             ;; them without passing through the cut, and then they would be
+             ;; one component.
+             (dolist (relation (copy-list (arcs cut)))
+               (when (intersection (remove cut (arcs relation)) component)
+                 (setf (arcs relation) (substitute piece cut (arcs relation)))
+                 (setf (arcs cut) (remove relation (arcs cut)))
+                 (setf (arcs piece) (append (arcs piece) (list relation)))))
+             (push piece copies)))
+         (share-identity (setf copies (nreverse copies)))
+         (mapcar #'make-cgraph copies))))))
