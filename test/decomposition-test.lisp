@@ -151,6 +151,27 @@
                (string= "Dave drives with his old chevy-vehicle to Baltimore. He is young."
                         (graphs-to-text (decompose-cgraph nodes :at cut)))))
 
+      ;; Every clause path must agree about who is a second mention. Three of
+      ;; them rendered their subject with REALIZE-FULL-NP and so never asked --
+      ;; the copula, the have-clause, and the possessive modifier -- which made
+      ;; consecutive sentences disagree about the same person: "Dave has an
+      ;; ancient bag. He is young."
+      (check "every sentence after the first refers back, not afresh"
+             (string= (concatenate 'string
+                                   "Dave drives with his chevy-vehicle to Baltimore. "
+                                   "He has an ancient bag containing a cake. "
+                                   "He is young. It is old.")
+                      (graph-to-text-decomposed
+                       (parse-cgraph "[CHEVY-VEHICLE]-
+                                        (attr)→[OLD]
+                                        (inst)←[DRIVE]-
+                                           (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
+                                           (dest)→[CITY: Baltimore #502],
+                                        (poss)←[PERSON: dave #501 *x]→(poss)→[BAG]-
+                                           (attr)→[ANCIENT]
+                                           (cntns)→[CAKE].")
+                       :threshold 7)))
+
       ;; --- policy: whether, and where ---------------------------------------
       (let* ((dave "[CHEVY-VEHICLE]-
                       (attr)→[OLD]

@@ -150,14 +150,20 @@
 
 (defun realize-have-clause (possessor state)
   "Render 'POSSESSOR has/have X (and Y ...)' for a POSS-only graph."
-  (let ((have-form (if (eq (concept-number possessor) :plural) "have" "has")))
+  (let ((have-form (if (eq (concept-number possessor) :plural) "have" "has"))
+        ;; Before marking, as in REALIZE-COPULA-CLAUSE and for the same reason.
+        ;; This was the third and last clause path that rendered its subject
+        ;; with REALIZE-FULL-NP and so never asked whether it was a revisit.
+        (revisit (uttered-or-coref-uttered-p state possessor)))
     (mark-uttered state possessor)
     ;; Mark the POSS relations traversed BEFORE rendering the topic NP
     ;; so they aren't folded back in as possessive prefixes.
     (dolist (rel (concept-relations possessor))
       (when (eq (relation-role rel) :poss)
         (mark-traversed state rel)))
-    (let ((possessor-np (realize-full-np possessor state))
+    (let ((possessor-np (if revisit
+                            (realize-np possessor state :case :nominative)
+                            (realize-full-np possessor state)))
           (objects      (realize-possessed-objects possessor state)))
       (format nil "~a ~a ~{~a~^ and ~}" possessor-np have-form objects))))
 
