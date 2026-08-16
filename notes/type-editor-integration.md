@@ -133,6 +133,12 @@ A relation type is flat. The class (`system/core/types.lisp:1109`) is label +
 `source-types` (a list) + `dest-type` (single) + `desc`. No lattice to
 maintain, no cycle checking, no `check-type-lattice` equivalent.
 
+> **Overtaken by §4(b).** True when written and false since: relation types now
+> have a hierarchy, `check-relation-lattice`, and cycle detection. The paragraph
+> is left because it is the reason the *persistence* work below stayed cheap —
+> the file helpers still never look at `:supertypes`, and gained the key without
+> caring what it means.
+
 The persistence layer is nearly free. Both type files are flat sequences of
 `(:label …)` plists, and the machinery written for concept types —
 `concept-type-in-file-p`, `%skip-to-form`, `concept-type-form-span`,
