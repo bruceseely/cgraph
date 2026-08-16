@@ -1611,3 +1611,78 @@ for (const el of [nrLabel, nrPrep, nrDesc, nrNote]) {
 }
 
 loadSyntaxRoles();
+
+// ── Draw the canonical graph in the editor ───────────────────────────────────
+//
+// The editor and this page share an acceptor and an origin, so the round trip
+// is a navigation rather than anything cleverer. The one thing a navigation
+// costs is the form: the label, supertypes and note you had typed are gone the
+// moment we leave. So they go into sessionStorage first and are restored on the
+// way back, with the drawn graph dropped into the canonical field.
+//
+// A second tab plus BroadcastChannel was the alternative and is a worse fit:
+// the editor's session model treats a closed tab as "not a decision" — sessions
+// are resumable at their URL — so a design that depends on the tab still being
+// there fights the thing it is built on. Navigating away and back is exactly
+// what a nested editor already does when you descend into a graph referent.
+
+const NT_STASH = 'cgraph.typeform';
+
+function stashTypeForm() {
+  sessionStorage.setItem(NT_STASH, JSON.stringify({
+    editing: editingLabel,
+    label:   ntLabel.value,
+    supers:  [...superSet],
+    canon:   ntCanon.value,
+    note:    ntNote.value
+  }));
+}
+
+// Restored on load, not on demand: coming back is an ordinary page load, so
+// there is no event to hang this on other than the load itself.
+function restoreTypeForm() {
+  const raw = sessionStorage.getItem(NT_STASH);
+  if (!raw) return;
+  sessionStorage.removeItem(NT_STASH);   // one restore per stash, never a stale one
+  let s;
+  try { s = JSON.parse(raw); } catch { return; }
+  const drawn = sessionStorage.getItem(NT_STASH + '.result');
+  sessionStorage.removeItem(NT_STASH + '.result');
+  openForm({ edit: s.editing, supers: s.supers || [],
+             canon: drawn !== null ? drawn : (s.canon || ''),
+             note: s.note || '' });
+  // openForm fills the name from `edit', which is null while creating — so the
+  // half-typed name of a type that does not exist yet has to be put back here.
+  if (s.editing === null) ntLabel.value = s.label || '';
+  syncEditorFields();
+  if (drawn !== null) setNtHint('canonical graph drawn — Create or Save to keep it');
+}
+
+document.getElementById('nt-draw').addEventListener('click', async () => {
+  const text = collapseWhitespace(ntCanon.value);
+  setNtHint('opening the editor…');
+  try {
+    const resp = await fetch(`/api/editor/open-string?text=${encodeURIComponent(text)}`,
+                             { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      setNtHint('');
+      showError(data.error || `could not open the editor: ${resp.status}`);
+      return;
+    }
+    stashTypeForm();
+    // `back' tells the editor where to return. Same-origin and same acceptor,
+    // so this is an ordinary path, never a cross-site hop.
+    location.href = `/editor?session=${data.session}&back=${encodeURIComponent('/')}`;
+  } catch (err) {
+    setNtHint('');
+    showError(err.message);
+  }
+});
+
+// The stored canonical is one line; the editor emits several. Same rule the
+// server applies on save (COLLAPSE-GRAPH-WHITESPACE), applied here so what we
+// hand the editor is what the field means.
+function collapseWhitespace(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
+
+restoreTypeForm();

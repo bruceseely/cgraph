@@ -71,6 +71,12 @@
   (connected nil)
   last-seen         ; universal-time of the last request; NIL until first seen
   (created (get-universal-time))
+  ;; Opened by a web page rather than by EDIT-CGRAPH, so nobody is blocked on
+  ;; the semaphore and no UNWIND-PROTECT will clean up. Like a nested session in
+  ;; that respect -- and unlike one in having no parent to return to, which is
+  ;; exactly why it needs its own flag rather than being inferred from PARENT.
+  ;; The result travels back in the FINISH response instead of a return value.
+  (web-owned nil)
   ;; The caller's *STANDARD-OUTPUT*, captured at EDIT-CGRAPH time. Handler
   ;; threads inherit none of the caller's bindings, so without this there is no
   ;; way to tell the REPL that its browser went away -- and a blocked REPL that

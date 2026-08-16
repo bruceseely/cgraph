@@ -178,6 +178,23 @@
       color: #33507a;
       cursor: pointer;
     }
+    /* Draw sits with the canonical field it acts on, matching the "+" pill
+       rather than the Create/Cancel row — it opens an editor, it does not
+       commit anything. */
+    #new-type-form #nt-draw {
+      align-self: flex-start;
+      margin-top: 0.28rem;
+      font-size: 11px;
+      line-height: 1;
+      padding: 0.18rem 0.4rem;
+      border: 1px solid #cdd9f0;
+      border-radius: 10px;
+      background: #eef4ff;
+      color: #33507a;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    #new-type-form #nt-draw:hover { background: #e0e9fb; border-color: #a9bde8; }
     #nt-add-super:hover { background: #e0e9fb; border-color: #a9bde8; }
     #nt-add-super.active { background: #4a90d9; color: #fff; border-color: #4a90d9; }
     /* a sidebar type currently chosen as a supertype */
@@ -688,6 +705,10 @@
         <button id="nt-add-super" type="button" title="add a supertype: click, then click one type in the list or graph">+</button>
       </div>
       <textarea id="nt-canonical" rows="1" placeholder="canonical graph (optional)" autocomplete="off" spellcheck="false"></textarea>
+      <!-- Draws the canonical graph in the editor instead of typing linear
+           notation by hand. Inside the canonical cell, because it acts on that
+           field and nothing else. -->
+      <button id="nt-draw" type="button" title="Draw this canonical graph in the graph editor">Draw…</button>
       <textarea id="nt-note" rows="1" placeholder="note (optional)" autocomplete="off" spellcheck="false"></textarea>
     </div>
     <button id="nt-create">Create</button>

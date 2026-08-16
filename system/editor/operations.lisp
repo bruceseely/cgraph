@@ -158,15 +158,25 @@
 
 (defun editor-add-concept (session type-label)
   "Create a free-standing concept. Used to start an empty graph, where the
-   first concept-type click makes a concept that becomes the focus."
+   first concept-type click makes a concept that becomes the focus.
+
+   REFUSES a graph that already has a head. It used to fall through the COND and
+   return the concept anyway -- unattached, since there is nothing here to
+   attach it to -- and the page would then set its focus to a NODE-REF the
+   working graph did not contain. Every subsequent request answered `no node N
+   in this graph', unclearably, because it was true again each time; only a
+   reload recovered. A concept with nowhere to go is not something to hand back
+   quietly."
   (with-cg-thread-bindings
-    (let ((concept (editor-make-concept type-label)))
-      (cond ((null (session-working session))
-             (setf (session-working session)
-                   (make-instance 'graph :head concept)))
-            ((null (head (session-working session)))
-             (setf (head (session-working session)) concept)))
-      concept)))
+    (let ((working (session-working session)))
+      (when (and working (head working))
+        (editor-error "this graph already has concepts — click one in the graph ~
+                       to choose the focus, then pick a relation"))
+      (let ((concept (editor-make-concept type-label)))
+        (if (null working)
+            (setf (session-working session) (make-instance 'graph :head concept))
+            (setf (head working) concept))
+        concept))))
 
 ;;; --- Remove ----------------------------------------------------------------
 

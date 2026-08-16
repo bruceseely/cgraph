@@ -541,9 +541,72 @@
              ;; so finishing one has to drop it from the registry as well --
              ;; otherwise its URL keeps resolving and a stale tab could go on
              ;; editing a graph the user believes they closed.
-             (let ((parent (session-parent s)))
-               (if parent
-                   (finish-nested-editor-session s state)
-                   (finish-editor-session s state))
-               (format nil "{\"ok\":true,\"state\":\"~(~a~)\"~@[,\"parent\":~a~]}"
-                       state (and parent (session-id parent)))))))))
+             (let ((parent (session-parent s))
+                   (web    (session-web-owned s)))
+               (cond (parent (finish-nested-editor-session s state))
+                     (web    (finish-web-editor-session s state))
+                     (t      (finish-editor-session s state)))
+               ;; RESULT rides back only for a web-owned commit: it is the ONLY
+               ;; way that string reaches anyone, since no caller is blocked to
+               ;; receive it. On cancel the page keeps what it already had, so
+               ;; sending SESSION-ORIGINAL back would at best be redundant and
+               ;; at worst overwrite an edit made in the form meanwhile.
+               (format nil "{\"ok\":true,\"state\":\"~(~a~)\"~@[,\"parent\":~a~]~
+                            ~@[,\"result\":\"~a\"~]}"
+                       state
+                       (and parent (session-id parent))
+                       (and web (eq state :committed)
+                            (json-escape (or (session-result s) ""))))))))))
+
+;;; --- Sessions opened by the browser rather than by a REPL call ---------------
+;;;
+;;; EDIT-CGRAPH's contract is that the caller BLOCKS and receives the result.
+;;; The type browser has no caller to block: it wants to hand a string to the
+;;; editor, let the page go away and come back, and get the edited string
+;;; through the response rather than a return value.
+;;;
+;;; OPEN-NESTED-EDITOR-SESSION already proved the shape -- a session created by
+;;; a request, whose semaphore nobody waits on and which
+;;; FINISH-NESTED-EDITOR-SESSION drops rather than an UNWIND-PROTECT. This is
+;;; that same shape with no parent, so WEB-OWNED is what distinguishes it: a
+;;; session with neither a parent nor a blocked caller.
+
+(defun open-web-string-session (text)
+  "A :STRING session over TEXT for the browser to edit, with nobody waiting on
+   it. The caller is a web page, so there is no *STANDARD-OUTPUT* worth
+   capturing and no REPL to announce a disconnect to."
+  (let ((session (make-editor-session
+                  :original (or text "")
+                  :kind :string
+                  :web-owned t
+                  :working (make-working-graph (or text "")))))
+    (register-editor-session session)
+    session))
+
+(defun finish-web-editor-session (session state)
+  "Complete a browser-owned session and drop it from the registry -- the same
+   reason FINISH-NESTED-EDITOR-SESSION does it: no blocked caller means no
+   UNWIND-PROTECT, so nothing else would ever forget it and its URL would go on
+   resolving for a tab that believes it is done."
+  (prog1 (finish-editor-session session state)
+    (forget-editor-session session)))
+
+;;; POST /api/editor/open-string?text=... — start a session on a linear-notation
+;;; string and return its id. The page then navigates to /editor?session=N.
+(hunchentoot:define-easy-handler (handle-editor-open-string
+                                  :uri "/api/editor/open-string")
+    (text)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (unless (eq (hunchentoot:request-method*) :post)
+    (return-from handle-editor-open-string
+      (json-error "POST required" hunchentoot:+http-method-not-allowed+)))
+  (handler-case
+      (with-cg-thread-bindings
+        ;; Parsed here rather than at the far end so a malformed graph is
+        ;; refused by the form that submitted it, where the field it came from
+        ;; is still on screen -- not by an editor page you have already
+        ;; navigated to and would have to navigate back from.
+        (let ((session (open-web-string-session text)))
+          (format nil "{\"ok\":true,\"session\":~a}" (session-id session))))
+    (error (e) (json-error (princ-to-string e)))))

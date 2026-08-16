@@ -10,6 +10,14 @@
 
 const params  = new URLSearchParams(location.search);
 const SESSION = params.get('session');
+// Where UPDATE/CANCEL should return to, when this session was opened by another
+// page rather than by a REPL call. Restricted to a same-origin PATH: it comes
+// off the URL, and a full URL here would let a crafted link bounce someone off
+// this page to anywhere.
+const BACK = (() => {
+  const b = params.get('back');
+  return b && b.startsWith('/') && !b.startsWith('//') ? b : null;
+})();
 
 const $ = id => document.getElementById(id);
 const graphEl     = $('graph');
@@ -374,6 +382,9 @@ function matchesFilter(text, q) {
 // repainted from the same choices either way.
 function paintConceptList(types) {
   if (types) lastConcepts = types;
+  // Almost everything refreshes, and a repaint would take the half-typed form
+  // with it. The form closes itself on Create, Cancel or Escape.
+  if (creatingType) return;
   const q = filterQuery('concept-filter');
   const shown = lastConcepts.filter(t => matchesFilter(t, q));
   conceptList.replaceChildren();
@@ -385,8 +396,11 @@ function paintConceptList(types) {
   // "your filter matches nothing" are different problems, and a filter you have
   // forgotten looks exactly like the first one.
   if (!shown.length) {
-    conceptList.innerHTML =
-      `<div class="type-empty">nothing here starts with “${q}” — Esc clears the filter</div>`;
+    // The moment a type you wanted turns out not to exist is exactly here, so
+    // this is where the offer to make it belongs — rather than a "+ new type"
+    // button standing permanently in a column whose whole job is to show you
+    // what is already legal.
+    conceptList.replaceChildren(missingTypeOffer(q));
     return;
   }
   for (const t of shown) {
@@ -395,6 +409,116 @@ function paintConceptList(types) {
     el.textContent = t;
     el.addEventListener('click', () => onConceptTypeClick(t));
     conceptList.append(el);
+  }
+}
+
+// ── Creating a concept type from here ────────────────────────────────────────
+//
+// The wrinkle this has to solve, and the reason the supertype is not free
+// choice: while a relation is picked, this column is not the catalog, it is
+// what `rel-far-end-types' says may legally go in the slot. A type created
+// under the wrong parent is legal, saved, and INVISIBLE in the very slot you
+// made it for — which reads as the create having silently failed.
+//
+// So the supertype menu is drawn from THIS LIST. Every entry in it is admissible
+// here, `rel-far-end-types' returns each root with its whole subtree, and a
+// subtype of anything admissible is admissible — so whatever you pick, the new
+// type appears in the slot on the next refresh. That is the guarantee; the menu
+// is narrow on purpose, not for lack of ambition.
+//
+// It is also why this is worth building at all rather than sending you to the
+// type browser: over there you would have to work out which parent makes the
+// type usable back here.
+
+let creatingType = false;   // the inline form is open; keeps repaints from eating it
+
+function missingTypeOffer(q) {
+  const box = document.createElement('div');
+  box.className = 'type-empty';
+  box.append(`nothing here starts with “${q}” — Esc clears the filter, or `);
+  const link = document.createElement('a');
+  link.className = 'make-type';
+  link.textContent = `create ${q}`;
+  link.addEventListener('click', () => openNewTypeForm(q));
+  box.append(link);
+  return box;
+}
+
+function openNewTypeForm(name) {
+  if (!lastConcepts.length) { setStatus('nothing legal here to inherit from', 'error'); return; }
+  creatingType = true;
+  const form = document.createElement('div');
+  form.className = 'new-type';
+
+  const label = document.createElement('input');
+  label.type = 'text';
+  label.value = name;
+  label.spellcheck = false;
+  label.autocomplete = 'off';
+
+  const supers = document.createElement('select');
+  supers.title = 'the new type inherits from this — every choice here is legal in this slot';
+  for (const t of lastConcepts) {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    supers.append(opt);
+  }
+  // The slot's current proposal is the best default there is: picking a type and
+  // then wanting a narrower one is why you are here at all.
+  if (pane.target && pane.target.type && lastConcepts.includes(pane.target.type))
+    supers.value = pane.target.type;
+
+  const row = document.createElement('div');
+  row.className = 'new-type-row';
+  const sub = document.createElement('span');
+  sub.className = 'sub';
+  sub.textContent = '⊑';
+  row.append(sub, supers);
+
+  const buttons = document.createElement('div');
+  buttons.className = 'new-type-row';
+  const create = document.createElement('button');
+  create.textContent = 'Create';
+  const cancel = document.createElement('button');
+  cancel.textContent = 'Cancel';
+  buttons.append(create, cancel);
+
+  const submit = () => createConceptType(label.value.trim(), supers.value);
+  create.addEventListener('click', submit);
+  cancel.addEventListener('click', () => { creatingType = false; paintConceptList(); });
+  label.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter')  { ev.preventDefault(); submit(); }
+    if (ev.key === 'Escape') { ev.preventDefault(); creatingType = false; paintConceptList(); }
+  });
+
+  form.append(label, row, buttons);
+  conceptList.replaceChildren(form);
+  label.focus();
+  label.select();
+}
+
+async function createConceptType(name, supertype) {
+  if (!name) { setStatus('a type name is required', 'error'); return; }
+  setStatus('creating…');
+  try {
+    // The type browser's endpoint, unchanged — the editor shares its acceptor
+    // and origin, so there is nothing to add on the server for this.
+    const url = `/api/create-type?label=${encodeURIComponent(name)}`
+              + `&supertypes=${encodeURIComponent(supertype)}`;
+    const resp = await fetch(url, { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) { setStatus(data.error || `failed: ${resp.status}`, 'error'); return; }
+    creatingType = false;
+    setStatus('');
+    // The catalog is process-global and /api/editor/choices reads it live, so
+    // the new type is in the next fetch with nothing else to do. Then put it
+    // where you were reaching for it: a create that left you to find and click
+    // the thing you just named would have done half the job.
+    await refresh();
+    onConceptTypeClick(data.label);
+  } catch (err) {
+    setStatus(err.message, 'error');
   }
 }
 
@@ -510,10 +634,29 @@ for (const [id, repaint] of [['concept-filter',  () => paintConceptList()],
 // it is not destructive: nothing has been said to the graph until Add or
 // Replace, and what the slot held was a proposal, not a node.
 function onConceptTypeClick(type) {
-  if (!pane.focus) { createFirstConcept(type); return; }
+  if (!pane.focus) {
+    // CREATEFIRSTCONCEPT is for an EMPTY graph. With no focus but a graph on
+    // screen -- which is every freshly loaded session over an existing graph --
+    // there is nothing to attach a new concept to, and asking for one used to
+    // leave the focus pointing at a node the graph did not contain. The server
+    // refuses that now; saying it here means not making the round trip to be
+    // told, and saying which click is the one that was wanted.
+    if (graphHasConcepts()) {
+      setStatus('click a concept in the graph to choose the focus first', 'note');
+      return;
+    }
+    createFirstConcept(type);
+    return;
+  }
   armedTarget = false;                 // the pick has landed
   pane.target = { type };
   refresh();
+}
+
+// Whether the graph pane is showing anything. The rendered graph is the page's
+// own record of what the session holds, so this needs no request.
+function graphHasConcepts() {
+  return !!graphEl.querySelector('.cg-concept[data-ref]');
 }
 
 // An empty graph gets its first node this way: the concept is created straight
@@ -1236,6 +1379,17 @@ async function finish(action) {
     // veiling. The veil means "this is over"; finishing a nested graph ends
     // that graph, not the session you are actually in.
     if (data.parent) { location.href = `/editor?session=${data.parent}`; return; }
+    // Same rule one level out: a session the type browser opened returns to the
+    // form that opened it, carrying the graph. There is no blocked caller to
+    // hand it to, so the response IS the delivery — which is why it is stashed
+    // before navigating rather than passed in the URL, where a graph would be
+    // both unwieldy and visible in history.
+    if (BACK) {
+      if (data.result !== undefined)
+        sessionStorage.setItem('cgraph.typeform.result', data.result);
+      location.href = BACK;
+      return;
+    }
     document.querySelectorAll('button').forEach(b => b.disabled = true);
     setStatus('');     // the veil says it, and says it where you are looking
     showVeil(action);

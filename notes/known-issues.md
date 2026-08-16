@@ -4,9 +4,38 @@ Defects that are on no feature list, because they are not missing features.
 New ones belong here; fixed ones stay, struck through, because what a thing
 was wrong about is worth as much as the fix.
 
-Both entries below were found on 2026-08-13/14 while building decomposition,
-were older than that work, and were fixed on 2026-08-14. Nothing is currently
-outstanding.
+The first two entries were found on 2026-08-13/14 while building decomposition,
+were older than that work, and were fixed on 2026-08-14. The third was found on
+2026-08-16 and fixed the same day. Nothing is currently outstanding.
+
+## ~~A concept-type click with no focus corrupts a non-empty graph~~ — fixed
+
+`system/editor/operations.lisp`, `editor/editor.js`. Found while building the
+create-a-type-from-the-editor affordance, which lives in the column where it
+happens; it is older than that work and reachable from `(edit-cgraph "[EAT]")`
+as easily as from anything new.
+
+`EDITOR-ADD-CONCEPT` exists to give an EMPTY graph its first node, and says so.
+Its `COND` installed the concept when the working graph was missing or headless
+and otherwise **fell through and returned it anyway** — unattached, because
+there was nothing to attach it to. The page then set its focus to that
+`NODE-REF`, and every request afterwards answered `no node N in this graph`.
+
+Unclearable, in the specific sense the editor already has a name for: the error
+was true again each time anything was tried, so the status line could not be
+cleared by any action, and only a reload recovered. The graph itself was never
+damaged — the concept simply went nowhere — so nothing looked wrong except that
+the editor had stopped working.
+
+The trigger is ordinary: a session loads with a graph and no focus (focus is set
+by clicking a concept **in the graph**), and the first thing clicked is a
+concept type in the list rather than a concept in the graph. Both are lists of
+type names a few centimetres apart.
+
+Fixed on both sides. `EDITOR-ADD-CONCEPT` now signals rather than returning a
+concept with nowhere to go, and the page checks whether the graph pane is
+showing anything before asking — so the usual case is a sentence naming the
+click that was wanted, not a round trip to be refused.
 
 ## ~~`graphs-equal` does not compare graphs~~ — fixed
 

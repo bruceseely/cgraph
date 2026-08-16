@@ -383,6 +383,45 @@
     .type-item .dir { color: #4a90d9; font-weight: bold; }
     .type-item .long { color: #aaa; font-size: 11px; }
     .type-empty { color: #bbb; font-style: italic; padding: 0.4rem 0.5rem; font-size: 12px; }
+    /* The offer to create the type you just failed to find. A link rather than a
+       button: it is an aside inside a sentence, not a control competing with the
+       list. */
+    .make-type { color: #4a90d9; cursor: pointer; text-decoration: underline; font-style: normal; }
+    .make-type:hover { color: #2f6fb3; }
+    /* The inline create form. Stacked rather than in a row: the column is as
+       narrow as its contents and a side-by-side name and parent would force it
+       wider for a form that is not there most of the time. */
+    .new-type {
+      padding: 0.4rem 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      background: #f7f9fc;
+      border-bottom: 1px solid #dfe3e8;
+    }
+    .new-type input, .new-type select {
+      font-family: inherit;
+      font-size: 12px;
+      padding: 0.15rem 0.3rem;
+      border: 1px solid #cdd9f0;
+      border-radius: 3px;
+      background: #fff;
+      max-width: 100%;
+    }
+    .new-type-row { display: flex; align-items: center; gap: 0.3rem; }
+    .new-type-row .sub { color: #999; font-size: 12px; }
+    .new-type-row select { flex: 1 1 auto; min-width: 0; }
+    .new-type button {
+      font-size: 11px;
+      padding: 0.12rem 0.45rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #f7f7f7;
+      color: #555;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .new-type button:hover { background: #e8e8e8; border-color: #aaa; }
     /* Direction groups in the relation column. Sticky so the heading is still
        there to tell you which group you are in after scrolling into it. */
     .group-head {
