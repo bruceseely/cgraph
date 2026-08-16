@@ -24,7 +24,12 @@
 
 (defun clear-relation-catalog ()
   (when *relation-type-catalog*
-    (clrhash *relation-type-catalog*)))
+    (clrhash *relation-type-catalog*))
+  ;; Forgetting the relation types includes forgetting how they surface in
+  ;; English -- otherwise a :ROLE removed from the ontology would outlive the
+  ;; relation it was attached to. See *RELATION-SYNTAX-RESET-HOOK*.
+  (when *relation-syntax-reset-hook*
+    (funcall *relation-syntax-reset-hook*)))
 
 (defun clear-cgraph-type-catalogs ()
   (clear-concept-catalog)
@@ -1387,7 +1392,15 @@
   (declare (special *undefined-concept-types*))
   ;; &allow-other-keys: tolerate (and ignore) annotation keys like :note -- see
   ;; parse-concept-type-def.
-  (destructuring-bind (&key label desc source-types dest-type &allow-other-keys) def
+  ;;
+  ;; :ROLE and :PREP are how a definition says what the relation does in
+  ;; English -- (:label benef :source-types act :dest-type animate :role :pp
+  ;; :prep "for"). They need no change to the file format, because
+  ;; &allow-other-keys already tolerated them; older files without them are
+  ;; unaffected, and an image with no generation system ignores them.
+  (destructuring-bind (&key label desc source-types dest-type role prep
+                       &allow-other-keys)
+      def
 
     (unless (listp source-types) (setf source-types (list source-types)))
 
@@ -1397,10 +1410,15 @@
            (source      (mapcar #'lookup-concept-type normalized-sources))
            (destination (lookup-concept-type normalized-dest)))
 
-      (make-relation-type (string-upcase label)
-                          :description desc
-        		  :source-types source
-        		  :dest-type destination))))
+      (prog1 (make-relation-type (string-upcase label)
+                                 :description desc
+                                 :source-types source
+                                 :dest-type destination)
+        ;; After the type exists, so a registration never names a relation the
+        ;; catalog has not heard of -- which is precisely what
+        ;; %LINT-STALE-RELATION-ENTRIES reports.
+        (when (and role *relation-syntax-hook*)
+          (funcall *relation-syntax-hook* label role prep))))))
 
 
 (defun load-relation-types (filename &optional supress-warnings)

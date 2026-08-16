@@ -116,6 +116,32 @@
    NIL means nothing has taught the reader about mass nouns yet, in which
    case every type is treated as countable.")
 
+(defvar *relation-syntax-hook* nil
+  "Function of (LABEL ROLE PREPOSITION), called by PARSE-RELATION-TYPE-DEF for
+   a relation definition carrying a :ROLE key.
+
+   Exactly the hole *MASS-TYPE-P* is, and for exactly the same reason: a
+   relation type's English behaviour is decided by the realizer, which is part
+   of generation and loads AFTER core, so core declares the hole and generation
+   fills it rather than core reaching forward into a module that depends on it.
+
+   This is what lets an ontology say how its own relations surface, in the file
+   that defines them. Without it, REGISTER-RELATION-SYNTAX exists but has
+   nowhere to be called from: relation-types.lisp is READ as data, never
+   LOADed as code, so a call placed there would be destructured as a type
+   definition.
+
+   NIL means generation is not loaded; :ROLE keys are then read and ignored,
+   which is the right outcome for an image that cannot realize anything anyway.")
+
+(defvar *relation-syntax-reset-hook* nil
+  "Function of no arguments, called by CLEAR-RELATION-CATALOG to discard the
+   syntax registrations along with the relation types they describe.
+
+   INITIALIZE-TYPES clears both catalogs before reloading, so without this a
+   :ROLE you deleted from your ontology would go on applying until the image
+   was restarted -- the one kind of staleness a reload is supposed to cure.")
+
 (defvar *always-print-ascii-arrows* nil
   "Use the string (eg. \"->\") instead of the single-character arrow (eg. →)")
 

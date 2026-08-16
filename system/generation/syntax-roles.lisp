@@ -113,6 +113,23 @@
    underneath it (or nothing). True when there was one to drop."
   (remhash (string-upcase (string label)) *relation-syntax-overrides*))
 
+(defun clear-relation-syntax-registrations ()
+  "Discard every registration, leaving the built-in table exposed. Called when
+   the relation catalog is cleared, so the two are forgotten together."
+  (clrhash *relation-syntax-overrides*))
+
+;;; Fill the holes core declared. Same move LEXICON makes for *MASS-TYPE-P*
+;;; (lexicon.lisp:377): the dependency points generation -> core, never back.
+;;;
+;;; With these set, a relation definition carrying :ROLE registers itself as it
+;;; loads, which is what gives REGISTER-RELATION-SYNTAX somewhere to be called
+;;; from. The registrations then become a projection of the ontology file
+;;; rather than hand-managed state -- which is also what makes
+;;; *RELATION-SYNTAX-OVERRIDES* being a DEFPARAMETER correct rather than merely
+;;; tolerable: cleared on reload, rebuilt by INITIALIZE-TYPES.
+(setf *relation-syntax-hook* #'register-relation-syntax)
+(setf *relation-syntax-reset-hook* #'clear-relation-syntax-registrations)
+
 (defun relation-syntax-entries ()
   "The effective mapping: every registration, plus the built-in entries no
    registration shadows. Uniform entry shape, so the lint walks this exactly as

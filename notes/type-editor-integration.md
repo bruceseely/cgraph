@@ -262,14 +262,47 @@ Two things the design got right by copying the lexicon, and one it had to add:
 
 What (a) does *not* do is give relation types a default. That still needs (b).
 
-The remaining option under (a), unbuilt: say it in the relation-types file itself, as extra keys
-on the existing form (`:role :pp :prep "in"`). `parse-relation-type-def`
-(`system/core/types.lisp:1390`) already tolerates unknown keys via
+**~~The remaining option under (a)~~ — built the same day, and it turned out
+not to be optional.** Saying it in the relation-types file itself, as extra
+keys on the existing form: `(:label benef :source-types act :dest-type animate
+:role :pp :prep "for")`. `parse-relation-type-def`
+(`system/core/types.lisp:1390`) already tolerated unknown keys via
 `&allow-other-keys`, exactly as `:note` is tolerated on the concept side, so
-the file format needs no change at all. The cost is that the ontology file
-starts carrying generator concerns — but it is honest about where the
-knowledge actually is, and it makes the relation type and its English one
-record instead of two that can drift.
+the file format did not change and older files are unaffected.
+
+This note first listed it as a nice-to-have whose cost was that the ontology
+file "starts carrying generator concerns". Finishing the hook showed that to be
+the wrong framing, because **a registration had nowhere else to live**:
+
+- `load-relation-types` (`system/core/types.lisp:1406`) **reads** the file as
+  data — a `read` loop handing each form to `parse-relation-type-def`. It is
+  never `load`ed as code, so a `(register-relation-syntax …)` form placed there
+  would be destructured as a type definition.
+- `setup-cgraph` loads no user init file. There is no such step.
+
+So without the keys, the hook could only be driven from the REPL — lost on the
+next reload — or from a private file the user must remember to load. The keys
+are what make the hook reachable at all.
+
+Two pieces of machinery it needed:
+
+- **The dependency has to point generation → core**, since the realizer loads
+  after core. `*relation-syntax-hook*` is declared NIL in
+  `system/setup/definitions.lisp` beside `*mass-type-p*`, which is the same
+  hole for the same reason, and `syntax-roles.lisp` fills it — the move
+  `lexicon.lisp:377` already makes. With no generation system loaded, `:role`
+  keys are read and ignored, which is right for an image that cannot realize
+  anything anyway.
+- **Clearing has to be symmetric.** `initialize-types`
+  (`system/setup/initialize.lisp:67`) clears both catalogs before reloading, so
+  `clear-relation-catalog` now clears the registrations too, via a second hook.
+  Without it a `:role` deleted from an ontology would go on applying until the
+  image restarted — the one staleness a reload exists to cure.
+
+A pleasant consequence: the registrations become a *projection* of the ontology
+file rather than hand-managed state, which is what makes
+`*relation-syntax-overrides*` being a `defparameter` correct rather than merely
+tolerable. Cleared on reload, rebuilt by `initialize-types`.
 
 **(b) A relation type hierarchy.** Populate the inherited supertype slots and
 derive the role by walking up, mirroring `pos-from-hierarchy`. This makes
@@ -291,7 +324,12 @@ subsumes most of (a), since most relations would inherit rather than declare.
    the arc silently gone — and after
    `(register-relation-syntax 'benef :pp "for")` as *"A dog eats food for a
    cat."* That transition is the whole feature, and it is the thing the lint
-   tests could not have shown.
+   tests could not have shown. The `:role` keys followed the same day, and the
+   end-to-end check moved with them: a `BENEF` relation defined **only** in an
+   ontology file, as `(:label benef :source-types act :dest-type animate :role
+   :pp :prep "for")`, loads, registers itself, satisfies the coverage lint and
+   renders *"A dog eats food for a cat."* — with no code anywhere outside that
+   file. Which is the whole point of §4.
 2. **Surface the lint at creation time.** Whatever form creates a relation
    should run `%lint-relation-syntax-coverage`'s check and say so: *"created —
    with no syntax role it will be dropped from generated English."* Cheap, and

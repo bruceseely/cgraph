@@ -39,6 +39,20 @@
       (dolist (pair saved)
         (setf (gethash (car pair) *relation-type-catalog*) (cdr pair))))))
 
+(defun %with-relation-def (def thunk)
+  "Parse DEF into the relation catalog, call THUNK with the interned label,
+   then remove whatever it defined -- even on non-local exit.
+
+   Goes through PARSE-RELATION-TYPE-DEF rather than MAKE-RELATION-TYPE because
+   that is the function LOAD-RELATION-TYPES calls per form, so a test written
+   this way exercises the path a user's relation-types.lisp actually takes."
+  (let ((label (intern (string-upcase (string (getf def :label)))
+                       :conceptual-graphs)))
+    (unwind-protect
+         (progn (parse-relation-type-def def t)
+                (funcall thunk label))
+      (remhash label *relation-type-catalog*))))
+
 (defun relation-tables-lint-test (&optional verbose)
   (with-test-types
     ;; A fresh override table for the whole suite. The fixtures below rebind
@@ -281,6 +295,73 @@
                  (eq :adv (relation-role 'loc)))
           (check "the entry's label is interned in :CG"
                  (eq 'loc (first (first (relation-syntax-entries))))))
+
+        ;; --- :ROLE in a relation definition --------------------------------
+        ;; The path an ontology file actually takes: PARSE-RELATION-TYPE-DEF is
+        ;; what LOAD-RELATION-TYPES calls per form, so these exercise the same
+        ;; code a user's relation-types.lisp does.
+
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+          (%with-relation-def '(:label test-benef :source-types act
+                                :dest-type animate :role :pp :prep "for")
+            (lambda (label)
+              (check "a definition with :role registers it"
+                     (eq :pp (relation-role label)))
+              (check ":prep rides along"
+                     (equal "for" (relation-preposition label)))
+              (check "the relation is in the catalog, so the entry is not stale"
+                     (not (member label (%contexts-named
+                                         :stale-relation-entry
+                                         (%lint-stale-relation-entries)))))
+              (check "and the coverage check is satisfied"
+                     (not (member label (%contexts-named
+                                         :relation-not-mapped
+                                         (%lint-relation-syntax-coverage))))))))
+
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+          (%with-relation-def '(:label test-benef :source-types act
+                                :dest-type animate :role :dobj)
+            (lambda (label)
+              (check ":role without :prep registers a bare role"
+                     (and (eq :dobj (relation-role label))
+                          (null (relation-preposition label)))))))
+
+        ;; A definition with no :role is the pre-existing shape, and must go on
+        ;; behaving exactly as it did -- registering nothing, and reported by
+        ;; the coverage check as the unmapped relation it is.
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+          (%with-relation-def '(:label test-benef :source-types act
+                                :dest-type animate)
+            (lambda (label)
+              (check "a definition without :role registers nothing"
+                     (null (relation-role label)))
+              (check "and is reported as unmapped"
+                     (member label (%contexts-named
+                                    :relation-not-mapped
+                                    (%lint-relation-syntax-coverage)))))))
+
+        ;; Clearing the catalog clears the syntax with it. Without this, a
+        ;; :role deleted from an ontology would outlive the reload meant to
+        ;; remove it.
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+          (register-relation-syntax 'test-ghost :pp "beside")
+          (check "a registration survives until the catalog is cleared"
+                 (eq :pp (relation-role 'test-ghost)))
+          (clear-relation-syntax-registrations)
+          (check "clearing drops it"
+                 (null (relation-role 'test-ghost)))
+          (check "and leaves the built-in table intact"
+                 (eq :dobj (relation-role 'obj))))
+
+        ;; Core must not require generation: with the hook unset, a :role key
+        ;; is read and ignored rather than signalling.
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+              (*relation-syntax-hook* nil))
+          (%with-relation-def '(:label test-benef :source-types act
+                                :dest-type animate :role :pp :prep "for")
+            (lambda (label)
+              (check "with no hook installed, :role is ignored, not fatal"
+                     (null (relation-role label))))))
 
         ;; --- Reachable through the aggregate entry point --------------------
 
