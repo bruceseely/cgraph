@@ -1098,3 +1098,38 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
       (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+
+;;; GET /api/syntax-roles — the roles a relation may be given, for the form's
+;;; Role menu. Served rather than hard-coded in JS for the reason this whole
+;;; area keeps running into: *GENERATION-SYNTAX-ROLES* is the single source of
+;;; truth for which roles a realizer reads, and a copy in the UI is a copy that
+;;; can drift from it silently.
+;;;
+;;; EXAMPLES is what each role currently means in this catalog -- the relations
+;;; already mapped to it. That is better documentation than a prose gloss would
+;;; be, because it is derived rather than written, so it cannot go stale, and it
+;;; describes THIS ontology rather than the shipped one.
+(hunchentoot:define-easy-handler (handle-api-syntax-roles :uri "/api/syntax-roles") ()
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (handler-case
+      (let ((entries
+              (loop for entry in *generation-syntax-roles*
+                    for role = (first entry)
+                    for implemented = (getf (rest entry) :implemented t)
+                    for examples = (sort (loop for e in (relation-syntax-entries)
+                                               when (and (eq (second e) role)
+                                                         (ignore-errors
+                                                          (get-relation-type (first e))))
+                                                 collect (string-downcase
+                                                          (string (first e))))
+                                         #'string<)
+                    collect (format nil "{\"role\":\"~a\",\"implemented\":~:[false~;true~],~
+                                          \"examples\":~a}"
+                                    (json-escape (string-downcase (symbol-name role)))
+                                    implemented
+                                    (json-string-array examples)))))
+        (format nil "[~{~a~^,~}]" entries))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-internal-server-error+)
+      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))

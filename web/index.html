@@ -207,6 +207,118 @@
       border-color: #c0392b;
       background: #fff6f6;
     }
+
+    /* ── the relation form ──
+       Deliberately built from the concept form's rules rather than its own set:
+       the two are siblings, and a reader who has understood one should not have
+       to learn a second visual language for the other. Only what genuinely
+       differs — two type slots instead of one, and a role menu — is new. */
+    #new-rel-form {
+      display: flex;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      padding: 0.35rem 0.6rem;
+      background: #fafafa;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 12px;
+    }
+    #new-rel-form[hidden] { display: none; }
+    #new-rel-form > input,
+    #new-rel-form > span,
+    #new-rel-form > button { margin-top: 1px; }
+    #new-rel-form input,
+    #new-rel-form select,
+    #new-rel-form textarea {
+      font-size: 12px;
+      padding: 0.18rem 0.4rem;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      font-family: inherit;
+    }
+    #new-rel-form textarea {
+      line-height: 1.4;
+      resize: none;
+      overflow-y: auto;
+      min-height: 1.55rem;
+      max-height: 12rem;
+    }
+    #nr-fields {
+      display: flex;
+      align-items: stretch;
+      flex: 1 1 auto;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #fff;
+      overflow: hidden;
+    }
+    #new-rel-form #nr-fields > * + * { border-left: 1px solid #ccc; }
+    #nr-fields > * { min-width: 0; }
+    #nr-label { width: 8rem; flex-shrink: 0; text-transform: lowercase; }
+    #nr-role  { flex: 0 0 auto; min-width: 6rem; cursor: pointer; }
+    #nr-prep  { width: 7rem; flex-shrink: 0; }
+    #nr-desc  { flex: 3 1 14rem; }
+    #nr-note  { flex: 2 1 8rem; }
+    /* A preposition with no role to belong to is a field the server refuses,
+       so it is dimmed rather than left looking usable. */
+    #nr-prep:disabled { background: #f6f6f6; color: #bbb; cursor: not-allowed; }
+
+    /* the two type slots — the same chip set the supertypes cell uses */
+    .nr-slot {
+      display: flex;
+      align-items: flex-start;
+      align-content: flex-start;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      flex: 0 1 auto;
+      min-width: 7rem;
+      min-height: 1.6rem;
+      padding: 0.28rem 0.4rem;
+      background: transparent;
+    }
+    .nr-sep { color: #999; align-self: flex-start; margin: 0.12rem 0.15rem 0 0; font-size: 11px; }
+    #nr-sources-empty, #nr-dest-empty { color: #bbb; font-style: italic; }
+    #nr-add-source, #nr-add-dest {
+      align-self: flex-start;
+      font-size: 12px;
+      line-height: 1;
+      padding: 0.1rem 0.4rem;
+      border: 1px solid #cdd9f0;
+      border-radius: 10px;
+      background: #eef4ff;
+      color: #33507a;
+      cursor: pointer;
+    }
+    #nr-add-source:hover, #nr-add-dest:hover { background: #e0e9fb; border-color: #a9bde8; }
+    #nr-add-source.active, #nr-add-dest.active {
+      background: #4a90d9; color: #fff; border-color: #4a90d9;
+    }
+    #new-rel-form button {
+      font-size: 11px;
+      padding: 0.18rem 0.55rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #f7f7f7;
+      color: #555;
+      cursor: pointer;
+    }
+    #new-rel-form button:hover { background: #e8e8e8; border-color: #aaa; }
+    #nr-delete { margin-left: 0.5rem; color: #a04040; border-color: #ddc4c4; }
+    #nr-delete:hover { background: #fbeaea; border-color: #c88; }
+    #nr-delete.armed,
+    #nr-delete.armed:hover { background: #c0392b; border-color: #a5301f; color: #fff; }
+    #nr-status { flex-basis: 100%; font-size: 11px; color: #aaa; }
+    /* The roleless warning is advice, not an error: the write succeeded. Amber
+       rather than the red #nt-status.error uses, so the difference is visible
+       without reading the words. */
+    #nr-status.warn  { color: #a76b2e; }
+    #nr-status.error { color: #c0392b; }
+    #new-rel-form input.field-error,
+    #new-rel-form textarea.field-error {
+      border-color: #c0392b;
+      background: #fff6f6;
+    }
     #save-btn { margin-left: auto; }
     #save-btn:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
     #save-btn:disabled { color: #bbb; cursor: default; }
@@ -318,20 +430,72 @@
     }
     #sidebar-resizer:hover, #sidebar-resizer.dragging { background: #aaa; }
 
+    /* Was a plain label; now two tabs. Keeps the old metrics so the sidebar
+       header sits at exactly the height it always did. */
     #sidebar-header {
+      display: flex;
       padding: 0.5rem 0.75rem 0.3rem;
+      gap: 0.75rem;
+      border-bottom: 1px solid #eee;
+      flex-shrink: 0;
+    }
+    .side-tab {
       font-size: 11px;
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: #999;
-      border-bottom: 1px solid #eee;
-      flex-shrink: 0;
+      color: #bbb;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 0 0 0.15rem;
+      cursor: pointer;
+      font-family: inherit;
     }
+    .side-tab:hover { color: #888; }
+    .side-tab.active { color: #555; border-bottom-color: #4a90d9; }
 
-    #type-list {
+    #type-list, #relation-list {
       overflow-y: auto;
       flex: 1;
+    }
+    #type-list[hidden], #relation-list[hidden] { display: none; }
+
+    /* A relation item says more than a concept item does, because a relation
+       IS its signature — the name alone identifies nothing. */
+    .rel-item {
+      padding: 0.28rem 0.75rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.1s;
+      border-bottom: 1px solid #f4f4f4;
+    }
+    .rel-item:hover { background: #f0f4ff; }
+    .rel-item-name {
+      text-transform: uppercase;
+      font-size: 12px;
+      color: #33507a;
+    }
+    .rel-item-sig {
+      font-size: 11px;
+      color: #999;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* The role badge is the point of this list: it is the only place you can
+       see, at a glance, which relations will never be spoken. */
+    .rel-item-role {
+      font-size: 10px;
+      padding: 0 0.3rem;
+      border-radius: 3px;
+      background: #eef4ff;
+      color: #33507a;
+      margin-left: 0.3rem;
+    }
+    .rel-item-role.none {
+      background: #fdf0e6;
+      color: #a76b2e;
     }
 
     .type-item {
@@ -505,6 +669,7 @@
     <button id="init-btn" title="Reinitialize concept types">Initialize</button>
     <button id="new-type-btn" title="Create a new concept type">New Type</button>
     <button id="edit-type-btn" title="Edit an existing concept type">Edit Type</button>
+    <button id="new-rel-btn" title="Create a new relation type">New Relation</button>
     <button id="options-btn" title="Display options">Options</button>
   </div>
 
@@ -537,13 +702,56 @@
     <span id="nt-status"></span>
   </div>
 
+  <!-- The relation form is a sibling of the concept form, not a mode of it: it
+       takes different fields (a signature, not a lattice position) and they are
+       never open at once. It sits in the same place for the same reason the
+       concept form does — the graph below must stay visible and clickable,
+       because that is where source and destination types are picked from. -->
+  <div id="new-rel-form" hidden>
+    <div id="nr-fields">
+      <input id="nr-label" type="text" placeholder="relation name" autocomplete="off" spellcheck="false">
+      <div id="nr-sources" class="nr-slot" title="source types: click + then a type">
+        <span class="nr-sep" title="from">from</span>
+        <span id="nr-sources-empty">click + then a type</span>
+        <button id="nr-add-source" type="button" title="add a source type: click, then click one type in the list or graph">+</button>
+      </div>
+      <div id="nr-dest" class="nr-slot" title="destination type: click + then a type">
+        <span class="nr-sep" title="to">→ to</span>
+        <span id="nr-dest-empty">click + then a type</span>
+        <button id="nr-add-dest" type="button" title="set the destination type: click, then click one type in the list or graph">+</button>
+      </div>
+      <!-- Role and preposition decide whether the relation is ever spoken.
+           A relation with no role is legal and silently absent from generated
+           English, so the menu is present on the form rather than tucked away. -->
+      <select id="nr-role" title="how this relation surfaces in English"></select>
+      <input id="nr-prep" type="text" placeholder="preposition" autocomplete="off" spellcheck="false"
+             title="only :pp and :iobj use a preposition">
+      <textarea id="nr-desc" rows="1" placeholder="description (optional)" autocomplete="off" spellcheck="false"></textarea>
+      <textarea id="nr-note" rows="1" placeholder="note (optional)" autocomplete="off" spellcheck="false"></textarea>
+    </div>
+    <button id="nr-create">Create</button>
+    <button id="nr-save" hidden>Save Relation</button>
+    <button id="nr-cancel">Cancel</button>
+    <!-- Same two-step arming as #nt-delete, and last in the row for the same
+         reason: arming must not move any control out from under the pointer. -->
+    <button id="nr-delete" hidden title="Delete this relation (refused if a canonical graph still uses it)">Delete</button>
+    <span id="nr-status"></span>
+  </div>
+
   <div id="error-msg"></div>
 
   <div id="body-row">
 
     <div id="sidebar">
-      <div id="sidebar-header">Concept Types</div>
+      <!-- Two tabs rather than two stacked lists: the catalogs are browsed one
+           at a time, and stacking them would halve the height of the concept
+           list, which is the one in constant use. -->
+      <div id="sidebar-header">
+        <button class="side-tab active" data-tab="concepts">Concept Types</button>
+        <button class="side-tab" data-tab="relations">Relation Types</button>
+      </div>
       <div id="type-list"></div>
+      <div id="relation-list" hidden></div>
     </div>
 
     <div id="sidebar-resizer"></div>

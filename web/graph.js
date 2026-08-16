@@ -88,6 +88,8 @@ function renderSidebar(names) {
         // After "+" in the supertypes cell, the next click adds ONE supertype;
         // otherwise clicks explore the graph normally, even while the form is open.
         if (pickSuperMode) { addSupertypeAndExit(name); return; }
+        // Same one-shot gesture, aimed at the relation form's two type slots.
+        if (pickRelSlot) { fillRelSlotAndExit(name); return; }
         if (selected.has(name)) deselect(name);
         else selectType(name);
         addCgEntry(name);
@@ -213,6 +215,10 @@ async function redraw() {
         // After "+" in the supertypes cell, a graph-node click adds ONE supertype;
         // otherwise clicks explore/select normally, even while the form is open.
         if (pickSuperMode) { addSupertypeAndExit(node.id); return; }
+        // The relation form's source/dest slots use the same gesture — which is
+        // the whole reason the relation form lives here rather than in a pane of
+        // its own: picking a signature means pointing at the lattice.
+        if (pickRelSlot) { fillRelSlotAndExit(node.id); return; }
         if (e.detail >= 2) {
           if (singleClickTimer) { clearTimeout(singleClickTimer); singleClickTimer = null; }
           if (cgEntries.has(node.id)) removeCgEntry(node.id);
@@ -888,6 +894,7 @@ function clearSuperSet() {
 
 // Open the form to create (edit=null) or to edit an existing type.
 function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
+  hideRelForm();               // the two forms are never open at once
   editingLabel = edit;
   pickTargetMode = false;
   exitPickSuper();                           // start out of supertype-pick mode
@@ -1176,3 +1183,403 @@ for (const el of [ntLabel, ntCanon, ntNote]) {
     else if (e.key === 'Escape')          { hideForm(); }
   });
 }
+
+// ── Relation types: sidebar tab, list, and the New/Edit Relation form ─────────
+//
+// A relation type is its SIGNATURE — the name alone identifies nothing — so both
+// the list and the form are built around a pair of concept types rather than
+// around a name with attributes hanging off it. That is the one real difference
+// from the concept side; everything else here deliberately reuses its gestures,
+// because a reader who has understood that form should not have to learn a
+// second visual language for this one.
+//
+// The form lives beside the concept form, above the graph, for a reason worth
+// stating: source and destination are PICKED from the lattice, never typed. So
+// the graph has to stay visible and clickable while the form is open, which
+// rules out a pane or a modal.
+
+const relationListEl = document.getElementById('relation-list');
+const newRelForm  = document.getElementById('new-rel-form');
+const nrLabel     = document.getElementById('nr-label');
+const nrSources   = document.getElementById('nr-sources');
+const nrSrcEmpty  = document.getElementById('nr-sources-empty');
+const nrAddSource = document.getElementById('nr-add-source');
+const nrDest      = document.getElementById('nr-dest');
+const nrDestEmpty = document.getElementById('nr-dest-empty');
+const nrAddDest   = document.getElementById('nr-add-dest');
+const nrRole      = document.getElementById('nr-role');
+const nrPrep      = document.getElementById('nr-prep');
+const nrDesc      = document.getElementById('nr-desc');
+const nrNote      = document.getElementById('nr-note');
+const nrStatus    = document.getElementById('nr-status');
+const nrCreateBtn = document.getElementById('nr-create');
+const nrSaveBtn   = document.getElementById('nr-save');
+const nrDeleteBtn = document.getElementById('nr-delete');
+
+const sourceSet = new Set();
+let destType      = null;   // a single name, or null — a relation has exactly one
+let editingRel    = null;   // null = creating; a name = editing that relation
+let pickRelSlot   = null;   // null | 'source' | 'dest' — which slot the next click fills
+let lastRelTypes  = [];
+let syntaxRoles   = [];
+
+function newRelFormOpen() { return !newRelForm.hidden; }
+
+function setNrHint(msg, kind) {
+  nrStatus.textContent = msg || '';
+  nrStatus.className = kind || '';
+}
+
+// ── Sidebar tabs ──────────────────────────────────────────────────────────────
+
+function showSidebarTab(which) {
+  for (const btn of document.querySelectorAll('.side-tab'))
+    btn.classList.toggle('active', btn.dataset.tab === which);
+  typeListEl.hidden     = which !== 'concepts';
+  relationListEl.hidden = which !== 'relations';
+  // Fetched on first view rather than at startup: the concept list is what the
+  // page opens on, and one more request before first paint buys nothing.
+  if (which === 'relations' && !lastRelTypes.length) refreshRelationList();
+}
+
+for (const btn of document.querySelectorAll('.side-tab'))
+  btn.addEventListener('click', () => showSidebarTab(btn.dataset.tab));
+
+// ── The relation list ─────────────────────────────────────────────────────────
+
+function relationRowEl(r) {
+  const el = document.createElement('div');
+  el.className = 'rel-item';
+  el.dataset.name = r.label;
+
+  const head = document.createElement('div');
+  const name = document.createElement('span');
+  name.className = 'rel-item-name';
+  name.textContent = r.label;
+  head.append(name);
+
+  // The badge is the reason this list is worth having: it is the only place the
+  // catalog shows which relations have no syntax role, and a relation with no
+  // role is invisible in generated English rather than broken — exactly the
+  // failure that is impossible to notice from anywhere else.
+  const badge = document.createElement('span');
+  badge.className = 'rel-item-role' + (r.role ? '' : ' none');
+  badge.textContent = r.role || 'no role';
+  badge.title = r.role
+    ? `surfaces as :${r.role}${r.prep ? ` with "${r.prep}"` : ''}`
+    : 'no syntax role — this relation will not appear in generated English';
+  head.append(badge);
+  el.append(head);
+
+  const sig = document.createElement('div');
+  sig.className = 'rel-item-sig';
+  sig.textContent = `${r.sources.join(', ')} → ${r.dest}`;
+  el.append(sig);
+
+  el.title = r.desc || '';
+  el.addEventListener('click', () => loadRelationForEdit(r.label));
+  return el;
+}
+
+function paintRelationTypes() {
+  relationListEl.replaceChildren();
+  if (!lastRelTypes.length) {
+    relationListEl.innerHTML = '<div class="rel-item-sig" style="padding:.5rem .75rem">no relation types</div>';
+    return;
+  }
+  relationListEl.append(...lastRelTypes.map(relationRowEl));
+}
+
+async function refreshRelationList(selectName) {
+  try {
+    const resp = await fetch('/api/relation-types');
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) { showError(data.error || 'could not load relation types'); return; }
+    lastRelTypes = data;
+    paintRelationTypes();
+    if (selectName) showSidebarTab('relations');
+  } catch (err) { showError(err.message); }
+}
+
+// ── Role menu ─────────────────────────────────────────────────────────────────
+// Fetched, never hard-coded: *GENERATION-SYNTAX-ROLES* decides which roles a
+// realizer actually reads, and a copy here is a copy that can drift from it.
+
+async function loadSyntaxRoles() {
+  try {
+    const resp = await fetch('/api/syntax-roles');
+    const data = await resp.json().catch(() => ([]));
+    if (Array.isArray(data)) syntaxRoles = data;
+  } catch { /* the menu degrades to "(none)" only; not worth an error banner */ }
+  renderRoleMenu();
+}
+
+function renderRoleMenu() {
+  nrRole.replaceChildren();
+  // "(no role)" is a real choice, not an empty state: a relation used only for
+  // projection never needs to be spoken. The warning after saving is advice.
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '(no role)';
+  none.title = 'legal — but the relation will not appear in generated English';
+  nrRole.append(none);
+  for (const r of syntaxRoles) {
+    const opt = document.createElement('option');
+    opt.value = r.role;
+    // An unimplemented role drops the relation exactly as no role does, so it is
+    // labelled rather than silently offered as though it worked.
+    opt.textContent = r.role + (r.implemented ? '' : ' (not implemented)');
+    opt.title = r.examples && r.examples.length
+      ? `like ${r.examples.slice(0, 6).join(', ')}`
+      : 'no relation in this catalog uses it yet';
+    nrRole.append(opt);
+  }
+}
+
+// Only :pp and :iobj read a preposition; the server refuses one without a role.
+// Disabling rather than hiding keeps the field bar from reflowing as you change
+// the menu, which would move every control to its right.
+function syncPrepEnabled() {
+  const role = nrRole.value;
+  const takesPrep = role === 'pp' || role === 'iobj';
+  nrPrep.disabled = !role || !takesPrep;
+  if (nrPrep.disabled) nrPrep.value = '';
+  nrPrep.placeholder = takesPrep ? 'preposition' : '—';
+}
+nrRole.addEventListener('change', () => { syncPrepEnabled(); disarmRelDelete(); });
+
+// ── The two type slots ────────────────────────────────────────────────────────
+
+function renderRelChips() {
+  for (const c of nrSources.querySelectorAll('.nt-chip')) c.remove();
+  for (const c of nrDest.querySelectorAll('.nt-chip')) c.remove();
+  nrSrcEmpty.style.display  = sourceSet.size ? 'none' : '';
+  nrDestEmpty.style.display = destType ? 'none' : '';
+  for (const name of sourceSet)
+    nrSources.insertBefore(relChip(name, () => { sourceSet.delete(name); renderRelChips(); }),
+                           nrAddSource);
+  if (destType)
+    nrDest.insertBefore(relChip(destType, () => { destType = null; renderRelChips(); }),
+                        nrAddDest);
+}
+
+function relChip(name, onRemove) {
+  const chip = document.createElement('span');
+  chip.className = 'nt-chip';
+  chip.title = 'remove';
+  const x = document.createElement('span');
+  x.className = 'x';
+  x.textContent = '✕';
+  chip.append(name, x);
+  chip.addEventListener('click', () => { onRemove(); disarmRelDelete(); });
+  return chip;
+}
+
+function enterPickRel(slot) {
+  cancelPickTarget();
+  exitPickSuper();
+  pickRelSlot = slot;
+  nrAddSource.classList.toggle('active', slot === 'source');
+  nrAddDest.classList.toggle('active', slot === 'dest');
+  showInfo(slot === 'source'
+    ? 'click one type (in the list or graph) to add as a source'
+    : 'click one type (in the list or graph) as the destination');
+}
+
+function exitPickRel() {
+  pickRelSlot = null;
+  nrAddSource.classList.remove('active');
+  nrAddDest.classList.remove('active');
+  if (errorMsg.classList.contains('is-info')) clearError();
+}
+
+function fillRelSlotAndExit(name) {
+  const slot = pickRelSlot;
+  exitPickRel();
+  // A destination is single, so picking replaces rather than accumulates —
+  // otherwise correcting a mis-click would need a removal first.
+  if (slot === 'dest') destType = name;
+  else                 sourceSet.add(name);
+  renderRelChips();
+  disarmRelDelete();
+}
+
+nrAddSource.addEventListener('click',
+  () => (pickRelSlot === 'source' ? exitPickRel() : enterPickRel('source')));
+nrAddDest.addEventListener('click',
+  () => (pickRelSlot === 'dest' ? exitPickRel() : enterPickRel('dest')));
+
+// ── Opening and closing ───────────────────────────────────────────────────────
+
+function openRelForm({ edit = null, sources = [], dest = '', role = '', prep = '',
+                       desc = '', note = '', warning = '' } = {}) {
+  hideForm();                    // the two forms are never open at once
+  editingRel = edit;
+  const isEdit = edit !== null;
+  nrLabel.value    = isEdit ? edit : '';
+  nrLabel.readOnly = isEdit;     // renaming would orphan every graph using it
+  sourceSet.clear();
+  sources.forEach(s => sourceSet.add(s));
+  destType = dest || null;
+  renderRelChips();
+  nrRole.value = role || '';
+  syncPrepEnabled();
+  nrPrep.value = prep || '';
+  nrDesc.value = desc;
+  nrNote.value = note;
+  nrCreateBtn.hidden = isEdit;
+  nrSaveBtn.hidden   = !isEdit;
+  nrDeleteBtn.hidden = !isEdit;
+  disarmRelDelete();
+  clearError();
+  setNrHint(warning || (isEdit
+    ? `editing ${edit} — “+” picks types from the list or graph`
+    : '“+” picks the source and destination from the list or graph'),
+    warning ? 'warn' : '');
+  newRelForm.hidden = false;
+  syncRelFieldHeights();
+  (isEdit ? nrRole : nrLabel).focus();
+}
+
+function hideRelForm() {
+  newRelForm.hidden = true;
+  exitPickRel();
+  editingRel = null;
+  nrLabel.readOnly = false;
+  disarmRelDelete();
+  setNrHint('');
+  clearError();
+}
+
+async function loadRelationForEdit(name) {
+  clearError();
+  try {
+    const resp = await fetch(`/api/relation-type-def?label=${encodeURIComponent(name)}`);
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) { showError(data.error || `could not load ${name}`); return; }
+    openRelForm({ edit: data.label, sources: data.sources || [], dest: data.dest || '',
+                  role: data.role || '', prep: data.prep || '',
+                  desc: data.desc || '', note: data.note || '',
+                  warning: data.warning || '' });
+  } catch (err) { showError(err.message); }
+}
+
+document.getElementById('new-rel-btn').addEventListener('click', () => {
+  if (newRelFormOpen() && editingRel === null) hideRelForm();
+  else openRelForm();
+});
+document.getElementById('nr-cancel').addEventListener('click', hideRelForm);
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+
+async function submitRelation() {
+  const editing = editingRel !== null;
+  const label = editing ? editingRel : nrLabel.value.trim();
+  if (!label)          { showError('a relation name is required'); if (!editing) nrLabel.focus(); return; }
+  if (!sourceSet.size) { showError('click + to pick at least one source type'); return; }
+  if (!destType)       { showError('click + to pick a destination type'); return; }
+  setNrHint(editing ? 'saving…' : 'creating…');
+  try {
+    const path = editing ? 'edit-relation-type' : 'create-relation-type';
+    const url = `/api/${path}?label=${encodeURIComponent(label)}`
+              + `&sources=${encodeURIComponent([...sourceSet].join(','))}`
+              + `&dest=${encodeURIComponent(destType)}`
+              + `&role=${encodeURIComponent(nrRole.value)}`
+              + `&prep=${encodeURIComponent(nrPrep.disabled ? '' : nrPrep.value.trim())}`
+              + `&desc=${encodeURIComponent(nrDesc.value.trim())}`
+              + `&note=${encodeURIComponent(nrNote.value.trim())}`;
+    const resp = await fetch(url, { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      setNrHint('');
+      showError(data.error || `failed: ${resp.status}`);
+      return;
+    }
+    await refreshRelationList();
+    showSidebarTab('relations');
+    // A warning means the write SUCCEEDED and something about it is worth
+    // knowing — so the form stays open showing it, rather than closing as a
+    // clean save does. Closing on a warning would be the same as hiding it.
+    if (data.warning) {
+      if (!editing) openRelForm({ edit: data.label, sources: [...sourceSet], dest: destType,
+                                  role: nrRole.value, prep: nrPrep.value,
+                                  desc: nrDesc.value, note: nrNote.value,
+                                  warning: data.warning });
+      else setNrHint(data.warning, 'warn');
+    } else {
+      hideRelForm();
+    }
+  } catch (err) {
+    setNrHint('');
+    showError(err.message);
+  }
+}
+
+nrCreateBtn.addEventListener('click', submitRelation);
+nrSaveBtn.addEventListener('click', submitRelation);
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+// The same two-step arm the concept form uses, for the same reasons: no modal,
+// and the button never changes width as it arms.
+
+let relDeleteArmed = false;
+let nrHintBeforeArm = '';
+let nrHintKindBeforeArm = '';
+
+function disarmRelDelete() {
+  if (relDeleteArmed) setNrHint(nrHintBeforeArm, nrHintKindBeforeArm);
+  relDeleteArmed = false;
+  nrDeleteBtn.classList.remove('armed');
+}
+
+function armRelDelete() {
+  nrHintBeforeArm = nrStatus.textContent;
+  nrHintKindBeforeArm = nrStatus.className;
+  relDeleteArmed = true;
+  nrDeleteBtn.classList.add('armed');
+  setNrHint(`click Delete again to remove ${editingRel} — Cancel, or any edit, backs out`);
+}
+
+nrDeleteBtn.addEventListener('click', async () => {
+  const label = editingRel;
+  if (!label) return;
+  if (!relDeleteArmed) { armRelDelete(); return; }
+  disarmRelDelete();
+  setNrHint(`deleting ${label}…`);
+  try {
+    const resp = await fetch(`/api/delete-relation-type?label=${encodeURIComponent(label)}`,
+                             { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      setNrHint('');
+      showError(data.error || `failed: ${resp.status}`);
+      return;
+    }
+    hideRelForm();
+    await refreshRelationList();
+  } catch (err) {
+    setNrHint('');
+    showError(err.message);
+  }
+});
+
+// ── Field sizing and keys ─────────────────────────────────────────────────────
+
+function syncRelFieldHeights() {
+  for (const el of [nrDesc, nrNote]) el.style.height = 'auto';
+  const h = Math.min(Math.max(nrDesc.scrollHeight, nrNote.scrollHeight) + 2, 192);
+  for (const el of [nrDesc, nrNote]) el.style.height = h + 'px';
+}
+for (const el of [nrDesc, nrNote]) {
+  el.addEventListener('input', () => { syncRelFieldHeights(); disarmRelDelete(); });
+}
+for (const el of [nrLabel, nrPrep]) el.addEventListener('input', disarmRelDelete);
+
+for (const el of [nrLabel, nrPrep, nrDesc, nrNote]) {
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitRelation(); }
+    else if (e.key === 'Escape')          { hideRelForm(); }
+  });
+}
+
+loadSyntaxRoles();
