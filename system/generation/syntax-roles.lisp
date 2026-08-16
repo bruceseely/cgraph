@@ -52,7 +52,85 @@
     (to    :pp     "to")
     (wgt   :pp     "of weight")
     )
-  "Each entry: (relation-label role-keyword &optional preposition).")
+  "Each entry: (relation-label role-keyword &optional preposition).
+   The BUILT-IN defaults; REGISTER-RELATION-SYNTAX overrides them, and
+   RELATION-SYNTAX-ENTRIES is the effective merge of the two.")
+
+;;; --- Registration ----------------------------------------------------------
+;;;
+;;; The table above used to be the only mapping: RELATION-ROLE-ENTRY read it
+;;; directly, so a relation type defined in a user's own ontology had no way to
+;;; reach the realizer short of editing this file and recompiling. That is the
+;;; asymmetry recorded in notes/type-editor-integration.md §4 -- a concept type
+;;; derives its part of speech from the lattice (POS-FROM-HIERARCHY) and can be
+;;; corrected at runtime (REGISTER-LEXICON-ENTRY), while a relation type could
+;;; do neither, so a user-authored relation was mute in generation and
+;;; unfixable in-image.
+;;;
+;;; This is the override half of that pair, and deliberately the same shape as
+;;; REGISTER-LEXICON-ENTRY: a hash consulted ahead of the declarative defaults.
+;;; It does NOT give relation types a default -- that needs the relation
+;;; hierarchy, §4(b) -- but it makes a custom ontology correctable, which it
+;;; was not.
+
+(defparameter *relation-syntax-overrides* (make-hash-table :test 'equal)
+  "Per-relation syntax registrations, consulted by RELATION-ROLE-ENTRY ahead of
+   *RELATION-SYNTAX-TABLE*. Key: upcased label string. Value: an entry of the
+   same (LABEL ROLE &optional PREPOSITION) shape the table holds, so that
+   everything downstream -- the accessors and all four lint checks -- reads the
+   two sources identically.
+
+   A DEFPARAMETER, like *LEXICON-OVERRIDES*, so reloading this file clears
+   registrations back to the built-in table. Registrations therefore belong in
+   a file that gets loaded, not in a one-off REPL call you would have to
+   remember to repeat after every ASDF:LOAD-SYSTEM :FORCE T.")
+
+(defun register-relation-syntax (label role &optional preposition)
+  "Map LABEL to ROLE (and PREPOSITION, which only :PP and :IOBJ read),
+   overriding any built-in entry. This is how an ontology teaches the realizer
+   about a relation type this file has never heard of.
+
+   ROLE is deliberately NOT validated here -- the same choice
+   REGISTER-LEXICON-ENTRY makes, and for the same reason: the lint already
+   walks the effective mapping (%LINT-UNREALIZABLE-SYNTAX-ROLES) and reports an
+   unknown or unimplemented role with its consequence spelled out, which is a
+   more useful error than a signal at registration time could give."
+  (assert (and label (or (symbolp label) (stringp label))) (label)
+          "REGISTER-RELATION-SYNTAX needs a relation label, got ~s." label)
+  (let ((name (string-upcase (string label))))
+    (setf (gethash name *relation-syntax-overrides*)
+          ;; :CG explicitly, never the ambient *PACKAGE*. The lint hands this
+          ;; symbol to GET-RELATION-TYPE, whose catalog is an EQL table keyed by
+          ;; :CG symbols -- so a label interned anywhere else is a different key
+          ;; and simply is not there. Same reason MAKE-RELATION-TYPE does it.
+          (list* (intern name :conceptual-graphs)
+                 role
+                 (when preposition (list preposition))))
+    role))
+
+(defun unregister-relation-syntax (label)
+  "Drop LABEL's registration, exposing whatever *RELATION-SYNTAX-TABLE* says
+   underneath it (or nothing). True when there was one to drop."
+  (remhash (string-upcase (string label)) *relation-syntax-overrides*))
+
+(defun relation-syntax-entries ()
+  "The effective mapping: every registration, plus the built-in entries no
+   registration shadows. Uniform entry shape, so the lint walks this exactly as
+   it used to walk *RELATION-SYNTAX-TABLE*.
+
+   APPEND rather than NCONC: REMOVE-IF may return the original list when it
+   removes nothing, and destructively appending to that would splice the
+   registrations onto the built-in table itself."
+  (let ((shadowed (make-hash-table :test 'equal))
+        (registered '()))
+    (maphash (lambda (name entry)
+               (setf (gethash name shadowed) t)
+               (push entry registered))
+             *relation-syntax-overrides*)
+    (append (nreverse registered)
+            (remove-if (lambda (e)
+                         (gethash (string-upcase (string (first e))) shadowed))
+                       *relation-syntax-table*))))
 
 ;;; Order in which roles are emitted in an English clause.
 (defparameter *role-emission-order*
@@ -165,12 +243,17 @@
   '(inst loc dest physical-part membr elem cntns age hgt wgt temp size dur time))
 
 (defun relation-role-entry (rel-or-label)
+  "LABEL's effective entry: a registration if there is one, else the built-in.
+   Kept as a direct hash probe plus the original ASSOC rather than a search of
+   RELATION-SYNTAX-ENTRIES, because this runs once per arc per realization and
+   the merged list would be rebuilt on every call."
   (let ((label (cond ((symbolp rel-or-label) rel-or-label)
                      ((typep rel-or-label 'relation)
                       (label (relation-type rel-or-label)))
                      (t nil))))
     (when label
-      (assoc label *relation-syntax-table* :test #'string-equal))))
+      (or (gethash (string-upcase (string label)) *relation-syntax-overrides*)
+          (assoc label *relation-syntax-table* :test #'string-equal)))))
 
 (defun relation-role (rel-or-label)
   "Return the syntactic role keyword for a relation, or NIL if unmapped."

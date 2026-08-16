@@ -41,7 +41,12 @@
 
 (defun relation-tables-lint-test (&optional verbose)
   (with-test-types
-    (let ((ok t))
+    ;; A fresh override table for the whole suite. The fixtures below rebind
+    ;; *RELATION-SYNTAX-TABLE* and expect the effective mapping to be exactly
+    ;; what they put there -- a registration left over in the image, or made by
+    ;; a user's ontology file, would silently falsify that.
+    (let ((ok t)
+          (*relation-syntax-overrides* (make-hash-table :test 'equal)))
       (flet ((check (label pass)
                (setf ok (and ok (and pass t)))
                (when (or verbose (not pass))
@@ -196,6 +201,86 @@
                                    (%lint-missing-generation-relations))))
             (check "TIME finding is :info"
                    (eq :info (first (first (%lint-missing-generation-relations)))))))
+
+        ;; --- Registration: REGISTER-RELATION-SYNTAX ------------------------
+        ;; The hook that lets an ontology defined outside the repo reach the
+        ;; realizer at all. Every fixture rebinds *RELATION-SYNTAX-OVERRIDES*
+        ;; rather than unregistering afterward, so a failing check can't leak a
+        ;; registration into the rest of the suite.
+
+        ;; The headline case: a relation in the catalog that nothing maps is an
+        ;; :error, and a registration -- not an edit to this repo -- clears it.
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+              (*relation-syntax-table* '((agnt :subject) (obj :dobj))))
+          (check "an unmapped catalog relation is reported"
+                 (member 'loc (%contexts-named :relation-not-mapped
+                                               (%lint-relation-syntax-coverage))))
+          (register-relation-syntax 'loc :pp "in")
+          (check "registering it clears the finding"
+                 (not (member 'loc (%contexts-named
+                                    :relation-not-mapped
+                                    (%lint-relation-syntax-coverage)))))
+          (check "and the realizer reads the role back"
+                 (eq :pp (relation-role 'loc)))
+          (check "and the preposition with it"
+                 (equal "in" (relation-preposition 'loc))))
+
+        ;; A registration shadows a built-in rather than sitting beside it.
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+          (check "the built-in applies before any registration"
+                 (eq :dobj (relation-role 'obj)))
+          (register-relation-syntax 'obj :pp "regarding")
+          (check "a registration overrides the built-in"
+                 (and (eq :pp (relation-role 'obj))
+                      (equal "regarding" (relation-preposition 'obj))))
+          (check "the effective mapping holds one entry for the label"
+                 (= 1 (count 'obj (relation-syntax-entries)
+                             :key #'first :test #'string-equal)))
+          (check "unregistering exposes the built-in again"
+                 (and (unregister-relation-syntax 'obj)
+                      (eq :dobj (relation-role 'obj))))
+          (check "unregistering something unregistered is not an error"
+                 (null (unregister-relation-syntax 'obj))))
+
+        ;; A registration counts as coverage exactly as a built-in does --
+        ;; %LIVE-RELATION-SYNTAX-ENTRIES has to see it, or an ontology that
+        ;; supplies its own agentive relation still reads as having no subject.
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+              (*relation-syntax-table* '((obj :dobj) (loc :pp "in"))))
+          (check ":subject is uncovered with no agentive relation mapped"
+                 (member :subject (%contexts-named :syntax-role-uncovered
+                                                   (%lint-uncovered-syntax-roles))))
+          (register-relation-syntax 'agnt :subject)
+          (check "a registration covers the role"
+                 (not (member :subject (%contexts-named
+                                        :syntax-role-uncovered
+                                        (%lint-uncovered-syntax-roles))))))
+
+        ;; REGISTER-RELATION-SYNTAX validates nothing, on purpose: the lint is
+        ;; what catches a bad role, and it must therefore walk registrations
+        ;; and not just the table.
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+              (*relation-syntax-table* '((agnt :subject) (obj :dobj))))
+          (register-relation-syntax 'loc :not-a-role)
+          (check "a registered unknown role is linted like a table entry"
+                 (member 'loc (%contexts-named :unknown-syntax-role
+                                               (%lint-unrealizable-syntax-roles)))))
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+              (*relation-syntax-table* '((agnt :subject) (obj :dobj))))
+          (register-relation-syntax 'loc :pred-cmp)
+          (check "a registered unimplemented role is linted too"
+                 (member 'loc (%contexts-named :unimplemented-syntax-role
+                                               (%lint-unrealizable-syntax-roles)))))
+
+        ;; A string label and a symbol label name the same registration; the
+        ;; entry carries a :CG symbol either way, because the lint hands it to
+        ;; GET-RELATION-TYPE and that catalog is keyed by :CG symbols.
+        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+          (register-relation-syntax "loc" :adv)
+          (check "a string label registers under the same key"
+                 (eq :adv (relation-role 'loc)))
+          (check "the entry's label is interned in :CG"
+                 (eq 'loc (first (first (relation-syntax-entries))))))
 
         ;; --- Reachable through the aggregate entry point --------------------
 

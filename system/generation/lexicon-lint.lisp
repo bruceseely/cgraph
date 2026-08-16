@@ -71,17 +71,24 @@
     (nreverse findings)))
 
 (defun %lint-relation-syntax-coverage ()
-  "Each relation type must have an entry in *relation-syntax-table*; an
-   unmapped relation is silently dropped during generation."
+  "Each relation type must have a syntax entry the realizer can find -- a
+   registration or a built-in; an unmapped relation is silently dropped during
+   generation.
+
+   This is the check a user-authored ontology hits first, so the message names
+   REGISTER-RELATION-SYNTAX: editing *relation-syntax-table* means editing the
+   repo, which is the thing the hook exists to avoid."
   (let ((findings nil))
     (dolist (label (all-relation-types))
-      (unless (assoc label *relation-syntax-table* :test #'string-equal)
+      (unless (relation-role-entry label)
         (push (list :error
                     :relation-not-mapped
-                    (format nil "Relation ~A has no entry in ~
-                                 *relation-syntax-table* — it will be ~
-                                 silently dropped during generation."
-                            label)
+                    (format nil "Relation ~A has no syntax entry — it will be ~
+                                 silently dropped during generation. To fix: ~
+                                 (register-relation-syntax '~(~A~) :dobj) with ~
+                                 whichever role fits, or add it to ~
+                                 *relation-syntax-table*."
+                            label label)
                     label)
               findings)))
     (nreverse findings)))
@@ -94,10 +101,12 @@
 ;;; (does the entry name a relation that exists?).
 
 (defun %live-relation-syntax-entries ()
-  "*RELATION-SYNTAX-TABLE* entries whose relation is actually in the catalog.
-   An entry for a relation you never defined provides no coverage."
+  "Effective syntax entries whose relation is actually in the catalog. An entry
+   for a relation you never defined provides no coverage -- and a registration
+   counts here exactly as a built-in does, which is the point: an ontology that
+   registers its own :SUBJECT relation has covered the role."
   (remove-if-not (lambda (e) (%relation-type-exists-p (first e)))
-                 *relation-syntax-table*))
+                 (relation-syntax-entries)))
 
 (defun %lint-uncovered-syntax-roles ()
   "A syntactic role is reachable only if some relation in the catalog maps to
@@ -122,14 +131,14 @@
     (nreverse findings)))
 
 (defun %lint-unrealizable-syntax-roles ()
-  "*RELATION-SYNTAX-TABLE* entries assigning a role no realizer reads: either
+  "Syntax entries assigning a role no realizer reads: either
    an unrecognized keyword (a typo -- :POS for :POSS) or one declared in
    *GENERATION-SYNTAX-ROLES* as not implemented. The consequence is identical
    in both cases and identical to having no entry at all: every consumer
    compares the role against the keywords it handles, no comparison matches,
    and the relation falls out of the output silently."
   (let ((findings nil))
-    (dolist (entry *relation-syntax-table*)
+    (dolist (entry (relation-syntax-entries))
       (let ((label (first entry))
             (role  (second entry)))
         (cond ((not (known-syntax-role-p role))
@@ -164,7 +173,11 @@
   "The generation tables keyed on relation labels, as (NAME TABLE PP-ONLY-P).
    PP-ONLY-P marks the three whose entries are consulted only for relations
    whose role is :PP."
-  (list (list "*relation-syntax-table*"      *relation-syntax-table*      nil)
+  ;; The first is named in prose rather than by variable, because it is now the
+  ;; MERGE of *relation-syntax-table* and the registrations -- a stale entry may
+  ;; have come from either, and naming one of them would send you to the wrong
+  ;; place half the time. The other three are single variables and say so.
+  (list (list "The relation syntax mapping"  (relation-syntax-entries)    nil)
         (list "*pp-relation-priority*"       *pp-relation-priority*       t)
         (list "*np-pp-prepositions*"         *np-pp-prepositions*         t)
         (list "*clause-level-pp-relations*"  *clause-level-pp-relations*  t)))
@@ -214,7 +227,7 @@
                 (push (list :warn
                             :pp-table-role-mismatch
                             (format nil "~A names relation ~:@(~A~), but its ~
-                                         role in *RELATION-SYNTAX-TABLE* is ~S, ~
+                                         syntax role is ~S, ~
                                          not :PP. The table is only consulted ~
                                          for :PP relations, so this entry can ~
                                          never fire."

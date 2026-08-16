@@ -232,13 +232,37 @@ structure you can only write in prose is a structure nothing can check.
 
 ### Two fixes, at different depths
 
-**(a) A registration hook.** `register-relation-syntax`, mirroring
-`register-lexicon-entry`: the five tables become defaults populated at load
-rather than closed literals, and a user ontology can say how its own relations
-behave. This does not change the model — it makes custom ontologies *possible*
-to make realizable, which today they are not.
+**(a) ~~A registration hook~~ — built 2026-08-16.**
+`register-relation-syntax`, mirroring `register-lexicon-entry`: a hash
+consulted ahead of the declarative defaults, so a user ontology can say how its
+own relations behave. This does not change the model — it makes custom
+ontologies *possible* to make realizable, which they were not.
 
-The natural place to say it is the relation-types file itself, as extra keys
+Scoped to `*relation-syntax-table*` only, deliberately. The other four tables
+degrade gracefully when a relation is absent — `pp-priority-rank` falls back to
+`most-positive-fixnum`, `*clause-level-pp-relations*` is a membership test where
+absent means "stays in the NP", and `np-pp-preposition` returns `NIL` — so only
+the syntax table is a hard gate on whether the relation is emitted at all.
+
+Two things the design got right by copying the lexicon, and one it had to add:
+
+- **No validation at the setter.** `register-lexicon-entry` deliberately
+  validates nothing, leaving it to the lint. The same choice here has a sharper
+  payoff: `%lint-unrealizable-syntax-roles` reports a bad role *with its
+  consequence spelled out*, which beats a signal at registration time. But it
+  only works because the lint now walks the **effective** mapping rather than
+  the table — so `relation-syntax-entries` is what all four checks read.
+- **A registration counts as coverage.** `%live-relation-syntax-entries` had to
+  see registrations too, or an ontology supplying its own agentive relation
+  would still read as having no `:subject` and every graph would be reported as
+  rendering copular.
+- **The lint message names the hook.** The old text said the relation had no
+  entry in `*relation-syntax-table*` — which is an instruction to edit the
+  repo, the exact thing the hook exists to avoid.
+
+What (a) does *not* do is give relation types a default. That still needs (b).
+
+The remaining option under (a), unbuilt: say it in the relation-types file itself, as extra keys
 on the existing form (`:role :pp :prep "in"`). `parse-relation-type-def`
 (`system/core/types.lisp:1390`) already tolerates unknown keys via
 `&allow-other-keys`, exactly as `:note` is tolerated on the concept side, so
@@ -260,13 +284,20 @@ subsumes most of (a), since most relations would inherit rather than declare.
 
 ### Recommended order
 
-1. **(a) first**, and scoped to `*relation-syntax-table*` only. It is small,
-   it unblocks custom ontologies at the level users actually hit, and it is
-   the piece (b) would need anyway for the irregular cases.
+1. ~~**(a) first**, scoped to `*relation-syntax-table*` only.~~ Done
+   2026-08-16. Verified end to end rather than only by lint: a `BENEF` relation
+   defined at runtime and absent from every table renders
+   `[EAT]- (agnt)→[DOG] (obj)→[FOOD] (benef)→[CAT].` as *"A dog eats food."* —
+   the arc silently gone — and after
+   `(register-relation-syntax 'benef :pp "for")` as *"A dog eats food for a
+   cat."* That transition is the whole feature, and it is the thing the lint
+   tests could not have shown.
 2. **Surface the lint at creation time.** Whatever form creates a relation
    should run `%lint-relation-syntax-coverage`'s check and say so: *"created —
    with no syntax role it will be dropped from generated English."* Cheap, and
-   it converts a silent failure into a visible one even before (a) lands.
+   now cheaper still: since (a), the check's own message names
+   `register-relation-syntax` as the remedy, so the UI can quote it rather than
+   compose its own.
 3. **(b) when there is evidence it is wanted** — which is to say, once the
    relation catalog has grown enough through use that declaring each new
    relation's syntax by hand is the annoyance rather than the safety net.
@@ -393,7 +424,7 @@ is a day of careful widening plus one line, with the genuinely open question
 | Draw a canonical graph | ~a day | lightly |
 | Relation-type endpoints | half a day | yes (mostly renames) |
 | Relation browser/editor pane | ~a day | no |
-| (a) registration hook | ~a day | yes |
+| ~~(a) registration hook~~ | done 2026-08-16 | yes |
 | (b) relation hierarchy, generation only | ~a day (see §5) | yes |
 | (b) + projection honours it | + widening the lattice predicates, ~half a day, plus the suite | yes, in core |
 | (b) + joins honour it | not estimated — needs the meet semantics decided first | yes |
