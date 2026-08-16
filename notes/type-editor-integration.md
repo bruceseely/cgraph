@@ -1,16 +1,19 @@
 # Type browser and graph editor — integration
 
-Four questions asked together on 2026-08-16, in the order they arose:
+Five questions asked on 2026-08-16, in the order they arose:
 
 1. Create a concept type while editing a graph.
 2. Draw a graph to serve as a new type's canonical graph.
 3. Create *relation* types the same way.
 4. And then, from what (3) turned up: is the way a relation type reaches
    English a fundamental obstacle to custom ontologies?
+5. And from what (4) proposed: is a relation hierarchy wanted for *reasoning*,
+   or only for generation? Because that decides whether it is a day's work or
+   a design job.
 
 The first two are small. The third is small in the catalog and not small in
 the realizer. The fourth is the real finding, and the rest of this note exists
-mostly to hold it.
+mostly to hold it. The fifth turned out to have a cheerful answer.
 
 Nothing here is built. This is analysis, recorded before it evaporates.
 
@@ -267,9 +270,117 @@ subsumes most of (a), since most relations would inherit rather than declare.
 3. **(b) when there is evidence it is wanted** — which is to say, once the
    relation catalog has grown enough through use that declaring each new
    relation's syntax by hand is the annoyance rather than the safety net.
+   See §5 for what (b) costs outside generation, which is less than expected.
 
 Do not block the UI work on any of this. (1) and (2) at the top of this note
 touch none of it.
+
+---
+
+## 5. What a relation hierarchy would cost in reasoning
+
+§4 recommended deferring (b) partly because its blast radius was unknown. It
+is now known, and it is smaller than assumed. The costs separate into three
+piles that can be paid independently.
+
+### Projection: one line, and the TODO is already written
+
+`relation-type-projects-p` (`system/operations/projection.lisp:120`) is
+already its own generic function, parallel to `type-projects-p`, and it says
+what it is waiting for:
+
+```lisp
+(defmethod relation-type-projects-p ((pattern-type relation-type) (target-type relation-type))
+  ;; For now, require exact type match for relations
+  ;; Could be extended to support relation type hierarchies
+  (types-equal pattern-type target-type))
+```
+
+`types-equal` → `subsumes-p` and projection honours the hierarchy.
+
+**Query comes free.** `query.lisp` reaches everything through `project`
+(lines 34, 71, 115) and never compares relation types itself, so it inherits
+the change with no separate work.
+
+### The lattice predicates only look generic
+
+This is the part that is not free. They are concept-typed nearly all the way
+down, in a way that reads as generic until you try it:
+
+- `subtype-p` **is** generic — it dispatches on `(type-object type-object)`
+  (`system/core/types.lisp:322`).
+- …but it calls `has-subtype`, defined **only** on
+  `(concept-type concept-type)` (line 319). So `subtype-p` on two relation
+  types finds no applicable method and errors.
+- `has-subtype` → `subtypes` → `collect-subtypes`, also concept-type-only
+  (lines 309, ~296).
+- `subsumes-p` is `(concept-type concept-type)` only (line 1507).
+- The symbol-taking `subtype-p` methods (325/328/331) hardcode
+  `get-concept-type`, so `(subtype-p 'ploc 'loc)` searches the *concept*
+  catalog and fails in a way that names the wrong problem.
+
+None of this is hard: every method *body* is already type-neutral, walking
+`direct-supertypes`/`direct-subtypes`, which `relation-type` inherits from
+`type-object`. It is widening about five specializers from `concept-type` to
+`type-object`, and splitting the symbol methods so each resolves against its
+own catalog. But these are core predicates with callers everywhere, so it
+wants the suite run behind it rather than a spot check.
+
+Construction is real work too: `make-relation-type` (line 1337) does not
+accept `:supertypes` at all, there is no `define-relation-type` mirroring
+`define-concept-type` (line 685), and a `check-relation-lattice` would be
+wanted alongside.
+
+### `rel-use` needs nothing
+
+It computes from signatures independently (`system/core/types.lisp:1141`), so
+with `ploc ⊑ loc` in place it already returns both for a compatible pair,
+which is the right answer. The editor's relation column behaves exactly as it
+does today.
+
+It does raise one design question: does a relation subtype **inherit** its
+signature, or must it restate it? Concept types never face this, having no
+signature. Restating is probably right — the signatures are precisely what
+`check-relation-lattice` verifies, and inheriting them makes the check
+vacuous.
+
+### Joins are the actual design question
+
+Three sites compare relation types with `types-equal` and are *not*
+projection:
+
+- `system/operations/maximal-join.lisp:166` and `:197`
+- `system/operations/graph-combination.lisp:380` (structural similarity)
+
+Concept types in a join go to `maximal-common-subtype`
+(`system/core/types.lisp:374`, used by `conformity.lisp:17`). The relation
+analogue does not exist and is not mechanical. Joining `[X]→(loc)→[Y]` with
+`[X]→(ploc)→[Y]` should presumably yield `(ploc)` — but **there is no `⊥` for
+relations**, so two incomparable relation types have no meet and
+`maximal-common-subtype` has no answer to give. The join must then choose
+between leaving the arcs unmerged and failing. That is semantics, not code,
+and nothing forces the decision yet.
+
+### The soundness rule
+
+For `ploc ⊑ loc` to be valid under projection, ploc's admissible pairs must be
+a subset of loc's — which means narrowing on **both** arcs, source and
+destination alike. (A relation is a predicate; subtyping it is implication, so
+its extension shrinks, and narrowing the signature is what shrinks it.) Both
+prose pairs recorded in §4 satisfy this, checked against the concept lattice.
+This is the rule `check-relation-lattice` enforces.
+
+### What this changes about the order
+
+Generation-only is nearly free. Reasoning costs the predicate widening plus a
+join decision — and the two separate cleanly, because **projection can honour
+the hierarchy while joins stay on `types-equal`**. That combination is
+strictly conservative: a join would only ever miss a merge, never make a wrong
+one. So the join semantics can wait for a case that actually needs them.
+
+The order in §4 stands. What §5 removes is the fear that (b) is unbounded: it
+is a day of careful widening plus one line, with the genuinely open question
+(join semantics) safely deferrable.
 
 ---
 
@@ -283,4 +394,6 @@ touch none of it.
 | Relation-type endpoints | half a day | yes (mostly renames) |
 | Relation browser/editor pane | ~a day | no |
 | (a) registration hook | ~a day | yes |
-| (b) relation hierarchy | not estimated — a design job first | yes, widely |
+| (b) relation hierarchy, generation only | ~a day (see §5) | yes |
+| (b) + projection honours it | + widening the lattice predicates, ~half a day, plus the suite | yes, in core |
+| (b) + joins honour it | not estimated — needs the meet semantics decided first | yes |
