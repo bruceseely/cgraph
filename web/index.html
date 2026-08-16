@@ -274,6 +274,7 @@
     #nr-fields > * { min-width: 0; }
     #nr-label { width: 8rem; flex-shrink: 0; text-transform: lowercase; }
     #nr-role  { flex: 0 0 auto; min-width: 6rem; cursor: pointer; }
+    #nr-super { flex: 0 0 auto; min-width: 7rem; cursor: pointer; }
     #nr-prep  { width: 7rem; flex-shrink: 0; }
     #nr-desc  { flex: 3 1 14rem; }
     #nr-note  { flex: 2 1 8rem; }
@@ -514,6 +515,15 @@
       background: #fdf0e6;
       color: #a76b2e;
     }
+    /* A role that came from a supertype rather than from this relation's own
+       definition. Same information, visibly second-hand — otherwise the list
+       shows a role the definition does not contain. */
+    .rel-item-role.inherited {
+      background: #f2f2f2;
+      color: #888;
+      font-style: italic;
+    }
+    .rel-item-super { font-size: 10px; color: #8a7; margin-left: 0.3rem; }
 
     .type-item {
       padding: 0.3rem 0.75rem;
@@ -737,6 +747,11 @@
   <div id="new-rel-form" hidden>
     <div id="nr-fields">
       <input id="nr-label" type="text" placeholder="relation name" autocomplete="off" spellcheck="false">
+      <!-- A relation may sit under another, which is what lets a new one inherit
+           a signature and a syntax role instead of restating both. A menu, not
+           the "+" picker the type slots use: the choices are relations, and the
+           relation list is right there in the sidebar rather than in the graph. -->
+      <select id="nr-super" title="inherit signature and syntax role from this relation"></select>
       <div id="nr-sources" class="nr-slot" title="source types: click + then a type">
         <span class="nr-sep" title="from">from</span>
         <span id="nr-sources-empty">click + then a type</span>

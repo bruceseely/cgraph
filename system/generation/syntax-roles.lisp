@@ -259,18 +259,41 @@
 (defparameter *pp-relation-priority*
   '(inst loc dest physical-part membr elem cntns age hgt wgt temp size dur time))
 
-(defun relation-role-entry (rel-or-label)
-  "LABEL's effective entry: a registration if there is one, else the built-in.
-   Kept as a direct hash probe plus the original ASSOC rather than a search of
+(defun %own-relation-syntax (label)
+  "LABEL's OWN entry -- a registration if there is one, else the built-in. A
+   direct hash probe plus the original ASSOC rather than a search of
    RELATION-SYNTAX-ENTRIES, because this runs once per arc per realization and
    the merged list would be rebuilt on every call."
+  (or (gethash (string-upcase (string label)) *relation-syntax-overrides*)
+      (assoc label *relation-syntax-table* :test #'string-equal)))
+
+(defun relation-role-entry (rel-or-label)
+  "LABEL's effective entry: its own if it has one, otherwise the nearest one
+   INHERITED from a relation type above it.
+
+   This is what makes a relation hierarchy worth having. It is the same move
+   POS-FROM-HIERARCHY makes for concept types, which is why a custom concept
+   type is born realizable and a custom relation type was not: define
+   BENEFICIARY under RCPT and it surfaces as RCPT does until told otherwise,
+   with nothing registered and nothing added to any table.
+
+   RELATION-ANCESTORS is breadth-first and nearest-first, so the most specific
+   answer wins when two ancestors disagree, and a cycle cannot hang this."
   (let ((label (cond ((symbolp rel-or-label) rel-or-label)
                      ((typep rel-or-label 'relation)
                       (label (relation-type rel-or-label)))
+                     ((typep rel-or-label 'relation-type) (label rel-or-label))
                      (t nil))))
     (when label
-      (or (gethash (string-upcase (string label)) *relation-syntax-overrides*)
-          (assoc label *relation-syntax-table* :test #'string-equal)))))
+      (or (%own-relation-syntax label)
+          ;; Only then the walk, and only if the label names something with a
+          ;; hierarchy at all -- the overwhelming majority of lookups are hits
+          ;; on the line above and must not pay for a catalog probe.
+          (let ((node (ignore-errors (get-relation-type label))))
+            (when node
+              (loop for ancestor in (rest (relation-ancestors node))
+                    for entry = (%own-relation-syntax (label ancestor))
+                    when entry return entry)))))))
 
 (defun relation-role (rel-or-label)
   "Return the syntactic role keyword for a relation, or NIL if unmapped."

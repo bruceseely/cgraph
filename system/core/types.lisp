@@ -299,7 +299,19 @@
   collected
   (list))
 
-(defmethod collect-subtypes ((node concept-type) &optional (collected (list)))
+;;; --- Lattice walks, for either kind of type ---------------------------------
+;;;
+;;; These four specialized on CONCEPT-TYPE and read as though that were a
+;;; requirement. It never was: every body here walks DIRECT-SUBTYPES or
+;;; DIRECT-SUPERTYPES, which RELATION-TYPE inherits from TYPE-OBJECT along with
+;;; everything else. Widening the specializers is what lets relation types have
+;;; a hierarchy at all -- see notes/type-editor-integration.md §4(b).
+;;;
+;;; The BOTTOM guard below stays and stays correct: relations have no bottom, and
+;;; NODES-EQUAL of a relation type and a concept type is NIL by the method at the
+;;; foot of this file, so the guard simply never fires for them.
+
+(defmethod collect-subtypes ((node type-object) &optional (collected (list)))
   (unless (nodes-equal node *concept-type-bottom*)
     ;; every type is a subtype of itself, except bottom-type
     (pushnew node collected)
@@ -311,7 +323,7 @@
 (defmethod collect-subtypes ((node symbol) &optional (collected (list)))
   (collect-subtypes (get-concept-type node) collected))
 
-(defmethod subtypes ((node concept-type))
+(defmethod subtypes ((node type-object))
   (collect-subtypes node))
 
 (defmethod subtypes ((node symbol))
@@ -321,7 +333,7 @@
   (remove node (subtypes node)))
 
 
-(defmethod has-subtype ((subtype-node concept-type) (type-node concept-type))
+(defmethod has-subtype ((subtype-node type-object) (type-node type-object))
   (not (null (find subtype-node (subtypes type-node) :test #'nodes-eq))))
 
 (defmethod subtype-p ((subtype-node type-object) (type-node type-object))
@@ -1141,6 +1153,99 @@
 (defmethod get-relation-type ((relation-type relation-type))
   relation-type)
 
+;;; --- The relation type hierarchy -------------------------------------------
+;;;
+;;; RELATION-TYPE has inherited DIRECT-SUPERTYPES and DIRECT-SUBTYPES from
+;;; TYPE-OBJECT since the beginning and nothing ever filled them. Sowa's theory
+;;; has the hierarchy; two pairs in the shipped catalog describe one in prose
+;;; and fail to represent it (PART/PHYSICAL-PART, LOC/PLOC). See
+;;; notes/type-editor-integration.md §4(b).
+;;;
+;;; Deliberately NOT reusing ADD-INHERITANCE-LINK: that function is mostly
+;;; top/bottom bookkeeping -- pushing BOTTOM under a childless type, pulling TOP
+;;; out from over a type that gains a real parent -- and relations have neither
+;;; bound. What is left once that goes is the two back-pointers.
+
+(defun add-relation-inheritance (supertype subtype)
+  "Link SUBTYPE under SUPERTYPE. EQ rather than NODES-EQ throughout: catalog
+   entries are singletons, and NODES-EQUAL on a relation type answers NIL for
+   everything including another relation type."
+  (pushnew supertype (direct-supertypes subtype) :test #'eq)
+  (pushnew subtype (direct-subtypes supertype) :test #'eq)
+  subtype)
+
+(defun relation-ancestors (relation-type)
+  "RELATION-TYPE and every relation type above it, nearest first.
+
+   Breadth-first and cycle-safe: a malformed catalog is CHECK-RELATION-LATTICE's
+   business to report, not this walker's to hang on. Nearest-first is what makes
+   the role lookup take the most specific answer when two ancestors disagree."
+  (let ((seen (list)) (order (list)) (queue (list relation-type)))
+    (loop while queue do
+      (let ((node (pop queue)))
+        (unless (member node seen :test #'eq)
+          (push node seen)
+          (push node order)
+          (dolist (super (direct-supertypes node))
+            (when (typep super 'relation-type) (setf queue (append queue (list super))))))))
+    (nreverse order)))
+
+(defun relation-signature-narrows-p (sub super)
+  "True when SUB's signature is a subset of SUPER's, which is what makes
+   SUB ⊑ SUPER sound under projection.
+
+   A relation is a predicate, so subtyping it is implication and its extension
+   must SHRINK -- which means narrowing on BOTH arcs, source and destination
+   alike. Every source of SUB must sit under some source of SUPER, and SUB's
+   destination under SUPER's."
+  (let ((sub-srcs   (relation-source-list sub))
+        (super-srcs (relation-source-list super))
+        (sub-dest   (dest-type sub))
+        (super-dest (dest-type super)))
+    (and (every (lambda (s)
+                  (some (lambda (p) (ignore-errors (subsumes-p p s))) super-srcs))
+                sub-srcs)
+         (or (null super-dest)
+             (and sub-dest (ignore-errors (subsumes-p super-dest sub-dest))))
+         t)))
+
+(defun check-relation-lattice (&key (stream *standard-output*))
+  "Report every relation type whose declared hierarchy is unsound: a cycle, or a
+   subtype whose signature does not narrow its supertype's. Returns the list of
+   complaints, empty when the lattice is well-formed.
+
+   The counterpart of CHECK-TYPE-LATTICE on the concept side, and needed for the
+   same reason: nothing else would notice, and an unsound relation subtype makes
+   projection claim something the graph does not say."
+  (let ((problems (list)))
+    (loop for rel being the hash-values of *relation-type-catalog* do
+      (dolist (super (direct-supertypes rel))
+        (when (typep super 'relation-type)
+          ;; A cycle shows up as each being an ancestor of the other.
+          (cond
+            ((member rel (rest (relation-ancestors super)) :test #'eq)
+             (push (format nil "~(~a~) and ~(~a~) are each above the other"
+                           (label rel) (label super))
+                   problems))
+            ((not (relation-signature-narrows-p rel super))
+             (push (format nil
+                           "~(~a~) (~{~(~a~)~^ ~} -> ~(~a~)) does not narrow ~
+                            ~(~a~) (~{~(~a~)~^ ~} -> ~(~a~))"
+                           (label rel)
+                           (mapcar #'label (relation-source-list rel))
+                           (and (dest-type rel) (label (dest-type rel)))
+                           (label super)
+                           (mapcar #'label (relation-source-list super))
+                           (and (dest-type super) (label (dest-type super))))
+                   problems))))))
+    (setf problems (nreverse problems))
+    (when stream
+      (if problems
+          (format stream "~&~{;; relation lattice: ~a~%~}" problems)
+          (format stream "~&;; relation lattice: ~a relation types, no problems~%"
+                  (hash-table-count *relation-type-catalog*))))
+    problems))
+
 
 
 (defun rel-use (source dest)
@@ -1267,6 +1372,13 @@
 (defmethod types-equal ((type1 relation-type) (type2 relation-type))
   (nodes-equal type1 type2))
 
+;;; Without this, SUBSUMES-P answers NIL for a relation type and ITSELF: its
+;;; first arm is TYPES-EQ, whose only other methods are (concept-type
+;;; concept-type) and the (t t) fallthrough that answers NIL. Catalog entries
+;;; are singletons, so EQ is the identity that matters.
+(defmethod types-eq ((type1 relation-type) (type2 relation-type))
+  (eq type1 type2))
+
 (defmethod nodes-equal ((rel relation-type) (anything t)) nil)
 
 (defmethod nodes-equal ((anything t) (rel relation-type)) nil)
@@ -1328,8 +1440,8 @@
   (relation-arc-types (get-relation-type type-label)))
 
 
-(defmethod make-relation-type ((label string)  &rest keys &key (source-types nil) (dest-type nil) description)
-  (declare (ignore source-types dest-type description))
+(defmethod make-relation-type ((label string)  &rest keys &key (source-types nil) (dest-type nil) description supertypes)
+  (declare (ignore source-types dest-type description supertypes))
   ;; :CG explicitly, never the ambient *PACKAGE*. This interns the key the
   ;; relation-type catalog is stored under, and the catalog is an EQL table, so
   ;; a label interned somewhere else is a different key and simply is not
@@ -1339,7 +1451,7 @@
   ;; then missed. Same fix, and the same reason, as the concept-type side.
   (apply #'make-relation-type (intern (string-upcase label) :cg) keys))
 
-(defmethod make-relation-type ((label symbol)  &rest keys &key (source-types nil) (dest-type nil) description)
+(defmethod make-relation-type ((label symbol)  &rest keys &key (source-types nil) (dest-type nil) description supertypes)
   (assert (or (null source-types) (every #'concept-type-p source-types))
           ()
           "For (make-relation-type ~a), source should be a concept-type, or nil" label)
@@ -1349,6 +1461,19 @@
   keys
 
   (when (and source-types (not (listp source-types))) (setf source-types (list source-types)))
+
+  ;; A subtype that says nothing about its own signature takes its parent's.
+  ;; The design note argued the other way -- restate it, so CHECK-RELATION-LATTICE
+  ;; always has something to verify -- and that was wrong: an inherited signature
+  ;; is sound by construction, so the check loses nothing, while requiring every
+  ;; subtype to repeat its parent's arcs makes the common case the tedious one.
+  ;; The check still bites for every subtype that DOES narrow, which is the case
+  ;; it exists for.
+  (let ((parent (and supertypes (typep (first supertypes) 'relation-type)
+                     (first supertypes))))
+    (when parent
+      (unless source-types (setf source-types (relation-source-list parent)))
+      (unless dest-type    (setf dest-type    (dest-type parent)))))
 
   (let ((relation-type (make-instance 'relation-type
 				      :label label
@@ -1365,6 +1490,15 @@
                                       ;; the truth.
 				      :desc (or description ""))))
     (record-relation-type relation-type)
+    ;; After RECORD, so a self-referential hierarchy cannot see a half-built
+    ;; catalog -- the same order DEFINE-CONCEPT-TYPE follows.
+    (dolist (super supertypes)
+      (let ((node (if (typep super 'relation-type)
+                      super
+                      (ignore-errors (get-relation-type super)))))
+        (unless node
+          (error "unknown relation supertype ~a for ~a" super label))
+        (add-relation-inheritance node relation-type)))
     ;;(make-relation-predicate label)
     relation-type))
 
@@ -1398,20 +1532,36 @@
   ;; :prep "for"). They need no change to the file format, because
   ;; &allow-other-keys already tolerated them; older files without them are
   ;; unaffected, and an image with no generation system ignores them.
-  (destructuring-bind (&key label desc source-types dest-type role prep
+  (destructuring-bind (&key label desc source-types dest-type role prep supertypes
                        &allow-other-keys)
       def
 
     (unless (listp source-types) (setf source-types (list source-types)))
+    (unless (listp supertypes) (setf supertypes (list supertypes)))
 
     (let* ((normalized-sources (mapcar (lambda (s) (intern (string-upcase (string s)) :cg))
                                        source-types))
            (normalized-dest    (when dest-type (intern (string-upcase (string dest-type)) :cg)))
            (source      (mapcar #'lookup-concept-type normalized-sources))
-           (destination (lookup-concept-type normalized-dest)))
+           (destination (lookup-concept-type normalized-dest))
+           ;; Resolved here rather than inside MAKE-RELATION-TYPE so a forward
+           ;; reference -- a subtype defined above its parent in the file --
+           ;; fails with the name you wrote rather than a NIL somewhere later.
+           ;; Relations load in file order and nothing sorts them, so this is a
+           ;; real thing to get told about.
+           (supers (mapcar (lambda (name)
+                             (let* ((sym (intern (string-upcase (string name)) :cg))
+                                    (node (ignore-errors (get-relation-type sym))))
+                               (unless node
+                                 (error "relation ~(~a~): unknown supertype ~(~a~) ~
+                                         (define it earlier in the file)"
+                                        label name))
+                               node))
+                           supertypes)))
 
       (prog1 (make-relation-type (string-upcase label)
                                  :description desc
+                                 :supertypes supers
                                  :source-types source
                                  :dest-type destination)
         ;; After the type exists, so a registration never names a relation the
@@ -1420,6 +1570,25 @@
         (when (and role *relation-syntax-hook*)
           (funcall *relation-syntax-hook* label role prep))))))
 
+
+(defun define-relation-type (&key label supertypes source-types dest-type desc)
+  "Create or replace a relation type, resolving names to catalog entries. The
+   relation-side counterpart of DEFINE-CONCEPT-TYPE, for callers holding names
+   rather than objects -- the web endpoints, and the REPL."
+  (let ((sym    (intern (string-upcase (string label)) :cg))
+        (supers (mapcar (lambda (n)
+                          (or (ignore-errors (get-relation-type n))
+                              (error "unknown relation supertype: ~a" n)))
+                        (if (listp supertypes) supertypes (list supertypes))))
+        (srcs   (mapcar (lambda (n)
+                          (or (ignore-errors (get-concept-type n))
+                              (error "unknown source type: ~a" n)))
+                        (if (listp source-types) source-types (list source-types))))
+        (dest   (and dest-type
+                     (or (ignore-errors (get-concept-type dest-type))
+                         (error "unknown destination type: ~a" dest-type)))))
+    (make-relation-type sym :supertypes supers :source-types srcs
+                            :dest-type dest :description desc)))
 
 (defun load-relation-types (filename &optional supress-warnings)
   (declare (special *undefined-concept-types*))
@@ -1522,7 +1691,9 @@
   nil)
 
 
-(defmethod subsumes-p ((type1 concept-type) (type2 concept-type))
+(defmethod subsumes-p ((type1 type-object) (type2 type-object))
+  "True when TYPE1 is TYPE2 or an ancestor of it. Widened from CONCEPT-TYPE so
+   projection can ask it of relation types -- the body never cared which."
   (or (types-eq type1 type2)
       (subtype-p type2 type1)))
 

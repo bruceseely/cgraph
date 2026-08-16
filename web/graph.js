@@ -1207,6 +1207,7 @@ const nrAddSource = document.getElementById('nr-add-source');
 const nrDest      = document.getElementById('nr-dest');
 const nrDestEmpty = document.getElementById('nr-dest-empty');
 const nrAddDest   = document.getElementById('nr-add-dest');
+const nrSuper     = document.getElementById('nr-super');
 const nrRole      = document.getElementById('nr-role');
 const nrPrep      = document.getElementById('nr-prep');
 const nrDesc      = document.getElementById('nr-desc');
@@ -1278,8 +1279,11 @@ function relationRowEl(r) {
   // alarm. PAINTRELATIONTYPES runs again once they arrive.
   const dead = r.role ? (roleEntry ? !roleEntry.implemented : false) : true;
   const badge = document.createElement('span');
-  badge.className = 'rel-item-role' + (dead ? ' none' : '');
-  badge.textContent = r.role || 'no role';
+  // An inherited role is real but second-hand, and saying so matters here: the
+  // definition does not contain it, so a reader comparing list to file would
+  // otherwise find it missing.
+  badge.className = 'rel-item-role' + (dead ? ' none' : (r.inherited ? ' inherited' : ''));
+  badge.textContent = (r.role || 'no role') + (r.inherited ? ' ⇡' : '');
   badge.title = !r.role
     ? 'no syntax role — this relation will not appear in generated English'
     : dead
@@ -1287,6 +1291,14 @@ function relationRowEl(r) {
       : `surfaces as :${r.role}${r.prep ? ` with "${r.prep}"` : ''}`;
   head.append(badge);
   el.append(head);
+
+  if (r.supertypes && r.supertypes.length) {
+    const sup = document.createElement('span');
+    sup.className = 'rel-item-super';
+    sup.textContent = `⊑ ${r.supertypes.join(', ')}`;
+    sup.title = 'inherits signature and syntax role from this';
+    head.append(sup);
+  }
 
   const sig = document.createElement('div');
   sig.className = 'rel-item-sig';
@@ -1335,6 +1347,31 @@ async function loadSyntaxRoles() {
   if (lastRelTypes.length) paintRelationTypes();
 }
 
+// Rebuilt whenever the relation list is, and never containing the relation
+// being edited: a relation cannot be its own supertype, and offering it only to
+// have the server refuse is worse than not offering it.
+function renderSuperMenu(current, editing) {
+  nrSuper.replaceChildren();
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '⊑ (no parent)';
+  none.title = 'a relation of its own, inheriting nothing';
+  nrSuper.append(none);
+  for (const r of lastRelTypes) {
+    if (editing && r.label === editing) continue;
+    const opt = document.createElement('option');
+    opt.value = r.label;
+    opt.textContent = `⊑ ${r.label}`;
+    opt.title = `${r.sources.join(', ')} → ${r.dest}`
+              + (r.role ? ` — surfaces as :${r.role}` : ' — no syntax role');
+    nrSuper.append(opt);
+  }
+  // Only one is offered even though the model takes a list: multiple
+  // inheritance of a SIGNATURE has no obvious meaning (whose arcs must you
+  // narrow?), and nothing has asked for it. The file format allows several.
+  nrSuper.value = (current && current[0]) || '';
+}
+
 function renderRoleMenu() {
   nrRole.replaceChildren();
   // "(no role)" is a real choice, not an empty state: a relation used only for
@@ -1375,6 +1412,7 @@ function syncPrepEnabled() {
   nrPrep.placeholder = takesPrep ? 'preposition' : '—';
 }
 nrRole.addEventListener('change', () => { syncPrepEnabled(); disarmRelDelete(); });
+nrSuper.addEventListener('change', disarmRelDelete);
 
 // ── The two type slots ────────────────────────────────────────────────────────
 
@@ -1439,8 +1477,8 @@ nrAddDest.addEventListener('click',
 
 // ── Opening and closing ───────────────────────────────────────────────────────
 
-function openRelForm({ edit = null, sources = [], dest = '', role = '', prep = '',
-                       desc = '', note = '', warning = '' } = {}) {
+function openRelForm({ edit = null, supertypes = [], sources = [], dest = '',
+                       role = '', prep = '', desc = '', note = '', warning = '' } = {}) {
   hideForm();                    // the two forms are never open at once
   editingRel = edit;
   const isEdit = edit !== null;
@@ -1450,6 +1488,7 @@ function openRelForm({ edit = null, sources = [], dest = '', role = '', prep = '
   sources.forEach(s => sourceSet.add(s));
   destType = dest || null;
   renderRelChips();
+  renderSuperMenu(supertypes, edit);
   nrRole.value = role || '';
   syncPrepEnabled();
   nrPrep.value = prep || '';
@@ -1485,7 +1524,8 @@ async function loadRelationForEdit(name) {
     const resp = await fetch(`/api/relation-type-def?label=${encodeURIComponent(name)}`);
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || data.error) { showError(data.error || `could not load ${name}`); return; }
-    openRelForm({ edit: data.label, sources: data.sources || [], dest: data.dest || '',
+    openRelForm({ edit: data.label, supertypes: data.supertypes || [],
+                  sources: data.sources || [], dest: data.dest || '',
                   role: data.role || '', prep: data.prep || '',
                   desc: data.desc || '', note: data.note || '',
                   warning: data.warning || '' });
@@ -1510,6 +1550,7 @@ async function submitRelation() {
   try {
     const path = editing ? 'edit-relation-type' : 'create-relation-type';
     const url = `/api/${path}?label=${encodeURIComponent(label)}`
+              + `&supertypes=${encodeURIComponent(nrSuper.value)}`
               + `&sources=${encodeURIComponent([...sourceSet].join(','))}`
               + `&dest=${encodeURIComponent(destType)}`
               + `&role=${encodeURIComponent(nrRole.value)}`
@@ -1529,7 +1570,8 @@ async function submitRelation() {
     // knowing — so the form stays open showing it, rather than closing as a
     // clean save does. Closing on a warning would be the same as hiding it.
     if (data.warning) {
-      if (!editing) openRelForm({ edit: data.label, sources: [...sourceSet], dest: destType,
+      if (!editing) openRelForm({ edit: data.label, supertypes: nrSuper.value ? [nrSuper.value] : [],
+                                  sources: [...sourceSet], dest: destType,
                                   role: nrRole.value, prep: nrPrep.value,
                                   desc: nrDesc.value, note: nrNote.value,
                                   warning: data.warning });

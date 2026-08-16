@@ -118,10 +118,21 @@
 
 
 (defmethod relation-type-projects-p ((pattern-type relation-type) (target-type relation-type))
-  "Check if pattern relation type subsumes target relation type."
-  ;; For now, require exact type match for relations
-  ;; Could be extended to support relation type hierarchies
-  (types-equal pattern-type target-type))
+  "Check if pattern relation type subsumes target relation type.
+
+   Was TYPES-EQUAL, with a comment saying it could be extended to relation type
+   hierarchies once there were any. There are now, so this is the same
+   SUBSUMES-P the concept side uses in TYPE-PROJECTS-P above -- a pattern
+   asking for (LOC) is answered by a graph that says (PLOC), because PLOC ⊑ LOC
+   means every ploc arc is a loc arc.
+
+   Sound because CHECK-RELATION-LATTICE holds subtypes to narrowing on both
+   arcs: a relation is a predicate, so subtyping it is implication and its
+   extension shrinks. Joins deliberately still compare with TYPES-EQUAL -- see
+   notes/type-editor-integration.md §5, where the meet of two incomparable
+   relation types is the open question, and a join that misses a merge is
+   harmless where one that invents a relation type is not."
+  (subsumes-p pattern-type target-type))
 
 
 (defmethod arcs-project-p ((pattern-arcs list) (target-arcs list) (concept-mapping list))

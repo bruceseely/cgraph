@@ -810,14 +810,16 @@ before any type object exists."
       (format nil "~(~a~)" (string (first sources)))
       (format nil "(~{~(~a~)~^ ~})" (mapcar #'string sources))))
 
-(defun relation-type-def-string (label sources dest role prep desc note)
+(defun relation-type-def-string (label supers sources dest role prep desc note)
   "The one-line (:label ...) source form for a relation type (no trailing newline).
 Keys are emitted in the order the shipped file uses, and each optional one only
 when non-empty, so a definition carrying no role reads exactly like the ones that
 were there before :role existed."
-  (format nil "(:label ~(~a~) :source-types ~a :dest-type ~(~a~)~
+  (format nil "(:label ~(~a~)~@[ :supertypes (~{~(~a~)~^ ~})~] ~
+               :source-types ~a :dest-type ~(~a~)~
                ~@[ :role ~(~s~)~]~@[ :prep ~s~]~@[ :desc ~s~]~@[ :note ~s~])"
           (string label)
+          (and supers (mapcar #'string supers))
           (relation-source-tokens-text sources)
           (string dest)
           (and role (plusp (length role)) (intern (string-upcase role) :keyword))
@@ -825,11 +827,11 @@ were there before :role existed."
           (and desc (plusp (length desc)) desc)
           (and note (plusp (length note)) note)))
 
-(defun append-relation-type-def (label sources dest role prep desc note file)
+(defun append-relation-type-def (label supers sources dest role prep desc note file)
   "Append one (:label ...) relation form to FILE in place (:append never renames,
 so a symlinked source keeps pointing at the edited file)."
   (with-open-file (out file :direction :output :if-exists :append :if-does-not-exist :error)
-    (format out "~&~a~%" (relation-type-def-string label sources dest role prep desc note))))
+    (format out "~&~a~%" (relation-type-def-string label supers sources dest role prep desc note))))
 
 (defun rollback-relation-type (label)
   "Undo a just-created relation type: drop it from the catalog AND drop any syntax
@@ -850,7 +852,15 @@ Shorter than CONCEPT-TYPE-REFERRERS because relation types have no hierarchy to
 orphan and nothing else points at them -- the three PP support tables name them, but
 an entry there that stops firing is what %LINT-STALE-RELATION-ENTRIES already reports
 as :info, so blocking a delete on it would be stronger than the lint's own verdict."
-  (let ((found (list)))
+  (let ((found (list))
+        (node (ignore-errors (get-relation-type (intern (string-upcase (string label)) :cg)))))
+    ;; Subtypes first, exactly as CONCEPT-TYPE-REFERRERS does: deleting a
+    ;; relation that others inherit from would orphan them, and unlike the
+    ;; concept side there is no TOP for them to fall back to.
+    (when node
+      (dolist (sub (direct-subtypes node))
+        (when (typep sub 'relation-type)
+          (push (format nil "~(~a~) inherits from it" (label sub)) found))))
     (loop for ct being the hash-values of *concept-type-catalog* do
       (let ((canon (ignore-errors (canonical-graph-string ct))))
         (when (type-name-mentioned-p label canon)
@@ -902,15 +912,24 @@ re-listing these fields or splicing braces back together."
          (srcs  (relation-source-list rel))
          (role  (ignore-errors (relation-role (label rel))))
          (prep  (ignore-errors (relation-preposition (label rel)))))
-    (format nil "{\"label\":\"~a\",\"sources\":~a,\"dest\":\"~a\",\"desc\":\"~a\",~
-                 \"role\":\"~a\",\"prep\":\"~a\"~{,~a~}}"
+    (format nil "{\"label\":\"~a\",\"supertypes\":~a,\"sources\":~a,\"dest\":\"~a\",~
+                 \"desc\":\"~a\",\"role\":\"~a\",\"prep\":\"~a\",\"inherited\":~:[false~;true~]~
+                 ~{,~a~}}"
             (json-escape label)
+            (json-string-array
+             (loop for s in (direct-supertypes rel)
+                   when (typep s 'relation-type)
+                     collect (string-downcase (string (label s)))))
             (json-string-array
              (mapcar (lambda (s) (string-downcase (string (label s)))) srcs))
             (json-escape (if dest (string-downcase (string (label dest))) ""))
             (json-escape (or (ignore-errors (desc rel)) ""))
             (json-escape (if role (string-downcase (symbol-name role)) ""))
             (json-escape (or prep ""))
+            ;; Whether that role is the relation's OWN or one it inherits. The
+            ;; pane would otherwise show a role the definition does not contain,
+            ;; and an edit that "kept" it would write it down as if declared.
+            (and role (null (%own-relation-syntax (label rel))))
             extra-pairs)))
 
 ;;; GET /api/relation-types — the whole relation catalog, for the browser pane.
@@ -951,13 +970,14 @@ re-listing these fields or splicing braces back together."
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
       (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
 
-(defun parse-relation-form (label sources dest role prep desc note)
+(defun parse-relation-form (label supers sources dest role prep desc note)
   "Validate and normalize a relation form's fields, returning them as a plist.
 Signals with a one-line message on anything the catalog would refuse.
 
 Everything is checked BEFORE any mutation, which is what lets both create and
 edit leave the catalog and the file untouched when a submission is bad."
   (let* ((label   (and label (string-trim '(#\Space #\Tab) label)))
+         (sup-tok (split-type-string (or supers "")))
          (src-tok (split-type-string (or sources "")))
          (dest    (and dest (string-trim '(#\Space #\Tab) dest)))
          (role    (and role (string-trim '(#\Space #\Tab) role)))
@@ -981,12 +1001,35 @@ edit leave the catalog and the file untouched when a submission is bad."
         (error "unknown source type: ~a" s)))
     (unless (ignore-errors (get-concept-type dest))
       (error "unknown destination type: ~a" dest))
+    (dolist (p sup-tok)
+      (unless (ignore-errors (get-relation-type (intern (string-upcase p) :cg)))
+        (error "unknown relation supertype: ~a" p))
+      (when (string-equal p label)
+        (error "~a cannot be its own supertype" label)))
     ;; A preposition without a role reads as a field left behind by changing the
     ;; role to one that has no preposition, and would be written to the file
     ;; where nothing would ever read it.
     (when (and prep (null role))
       (error "a preposition needs a role (:pp or :iobj) to belong to"))
-    (list :label label :sources src-tok :dest dest
+    ;; Soundness, checked here rather than left to CHECK-RELATION-LATTICE. A
+    ;; subtype whose signature does not narrow its parent's makes projection
+    ;; claim something the graph never said, so it should be refused at the form
+    ;; that proposed it -- while the fields are still on screen -- not reported
+    ;; at the next startup by a lint nobody is looking at.
+    (dolist (p sup-tok)
+      (let* ((parent (get-relation-type (intern (string-upcase p) :cg)))
+             (p-srcs (relation-source-list parent))
+             (p-dest (dest-type parent)))
+        (dolist (tok src-tok)
+          (let ((src (get-concept-type tok)))
+            (unless (some (lambda (ps) (ignore-errors (subsumes-p ps src))) p-srcs)
+              (error "~a is not a kind of ~a: source ~a is not under ~{~(~a~)~^ or ~}"
+                     label p tok (mapcar #'label p-srcs)))))
+        (when p-dest
+          (unless (ignore-errors (subsumes-p p-dest (get-concept-type dest)))
+            (error "~a is not a kind of ~a: destination ~a is not under ~(~a~)"
+                   label p dest (label p-dest))))))
+    (list :label label :supers sup-tok :sources src-tok :dest dest
           :role role :prep prep :desc desc :note note)))
 
 (defun install-relation-type (fields)
@@ -994,10 +1037,12 @@ edit leave the catalog and the file untouched when a submission is bad."
 Goes through PARSE-RELATION-TYPE-DEF -- the loader's own entry point -- rather
 than MAKE-RELATION-TYPE, so a type created here takes exactly the path a type
 loaded from the file takes, :role hook and all."
-  (destructuring-bind (&key label sources dest role prep desc note) fields
+  (destructuring-bind (&key label supers sources dest role prep desc note) fields
     (declare (ignore note))
     (parse-relation-type-def
      (append (list :label (intern (string-upcase label) :cg)
+                   :supertypes (mapcar (lambda (p) (intern (string-upcase p) :cg))
+                                       supers)
                    :source-types (mapcar (lambda (s) (intern (string-upcase s) :cg))
                                          sources)
                    :dest-type (intern (string-upcase dest) :cg))
@@ -1024,13 +1069,13 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
 ;;; -- and staying silent is what made the gap hard to find in the first place.
 (hunchentoot:define-easy-handler (handle-api-create-relation-type
                                   :uri "/api/create-relation-type")
-    (label sources dest role prep desc note)
+    (label supertypes sources dest role prep desc note)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (unless (eq (hunchentoot:request-method*) :post)
     (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
     (return-from handle-api-create-relation-type "{\"error\":\"POST required\"}"))
   (handler-case
-      (let* ((fields (parse-relation-form label sources dest role prep desc note))
+      (let* ((fields (parse-relation-form label supertypes sources dest role prep desc note))
              (label  (getf fields :label))
              (file   (relation-types-file)))
         (when (type-def-in-file-p label file)
@@ -1038,9 +1083,10 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
                  label))
         (install-relation-type fields)
         (handler-case
-            (destructuring-bind (&key sources dest role prep desc note &allow-other-keys)
+            (destructuring-bind (&key supers sources dest role prep desc note
+                                 &allow-other-keys)
                 fields
-              (append-relation-type-def label sources dest role prep desc note file))
+              (append-relation-type-def label supers sources dest role prep desc note file))
           ;; The live half succeeded and the file half did not: leave nothing
           ;; behind that the next reload would silently drop.
           (error (e) (rollback-relation-type label) (error e)))
@@ -1054,13 +1100,13 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
 ;;; the relation was runtime-only). The relation must already exist.
 (hunchentoot:define-easy-handler (handle-api-edit-relation-type
                                   :uri "/api/edit-relation-type")
-    (label sources dest role prep desc note)
+    (label supertypes sources dest role prep desc note)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (unless (eq (hunchentoot:request-method*) :post)
     (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
     (return-from handle-api-edit-relation-type "{\"error\":\"POST required\"}"))
   (handler-case
-      (let* ((fields (parse-relation-form label sources dest role prep desc note))
+      (let* ((fields (parse-relation-form label supertypes sources dest role prep desc note))
              (label  (getf fields :label)))
         (unless (ignore-errors (get-relation-type (intern (string-upcase label) :cg)))
           (error "no such relation type: ~a" label))
@@ -1069,15 +1115,16 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
         ;; this the old role would survive its own removal.
         (ignore-errors (unregister-relation-syntax label))
         (install-relation-type fields)
-        (destructuring-bind (&key sources dest role prep desc note &allow-other-keys)
+        (destructuring-bind (&key supers sources dest role prep desc note
+                             &allow-other-keys)
             fields
           (let ((file (relation-types-file)))
             (unless (splice-type-def
                      label
-                     (relation-type-def-string label sources dest role prep desc note)
+                     (relation-type-def-string label supers sources dest role prep desc note)
                      file)
               ;; Runtime-only until now -- persist it rather than losing the edit.
-              (append-relation-type-def label sources dest role prep desc note file))))
+              (append-relation-type-def label supers sources dest role prep desc note file))))
         (relation-write-response label (relation-syntax-warning label)))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
