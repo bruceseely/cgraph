@@ -15,7 +15,16 @@ The first two are small. The third is small in the catalog and not small in
 the realizer. The fourth is the real finding, and the rest of this note exists
 mostly to hold it. The fifth turned out to have a cheerful answer.
 
-Nothing here is built. This is analysis, recorded before it evaporates.
+Written as analysis, before any of it was built. Most of it since has been:
+§1, §2, §3 and §4(a) were all built on 2026-08-16, and each section carries what
+building it settled or corrected. Struck-through headings are done; what remains
+outstanding is §4(b), the relation hierarchy, and the `:role` keys' one open
+question in §5 about joins.
+
+The analysis is left standing rather than rewritten into a description of the
+result, because in several places the thing that was wrong about it is the most
+useful part — §4(a) in particular was listed here as an optional nicety and
+turned out to be the piece without which the rest is unreachable.
 
 ---
 
