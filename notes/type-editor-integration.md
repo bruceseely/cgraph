@@ -18,8 +18,9 @@ mostly to hold it. The fifth turned out to have a cheerful answer.
 Written as analysis, before any of it was built. Most of it since has been:
 §1, §2, §3 and §4(a) were all built on 2026-08-16, and each section carries what
 building it settled or corrected. Struck-through headings are done; what remains
-outstanding is §4(b), the relation hierarchy, and the `:role` keys' one open
-question in §5 about joins.
+outstanding is the one question §5 left open: what two *incomparable* relation
+types join to, given there is no `⊥` for relations. Everything else here is
+built.
 
 The analysis is left standing rather than rewritten into a description of the
 result, because in several places the thing that was wrong about it is the most
@@ -334,7 +335,7 @@ file rather than hand-managed state, which is what makes
 `*relation-syntax-overrides*` being a `defparameter` correct rather than merely
 tolerable. Cleared on reload, rebuilt by `initialize-types`.
 
-**(b) A relation type hierarchy.** Populate the inherited supertype slots and
+**(b) ~~A relation type hierarchy~~ — built 2026-08-16.** Populate the inherited supertype slots and
 derive the role by walking up, mirroring `pos-from-hierarchy`. This makes
 custom ontologies realizable *by default* — a new relation under `loc` behaves
 like `loc` until told otherwise — which is the actual goal, and the property
@@ -344,6 +345,28 @@ the concept side already has.
 per relation, it touches the reader and the projection code that assume
 relation types are atomic, and it needs its own `check-type-lattice`. It also
 subsumes most of (a), since most relations would inherit rather than declare.
+
+Built, and smaller than that paragraph feared — §5's measurement was the
+accurate one. Four things it settled or corrected:
+
+- **A subtype inherits its signature when it states none.** §5 argued the
+  opposite (restate it, so the check always has something to verify) and that
+  was wrong: an inherited signature is sound by construction, so the check
+  loses nothing, while requiring every subtype to repeat its parent's arcs
+  makes the common case the tedious one. The check still bites for every
+  subtype that *does* narrow, which is what it is for.
+- **`types-eq` had no relation-type method**, which neither §4 nor §5 noticed.
+  `subsumes-p`'s first arm is `types-eq`, so a relation type failed to subsume
+  *itself* — projection of any relation onto its own type would have broken the
+  moment the specializers were widened. Found by writing the reflexivity test.
+- **The soundness rule is enforced at the form**, not only by the lattice
+  check: a subtype whose signature widens is refused while the fields are still
+  on screen. A lint nobody is reading is not where a correctness rule should
+  first be met.
+- **Two web bugs the hierarchy would have introduced**, both caught before
+  shipping: an edit would have silently dropped a relation's supertypes, and a
+  delete would have orphaned its subtypes — and unlike concept types there is
+  no `⊤` for them to fall back to.
 
 ### Recommended order
 
@@ -366,10 +389,12 @@ subsumes most of (a), since most relations would inherit rather than declare.
    now cheaper still: since (a), the check's own message names
    `register-relation-syntax` as the remedy, so the UI can quote it rather than
    compose its own.
-3. **(b) when there is evidence it is wanted** — which is to say, once the
-   relation catalog has grown enough through use that declaring each new
-   relation's syntax by hand is the annoyance rather than the safety net.
-   See §5 for what (b) costs outside generation, which is less than expected.
+3. ~~**(b) when there is evidence it is wanted**~~ — done 2026-08-16, sooner
+   than this said to. The argument for waiting was that (a) covers the case
+   until the catalog grows; what it missed is that (b) is what makes a custom
+   relation type *born* realizable rather than merely correctable, and that is
+   the property the concept side has always had. §5's costing turned out
+   accurate, and the widening was the bulk of it.
 
 Do not block the UI work on any of this. (1) and (2) at the top of this note
 touch none of it.
@@ -493,6 +518,6 @@ is a day of careful widening plus one line, with the genuinely open question
 | Relation-type endpoints | half a day | yes (mostly renames) |
 | Relation browser/editor pane | ~a day | no |
 | ~~(a) registration hook~~ | done 2026-08-16 | yes |
-| (b) relation hierarchy, generation only | ~a day (see §5) | yes |
-| (b) + projection honours it | + widening the lattice predicates, ~half a day, plus the suite | yes, in core |
-| (b) + joins honour it | not estimated — needs the meet semantics decided first | yes |
+| ~~(b) relation hierarchy, generation only~~ | done 2026-08-16 | yes |
+| ~~(b) + projection honours it~~ | done — one line, once the predicates were widened | yes, in core |
+| (b) + joins honour it | **still open** — needs the meet semantics decided first | yes |
