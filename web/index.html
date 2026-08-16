@@ -538,6 +538,12 @@
       color: #bbb;
       padding: 2rem;
       text-align: center;
+      /* The relations-tab wording is a sentence rather than a phrase, so cap the
+         measure: centred text set to the full width of the graph area is hard to
+         read back to the start of the next line. */
+      max-width: 34rem;
+      margin: 0 auto;
+      line-height: 1.5;
     }
 
     /* ── resizer between graph area and CG pane ── */

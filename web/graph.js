@@ -1237,6 +1237,14 @@ function showSidebarTab(which) {
     btn.classList.toggle('active', btn.dataset.tab === which);
   typeListEl.hidden     = which !== 'concepts';
   relationListEl.hidden = which !== 'relations';
+  // "the list on the left" stops being the concept list when the other tab is
+  // showing, so the empty-graph message has to follow the tab. The graph area
+  // itself does NOT change meaning — it is still the concept lattice, and still
+  // where the relation form's "+" picks from, which is what the second wording
+  // has to get across rather than just going blank.
+  placeholder.textContent = which === 'relations'
+    ? 'Relations are edited from the list on the left. Select a concept type to draw the lattice here — “+” in a relation form picks from it.'
+    : 'Select a type from the list on the left.';
   // Fetched on first view rather than at startup: the concept list is what the
   // page opens on, and one more request before first paint buys nothing.
   if (which === 'relations' && !lastRelTypes.length) refreshRelationList();
@@ -1262,12 +1270,21 @@ function relationRowEl(r) {
   // catalog shows which relations have no syntax role, and a relation with no
   // role is invisible in generated English rather than broken — exactly the
   // failure that is impossible to notice from anywhere else.
+  // A role no realizer reads drops the relation exactly as no role does, so the
+  // badge marks both the same way. Anything else would show a relation as
+  // spoken when it is silent — which is the failure this badge exists to catch.
+  const roleEntry = r.role ? syntaxRoles.find(s => s.role === r.role) : null;
+  // Unknown until the roles have loaded: assume fine rather than raise a false
+  // alarm. PAINTRELATIONTYPES runs again once they arrive.
+  const dead = r.role ? (roleEntry ? !roleEntry.implemented : false) : true;
   const badge = document.createElement('span');
-  badge.className = 'rel-item-role' + (r.role ? '' : ' none');
+  badge.className = 'rel-item-role' + (dead ? ' none' : '');
   badge.textContent = r.role || 'no role';
-  badge.title = r.role
-    ? `surfaces as :${r.role}${r.prep ? ` with "${r.prep}"` : ''}`
-    : 'no syntax role — this relation will not appear in generated English';
+  badge.title = !r.role
+    ? 'no syntax role — this relation will not appear in generated English'
+    : dead
+      ? `:${r.role} is declared but no realizer reads it — this relation will not appear in generated English`
+      : `surfaces as :${r.role}${r.prep ? ` with "${r.prep}"` : ''}`;
   head.append(badge);
   el.append(head);
 
@@ -1312,6 +1329,10 @@ async function loadSyntaxRoles() {
     if (Array.isArray(data)) syntaxRoles = data;
   } catch { /* the menu degrades to "(none)" only; not worth an error banner */ }
   renderRoleMenu();
+  // The badges depend on which roles are implemented, and the list may already
+  // be painted from before this resolved — so repaint rather than leave a row
+  // showing an unreadable role as though it were fine.
+  if (lastRelTypes.length) paintRelationTypes();
 }
 
 function renderRoleMenu() {
@@ -1327,11 +1348,18 @@ function renderRoleMenu() {
     const opt = document.createElement('option');
     opt.value = r.role;
     // An unimplemented role drops the relation exactly as no role does, so it is
-    // labelled rather than silently offered as though it worked.
-    opt.textContent = r.role + (r.implemented ? '' : ' (not implemented)');
-    opt.title = r.examples && r.examples.length
-      ? `like ${r.examples.slice(0, 6).join(', ')}`
-      : 'no relation in this catalog uses it yet';
+    // marked rather than silently offered as though it worked. The mark LEADS
+    // the name instead of trailing it as "(not implemented)": a <select> is as
+    // wide as its widest option, so a trailing phrase on one option set the
+    // width of the whole control — and clipping it instead would have hidden
+    // the mark on the one option that needs it.
+    opt.textContent = (r.implemented ? '' : '⚠ ') + r.role;
+    opt.title = (r.implemented ? '' :
+                 'declared, but no realizer reads it — a relation mapped here is ' +
+                 'dropped exactly as one with no role is. ')
+      + (r.examples && r.examples.length
+         ? `like ${r.examples.slice(0, 6).join(', ')}`
+         : 'no relation in this catalog uses it yet');
     nrRole.append(opt);
   }
 }

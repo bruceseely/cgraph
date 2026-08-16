@@ -868,13 +868,27 @@ what someone looking at a form with a Role field should be told to do.
 
 Not an error. A relation with no role is legal and sometimes right -- one used
 only for projection needs none -- so the write succeeds and this is advice."
-  (let ((finding (find (intern (string-upcase (string label)) :cg)
-                       (ignore-errors (%lint-relation-syntax-coverage))
-                       :key #'fourth)))
-    (and finding
-         (format nil "~a has no syntax role, so it will not appear in generated ~
-                      English. Set Role to say how it should surface."
-                 (string-downcase (string label))))))
+  (let* ((sym  (intern (string-upcase (string label)) :cg))
+         (name (string-downcase (string label)))
+         (uncovered (find sym (ignore-errors (%lint-relation-syntax-coverage))
+                          :key #'fourth))
+         ;; The second case is easy to miss and has the SAME consequence: a role
+         ;; no realizer reads drops the relation exactly as no role does. Warning
+         ;; on the first alone would have made the form quietly endorse a choice
+         ;; its own menu marks with a warning sign.
+         (unrealizable (find sym (ignore-errors (%lint-unrealizable-syntax-roles))
+                             :key #'fourth)))
+    (cond
+      (uncovered
+       (format nil "~a has no syntax role, so it will not appear in generated ~
+                    English. Set Role to say how it should surface."
+               name))
+      (unrealizable
+       (format nil "~a's role ~(~s~) is not one any realizer reads, so it will ~
+                    not appear in generated English — the same outcome as no ~
+                    role at all."
+               name (ignore-errors (relation-role sym))))
+      (t nil))))
 
 (defun relation-type-json (rel &optional extra-pairs)
   "One relation type as the browser pane wants it: signature, description, and the
