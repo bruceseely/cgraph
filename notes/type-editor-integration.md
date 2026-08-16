@@ -33,7 +33,7 @@ for cross-references turns up nothing at all. They are neighbours that have
 never spoken. A link each way in the two headers is the ten-minute version of
 this whole note, and should probably go first.
 
-## 1. Create a concept type while editing — JS only
+## 1. ~~Create a concept type while editing~~ — built 2026-08-16, JS only
 
 `/api/create-type` (`system/web/api.lisp:482`) already does the work:
 creates the type live in the process-global catalog, validates any canonical
@@ -56,9 +56,18 @@ list is filtered to what the relation admits (`rel-far-end-types`,
 reads as a bug. So the supertype field must prefill from the focus's type or
 whatever is in the target slot, never default to `⊤`.
 
-Estimate: half a day, no server change.
+Built as estimated, no server change. Two things the building settled:
 
-## 2. Draw the canonical graph — one small server change
+- **The supertype menu is drawn from the column itself**, not offered as free
+  choice. That is this wrinkle solved rather than guarded against: every entry
+  offered is admissible in the slot, and a subtype of anything admissible is
+  admissible, so whatever you pick lands. Measured with `[DOG]` and `(agnt)`:
+  23 entries, `ANIMAL` absent, `ACT` present.
+- **The offer lives in the empty-filter state**, not in a permanent button. A
+  column whose job is to show what is legal should not carry a standing
+  invitation to add something that is not.
+
+## 2. ~~Draw the canonical graph~~ — built 2026-08-16, one small server change
 
 The precedent exists. `open-nested-editor-session`
 (`system/editor/referent.lisp:339`) already creates a session **from an HTTP
@@ -90,7 +99,19 @@ would rewrite the stored text. It does not: `canonical-unchanged-p`
 raw one, and the editor's plain render is `format-cgraph` of the same parse.
 "Drew it, changed nothing" is correctly recognised as no change.
 
-Estimate: ~a day.
+Built as estimated. `OPEN-WEB-STRING-SESSION` is
+`OPEN-NESTED-EDITOR-SESSION`'s shape with no parent, and `WEB-OWNED` marks the
+one thing that distinguishes it: no parent *and* no blocked caller. The result
+travels back in the `FINISH` response because that is the only route left when
+nobody is waiting on the semaphore.
+
+The `back` parameter is restricted to a same-origin path — it arrives on the
+URL, and a full URL there would let a crafted link bounce someone off the
+editor to anywhere.
+
+One thing the note did not foresee: building this turned up a defect older than
+it, in `EDITOR-ADD-CONCEPT`. Recorded in `notes/known-issues.md` rather than
+here, because it is not a missing feature.
 
 ---
 
@@ -458,8 +479,8 @@ is a day of careful widening plus one line, with the genuinely open question
 | | estimate | touches Lisp |
 |---|---|---|
 | Links between the two UIs | 10 min | no |
-| Concept type from the editor | half a day | no |
-| Draw a canonical graph | ~a day | lightly |
+| ~~Concept type from the editor~~ | done 2026-08-16 | no |
+| ~~Draw a canonical graph~~ | done 2026-08-16 | lightly |
 | Relation-type endpoints | half a day | yes (mostly renames) |
 | Relation browser/editor pane | ~a day | no |
 | ~~(a) registration hook~~ | done 2026-08-16 | yes |
