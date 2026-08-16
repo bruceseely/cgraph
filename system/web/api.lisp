@@ -234,7 +234,16 @@ front means every write targets the REAL file (the repo it links to), and never
 replaces the link with a plain copy the way a write-then-rename save would."
   (truename (merge-pathnames "concept-types.lisp" *cgraph-types-directory*)))
 
-(defun concept-type-in-file-p (label file)
+;;; --- Type-definition files, either kind ------------------------------------
+;;;
+;;; concept-types.lisp and relation-types.lisp are both flat sequences of
+;;; (:label ... ) plists, and the four functions below never look at any key
+;;; but :label -- so they were already generic over the two files and only the
+;;; names said otherwise. Splitting the label-neutral half out is what lets the
+;;; relation endpoints reuse the whole read/splice/remove path rather than
+;;; growing a parallel copy of it.
+
+(defun type-def-in-file-p (label file)
   "True if FILE already carries a (:label LABEL ...) form (case-insensitive). Reads
 under the standard readtable/:cg package so the CG readtable can't skew the plists."
   (with-open-file (in file :direction :input)
@@ -275,7 +284,7 @@ next form's first character (STREAM left positioned there), or NIL at end of str
                    until (or (eq d :eof) (char= d #\Newline))))
             (t (file-position stream pos) (return pos))))))               ; found a form; rewind onto it
 
-(defun concept-type-form-span (label text)
+(defun type-def-form-span (label text)
   "The (START . END) character span of the (:label LABEL ...) top-level form within
 TEXT — START at its opening paren, END just past its close — or NIL if absent. Reads
 whole FORMS, so it matches a form that spans several lines. Standard readtable/:cg."
@@ -297,23 +306,27 @@ whole FORMS, so it matches a form that spans several lines. Standard readtable/:
                      (close (position #\) text :from-end t :end fp)))
                 (return (cons start (if close (1+ close) fp)))))))))))
 
-(defun splice-concept-type-def (label supertypes canonical note file)
-  "Replace the (:label LABEL ...) form in FILE with the new definition, preserving
-every other byte — comments, ordering, other types and their manual (even multi-line)
+(defun splice-type-def (label new-text file)
+  "Replace the (:label LABEL ...) form in FILE with NEW-TEXT, preserving every
+other byte — comments, ordering, other types and their manual (even multi-line)
 formatting — verbatim. Returns T if replaced, NIL if the form was absent (caller then
-appends). Writes the truename'd path, so a ~/.cgraph symlink stays intact."
+appends). Writes the truename'd path, so a ~/.cgraph symlink stays intact.
+
+NEW-TEXT is rendered by the caller rather than by a def-string function passed in,
+because the two kinds of definition take entirely different arguments and a
+lambda-list that covered both would say less than the two call sites do."
   (let* ((text (uiop:read-file-string file))
-         (span (concept-type-form-span label text)))
+         (span (type-def-form-span label text)))
     (when span
       (let ((out-text (concatenate 'string
                                    (subseq text 0 (car span))
-                                   (concept-type-def-string label supertypes canonical note)
+                                   new-text
                                    (subseq text (cdr span)))))
         (with-open-file (out file :direction :output :if-exists :supersede :if-does-not-exist :error)
           (write-string out-text out)))
       t)))
 
-(defun remove-concept-type-def (label file)
+(defun remove-type-def (label file)
   "Cut the (:label LABEL ...) form out of FILE, preserving every other byte.
 Returns T if a form was removed, NIL if it was not there (a runtime-only type,
 which is not an error -- the live catalog is still the thing being deleted).
@@ -322,7 +335,7 @@ The span ends just past the form's closing paren, so the newline the form was
 written with is still ahead of it; taking that too is what keeps a delete from
 leaving a blank line where the type used to be."
   (let* ((text (uiop:read-file-string file))
-         (span (concept-type-form-span label text)))
+         (span (type-def-form-span label text)))
     (when span
       (let* ((end       (cdr span))
              (with-eol  (if (and (< end (length text)) (char= (char text end) #\Newline))
@@ -388,7 +401,7 @@ strings, empty when the type is free to go."
           (push (format nil "relation (~(~a~)) comes from it" (label rel)) found))))
     (nreverse found)))
 
-(defun concept-type-file-note (label file)
+(defun type-def-file-note (label file)
   "The :note string stored for LABEL in FILE, or NIL. Notes live only in the file
 (the loader drops them), so this is the only way to pre-fill a note for editing."
   (with-open-file (in file :direction :input)
@@ -507,7 +520,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                (sym         (intern (string-upcase label) :cg))
                (super-syms  (mapcar (lambda (s) (intern (string-upcase s) :cg)) super-tokens))
                (pre-existed (ignore-errors (get-concept-type sym))))
-          (when (concept-type-in-file-p label file)
+          (when (type-def-in-file-p label file)
             (error "~a is already defined in the ontology file; ~
                     editing existing types is not yet supported" label))
           ;; live: create the type first (canonical attached only after it validates)
@@ -547,7 +560,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
               ;; collapsed out again — see collapse-graph-whitespace, and
               ;; canonical-unchanged-p, which recognizes this exact text as "no edit".)
               (canon (canonical-as-served label node))
-              (note  (or (concept-type-file-note label (concept-types-file)) "")))
+              (note  (or (type-def-file-note label (concept-types-file)) "")))
           (format nil "{\"label\":\"~a\",\"supertypes\":~a,\"canonical\":\"~a\",\"note\":\"~a\"}"
                   (json-escape (string-downcase label))
                   (json-string-array (sort supers #'string<))
@@ -595,7 +608,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                  (canon-same  (canonical-unchanged-p canonical label node))
                  (supers-same (supertypes-unchanged-p super-tokens node))
                  (note-same   (string= (or note "")
-                                       (or (concept-type-file-note label file) ""))))
+                                       (or (type-def-file-note label file) ""))))
             ;; Nothing actually changed — leave the file alone. Merely opening a type
             ;; reformats its canonical for display, so without this a look-and-save
             ;; would rewrite the source line.
@@ -620,7 +633,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                                                        super-tokens)
                                    :canonical-graph (or canonical ""))
               ;; persist: splice the form in place, or append if it wasn't in the file.
-              (unless (splice-concept-type-def label super-tokens canonical note file)
+              (unless (splice-type-def label (concept-type-def-string label super-tokens canonical note) file)
                 (append-concept-type-def label super-tokens canonical note file))
               (format nil "{\"ok\":true,\"label\":\"~a\"}"
                       (json-escape (string-downcase label)))))))
@@ -663,11 +676,11 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
             (when referrers
               (error "~a is still in use: ~{~a~^; ~}" label referrers)))
           (let* ((file    (concept-types-file))
-                 (in-file (concept-type-in-file-p label file)))
+                 (in-file (type-def-in-file-p label file)))
             ;; live first: rollback-concept-type unlinks the inheritance AND
             ;; drops the catalog entry, which is what keeps it out of /api/types.
             (rollback-concept-type label)
-            (when in-file (remove-concept-type-def label file))
+            (when in-file (remove-type-def label file))
             (format nil "{\"ok\":true,\"label\":\"~a\",\"removedFromFile\":~:[false~;true~]}"
                     (json-escape (string-downcase label))
                     in-file))))
@@ -764,3 +777,324 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                 (json-escape (or cg-format-error ""))
                 (json-relation-array input-entries)
                 (json-relation-array output-entries))))))
+
+
+;;;; ==========================================================================
+;;;; Relation types: browse, create, edit, delete
+;;;; ==========================================================================
+;;;
+;;; The concept-type endpoints above and these differ in what a definition
+;;; HOLDS, not in how it is stored: both files are flat sequences of (:label ...)
+;;; plists, so everything from TYPE-DEF-IN-FILE-P down through SPLICE-TYPE-DEF
+;;; is shared and only the def-string differs.
+;;;
+;;; What is genuinely different is that a relation type's identity is a PAIR of
+;;; concept types -- see notes/type-editor-integration.md §3 -- and that its
+;;; English behaviour rides on the same form, as :role/:prep. That last part is
+;;; why creating a relation from the UI is worth doing at all: a relation
+;;; created without a role is silently dropped by the realizer, and this is the
+;;; layer that can say so at the moment it happens.
+
+(defun relation-types-file ()
+  "TRUENAME of the relation-types source file. Resolved for the same reason
+CONCEPT-TYPES-FILE resolves: ~/.cgraph/types/* are symlinks, and writing through
+the link is what keeps the real file in the types repo as the thing being edited."
+  (truename (merge-pathnames "relation-types.lisp" *cgraph-types-directory*)))
+
+(defun relation-source-tokens-text (sources)
+  "SOURCE-TYPES as the catalog file writes them: a bare name for one, a
+parenthesised list for several. Mirrors RELATION-SOURCE-TEXT (types.lisp), which
+does this for a live relation-type; this one works from the tokens a form submits,
+before any type object exists."
+  (if (= 1 (length sources))
+      (format nil "~(~a~)" (string (first sources)))
+      (format nil "(~{~(~a~)~^ ~})" (mapcar #'string sources))))
+
+(defun relation-type-def-string (label sources dest role prep desc note)
+  "The one-line (:label ...) source form for a relation type (no trailing newline).
+Keys are emitted in the order the shipped file uses, and each optional one only
+when non-empty, so a definition carrying no role reads exactly like the ones that
+were there before :role existed."
+  (format nil "(:label ~(~a~) :source-types ~a :dest-type ~(~a~)~
+               ~@[ :role ~(~s~)~]~@[ :prep ~s~]~@[ :desc ~s~]~@[ :note ~s~])"
+          (string label)
+          (relation-source-tokens-text sources)
+          (string dest)
+          (and role (plusp (length role)) (intern (string-upcase role) :keyword))
+          (and prep (plusp (length prep)) prep)
+          (and desc (plusp (length desc)) desc)
+          (and note (plusp (length note)) note)))
+
+(defun append-relation-type-def (label sources dest role prep desc note file)
+  "Append one (:label ...) relation form to FILE in place (:append never renames,
+so a symlinked source keeps pointing at the edited file)."
+  (with-open-file (out file :direction :output :if-exists :append :if-does-not-exist :error)
+    (format out "~&~a~%" (relation-type-def-string label sources dest role prep desc note))))
+
+(defun rollback-relation-type (label)
+  "Undo a just-created relation type: drop it from the catalog AND drop any syntax
+it registered. The second half matters because a rolled-back relation that left its
+:role behind would keep answering RELATION-ROLE for a relation that no longer exists
+-- exactly the stale registration CLEAR-RELATION-CATALOG exists to prevent."
+  (let ((key (loop for k being the hash-keys of *relation-type-catalog*
+                   when (string-equal (symbol-name k) (string-upcase (string label)))
+                     return k)))
+    (when key (remhash key *relation-type-catalog*)))
+  (ignore-errors (unregister-relation-syntax label)))
+
+(defun relation-type-referrers (label)
+  "Everything left dangling by deleting relation LABEL: the concept types whose
+canonical graph uses it. Returns human-readable strings, empty when it is free to go.
+
+Shorter than CONCEPT-TYPE-REFERRERS because relation types have no hierarchy to
+orphan and nothing else points at them -- the three PP support tables name them, but
+an entry there that stops firing is what %LINT-STALE-RELATION-ENTRIES already reports
+as :info, so blocking a delete on it would be stronger than the lint's own verdict."
+  (let ((found (list)))
+    (loop for ct being the hash-values of *concept-type-catalog* do
+      (let ((canon (ignore-errors (canonical-graph-string ct))))
+        (when (type-name-mentioned-p label canon)
+          (push (format nil "~(~a~)'s canonical graph uses it" (label ct)) found))))
+    (nreverse found)))
+
+(defun relation-syntax-warning (label)
+  "The warning to show after creating or editing relation LABEL, or NIL.
+
+The CONDITION comes from %LINT-RELATION-SYNTAX-COVERAGE rather than being
+restated here, so the form and the startup lint can never disagree about what
+counts as unrealizable. The REMEDY is reworded, because the lint's own text
+tells you to call REGISTER-RELATION-SYNTAX or edit a source file, and neither is
+what someone looking at a form with a Role field should be told to do.
+
+Not an error. A relation with no role is legal and sometimes right -- one used
+only for projection needs none -- so the write succeeds and this is advice."
+  (let ((finding (find (intern (string-upcase (string label)) :cg)
+                       (ignore-errors (%lint-relation-syntax-coverage))
+                       :key #'fourth)))
+    (and finding
+         (format nil "~a has no syntax role, so it will not appear in generated ~
+                      English. Set Role to say how it should surface."
+                 (string-downcase (string label))))))
+
+(defun relation-type-json (rel &optional extra-pairs)
+  "One relation type as the browser pane wants it: signature, description, and the
+syntax role, which is the part no existing endpoint reports.
+
+EXTRA-PAIRS is a list of pre-rendered \"key\":value strings appended inside the
+object, so the Edit endpoint can add its note and warning without either
+re-listing these fields or splicing braces back together."
+  (let* ((label (string-downcase (string (label rel))))
+         (dest  (ignore-errors (dest-type rel)))
+         (srcs  (relation-source-list rel))
+         (role  (ignore-errors (relation-role (label rel))))
+         (prep  (ignore-errors (relation-preposition (label rel)))))
+    (format nil "{\"label\":\"~a\",\"sources\":~a,\"dest\":\"~a\",\"desc\":\"~a\",~
+                 \"role\":\"~a\",\"prep\":\"~a\"~{,~a~}}"
+            (json-escape label)
+            (json-string-array
+             (mapcar (lambda (s) (string-downcase (string (label s)))) srcs))
+            (json-escape (if dest (string-downcase (string (label dest))) ""))
+            (json-escape (or (ignore-errors (desc rel)) ""))
+            (json-escape (if role (string-downcase (symbol-name role)) ""))
+            (json-escape (or prep ""))
+            extra-pairs)))
+
+;;; GET /api/relation-types — the whole relation catalog, for the browser pane.
+(hunchentoot:define-easy-handler (handle-api-relation-types :uri "/api/relation-types") ()
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (handler-case
+      (let ((rels (sort (loop for r being the hash-values of *relation-type-catalog*
+                              collect r)
+                        #'string< :key (lambda (r) (string (label r))))))
+        (format nil "[~{~a~^,~}]" (mapcar #'relation-type-json rels)))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-internal-server-error+)
+      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+
+;;; GET /api/relation-type-def?label=X — the editable definition for the Edit form.
+(hunchentoot:define-easy-handler (handle-api-relation-type-def :uri "/api/relation-type-def")
+    (label)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (handler-case
+      (let* ((label (and label (string-trim '(#\Space #\Tab) label)))
+             (rel   (and label (plusp (length label))
+                         (ignore-errors (get-relation-type
+                                         (intern (string-upcase label) :cg))))))
+        (unless rel (error "no such relation type: ~a" (or label "")))
+        ;; The note lives only in the file -- the loader drops it -- so it is read
+        ;; from there, exactly as /api/type-def does on the concept side.
+        (let ((note (or (ignore-errors
+                         (type-def-file-note label (relation-types-file)))
+                        "")))
+          (relation-type-json
+           rel
+           (list (format nil "\"note\":\"~a\"" (json-escape note))
+                 (format nil "\"warning\":\"~a\""
+                         (json-escape (or (relation-syntax-warning label) "")))))))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+
+(defun parse-relation-form (label sources dest role prep desc note)
+  "Validate and normalize a relation form's fields, returning them as a plist.
+Signals with a one-line message on anything the catalog would refuse.
+
+Everything is checked BEFORE any mutation, which is what lets both create and
+edit leave the catalog and the file untouched when a submission is bad."
+  (let* ((label   (and label (string-trim '(#\Space #\Tab) label)))
+         (src-tok (split-type-string (or sources "")))
+         (dest    (and dest (string-trim '(#\Space #\Tab) dest)))
+         (role    (and role (string-trim '(#\Space #\Tab) role)))
+         (role    (and role (plusp (length role)) role))
+         (prep    (and prep (string-trim '(#\Space #\Tab) prep)))
+         (prep    (and prep (plusp (length prep)) prep))
+         (desc    (and desc (string-trim '(#\Space #\Tab #\Newline #\Return) desc)))
+         (desc    (and desc (plusp (length desc)) desc))
+         (note    (and note (string-trim '(#\Space #\Tab #\Newline #\Return) note)))
+         (note    (and note (plusp (length note)) note)))
+    (when (or (null label) (zerop (length label)))
+      (error "a relation name is required"))
+    (when (null src-tok)
+      (error "at least one source type is required"))
+    (when (or (null dest) (zerop (length dest)))
+      (error "a destination type is required"))
+    ;; get-concept-type SIGNALS on an unknown label rather than returning nil,
+    ;; so each lookup is guarded to give a clean message instead of a backtrace.
+    (dolist (s src-tok)
+      (unless (ignore-errors (get-concept-type s))
+        (error "unknown source type: ~a" s)))
+    (unless (ignore-errors (get-concept-type dest))
+      (error "unknown destination type: ~a" dest))
+    ;; A preposition without a role reads as a field left behind by changing the
+    ;; role to one that has no preposition, and would be written to the file
+    ;; where nothing would ever read it.
+    (when (and prep (null role))
+      (error "a preposition needs a role (:pp or :iobj) to belong to"))
+    (list :label label :sources src-tok :dest dest
+          :role role :prep prep :desc desc :note note)))
+
+(defun install-relation-type (fields)
+  "Create or replace the live relation type described by FIELDS, syntax included.
+Goes through PARSE-RELATION-TYPE-DEF -- the loader's own entry point -- rather
+than MAKE-RELATION-TYPE, so a type created here takes exactly the path a type
+loaded from the file takes, :role hook and all."
+  (destructuring-bind (&key label sources dest role prep desc note) fields
+    (declare (ignore note))
+    (parse-relation-type-def
+     (append (list :label (intern (string-upcase label) :cg)
+                   :source-types (mapcar (lambda (s) (intern (string-upcase s) :cg))
+                                         sources)
+                   :dest-type (intern (string-upcase dest) :cg))
+             (when desc (list :desc desc))
+             (when role (list :role (intern (string-upcase role) :keyword)))
+             (when prep (list :prep prep)))
+     t)))
+
+(defun relation-write-response (label warning)
+  "The shared success shape for create and edit. WARNING is a message, not an
+error: the write succeeded either way, and the UI decides how loudly to say it."
+  (format nil "{\"ok\":true,\"label\":\"~a\",\"warning\":\"~a\"}"
+          (json-escape (string-downcase label))
+          (json-escape (or warning ""))))
+
+;;; POST /api/create-relation-type?label=&sources=a,b&dest=&role=&prep=&desc=&note=
+;;; Create the relation live (the catalog is process-global, so it shows at once)
+;;; and append the form to the source file. Refuses one already in the file.
+;;;
+;;; The response carries a WARNING, not just an error or an ok: a relation with no
+;;; syntax role is perfectly legal and completely invisible in generated English,
+;;; and that is precisely the failure notes/type-editor-integration.md §4 is about.
+;;; Refusing it would be wrong -- a relation used only for projection needs no role
+;;; -- and staying silent is what made the gap hard to find in the first place.
+(hunchentoot:define-easy-handler (handle-api-create-relation-type
+                                  :uri "/api/create-relation-type")
+    (label sources dest role prep desc note)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (unless (eq (hunchentoot:request-method*) :post)
+    (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
+    (return-from handle-api-create-relation-type "{\"error\":\"POST required\"}"))
+  (handler-case
+      (let* ((fields (parse-relation-form label sources dest role prep desc note))
+             (label  (getf fields :label))
+             (file   (relation-types-file)))
+        (when (type-def-in-file-p label file)
+          (error "~a is already defined in the relation file; use Edit to change it"
+                 label))
+        (install-relation-type fields)
+        (handler-case
+            (destructuring-bind (&key sources dest role prep desc note &allow-other-keys)
+                fields
+              (append-relation-type-def label sources dest role prep desc note file))
+          ;; The live half succeeded and the file half did not: leave nothing
+          ;; behind that the next reload would silently drop.
+          (error (e) (rollback-relation-type label) (error e)))
+        (relation-write-response label (relation-syntax-warning label)))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+
+;;; POST /api/edit-relation-type — same checks as create; the new definition
+;;; supplants the old one live and in the file (spliced in place, or appended if
+;;; the relation was runtime-only). The relation must already exist.
+(hunchentoot:define-easy-handler (handle-api-edit-relation-type
+                                  :uri "/api/edit-relation-type")
+    (label sources dest role prep desc note)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (unless (eq (hunchentoot:request-method*) :post)
+    (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
+    (return-from handle-api-edit-relation-type "{\"error\":\"POST required\"}"))
+  (handler-case
+      (let* ((fields (parse-relation-form label sources dest role prep desc note))
+             (label  (getf fields :label)))
+        (unless (ignore-errors (get-relation-type (intern (string-upcase label) :cg)))
+          (error "no such relation type: ~a" label))
+        ;; An edit that drops :role must drop the registration too. Nothing else
+        ;; would: INSTALL-RELATION-TYPE only ever ADDS a registration, so without
+        ;; this the old role would survive its own removal.
+        (ignore-errors (unregister-relation-syntax label))
+        (install-relation-type fields)
+        (destructuring-bind (&key sources dest role prep desc note &allow-other-keys)
+            fields
+          (let ((file (relation-types-file)))
+            (unless (splice-type-def
+                     label
+                     (relation-type-def-string label sources dest role prep desc note)
+                     file)
+              ;; Runtime-only until now -- persist it rather than losing the edit.
+              (append-relation-type-def label sources dest role prep desc note file))))
+        (relation-write-response label (relation-syntax-warning label)))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+
+;;; POST /api/delete-relation-type?label=X
+(hunchentoot:define-easy-handler (handle-api-delete-relation-type
+                                  :uri "/api/delete-relation-type")
+    (label)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (unless (eq (hunchentoot:request-method*) :post)
+    (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
+    (return-from handle-api-delete-relation-type "{\"error\":\"POST required\"}"))
+  (handler-case
+      (let ((label (and label (string-trim '(#\Space #\Tab) label))))
+        (when (or (null label) (zerop (length label)))
+          (error "a relation name is required"))
+        (unless (ignore-errors (get-relation-type (intern (string-upcase label) :cg)))
+          (error "no such relation type: ~a" label))
+        ;; Validate before mutating, the order create and the concept-side delete
+        ;; both follow: a refusal leaves catalog and file untouched.
+        (let ((referrers (relation-type-referrers label)))
+          (when referrers
+            (error "~a is still in use: ~{~a~^; ~}" label referrers)))
+        (let* ((file    (relation-types-file))
+               (in-file (type-def-in-file-p label file)))
+          (rollback-relation-type label)
+          (when in-file (remove-type-def label file))
+          (format nil "{\"ok\":true,\"label\":\"~a\",\"removedFromFile\":~:[false~;true~]}"
+                  (json-escape (string-downcase label))
+                  in-file)))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
