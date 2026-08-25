@@ -810,6 +810,7 @@ const ntStatus    = document.getElementById('nt-status');
 const ntCreateBtn = document.getElementById('nt-create');
 const ntSaveBtn   = document.getElementById('nt-save');
 const ntDeleteBtn = document.getElementById('nt-delete');
+const ntDupBtn    = document.getElementById('nt-duplicate');
 const editTypeBtn = document.getElementById('edit-type-btn');
 
 // Supertypes are chosen by clicking existing types (sidebar or graph), never typed —
@@ -912,6 +913,7 @@ function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
   ntCreateBtn.hidden = isEdit;               // Create ↔ Save
   ntSaveBtn.hidden   = !isEdit;
   ntDeleteBtn.hidden = !isEdit;              // nothing to delete while creating
+  ntDupBtn.hidden    = !isEdit;              // nor anything to copy
   disarmDelete();                            // never inherit an arm from a previous type
   clearError();
   setNtHint(isEdit ? `editing ${edit} — “+” adds a supertype; explore the graph freely`
@@ -931,6 +933,52 @@ function hideForm() {
   setNtHint('');
   clearError();
 }
+
+// ── Duplicate a type ────────────────────────────────────────────────────────────
+// "A new type like that one." Editing-only, because the type you want to copy is
+// the one you just opened, and OPENFORM already takes every field as an argument —
+// so this is a re-open with the identity dropped, and no server call at all.
+//
+// It is NOT a rename, and the difference is the whole point. A copy leaves every
+// referrer — subtypes, canonical graphs, relation signatures — pointing at the
+// original, which is correct for "similar to" and wrong for "misspelled". Copy
+// then delete only works when the original had no referrers, and in that case
+// Delete alone was already enough.
+//
+// The name is prefilled with the source's and SELECTED rather than left blank:
+// most copies are a variation on the name, so typing replaces it and clicking
+// into it edits it. An unchanged name is not a hazard — /api/create-type refuses
+// a label already in the ontology file, which every duplicable type is.
+
+// Mirrors TYPE-NAME-MENTIONED-P (api.lisp:352): a whole token, where tokens run
+// over alphanumerics and hyphens — so CAT does not match inside CATALOG, and
+// ABSTRACT-OBJECT is one name rather than two.
+function typeNameMentioned(label, text) {
+  if (!text || !label) return false;
+  const esc = String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^0-9a-z-])${esc}($|[^0-9a-z-])`, 'i').test(text);
+}
+
+ntDupBtn.addEventListener('click', () => {
+  if (editingLabel === null) return;          // hidden while creating, but be sure
+  const source = editingLabel;
+  const canon  = ntCanon.value;
+  const note   = ntNote.value;
+  const supers = [...superSet];               // read before openForm clears the set
+  // A canonical graph that names its own type — [WANT] inside WANT's graph — is
+  // ordinary and is the one thing a copy cannot carry over silently: the copy's
+  // graph would go on describing the ORIGINAL. Nothing here rewrites it, because
+  // the new name is not known yet and a blind substitution is worse than a
+  // sentence; the hint says so while the field is on screen.
+  const selfRef = typeNameMentioned(source, canon);
+  openForm({ edit: null, supers, canon, note });
+  ntLabel.value = source;
+  ntLabel.select();
+  setNtHint(selfRef
+    ? `copy of ${source} — give it a new name, and note that the canonical graph `
+      + `still says ${source}`
+    : `copy of ${source} — give it a new name, then Create`);
+});
 
 // ── Delete a type ───────────────────────────────────────────────────────────────
 // Two clicks, not a confirm(): the first arms the button and says what is about
@@ -1216,6 +1264,7 @@ const nrStatus    = document.getElementById('nr-status');
 const nrCreateBtn = document.getElementById('nr-create');
 const nrSaveBtn   = document.getElementById('nr-save');
 const nrDeleteBtn = document.getElementById('nr-delete');
+const nrDupBtn    = document.getElementById('nr-duplicate');
 
 const sourceSet = new Set();
 let destType      = null;   // a single name, or null — a relation has exactly one
@@ -1497,6 +1546,7 @@ function openRelForm({ edit = null, supertypes = [], sources = [], dest = '',
   nrCreateBtn.hidden = isEdit;
   nrSaveBtn.hidden   = !isEdit;
   nrDeleteBtn.hidden = !isEdit;
+  nrDupBtn.hidden    = !isEdit;
   disarmRelDelete();
   clearError();
   setNrHint(warning || (isEdit
@@ -1587,6 +1637,34 @@ async function submitRelation() {
 
 nrCreateBtn.addEventListener('click', submitRelation);
 nrSaveBtn.addEventListener('click', submitRelation);
+
+// ── Duplicate ─────────────────────────────────────────────────────────────────
+// The concept form's Duplicate, for relations, and simpler: a relation's fields
+// are a signature, a role and prose — none of them can name the relation itself,
+// so there is no equivalent of the canonical graph's self-reference to warn about.
+//
+// The copy keeps the source's PARENT rather than becoming its child. A relation
+// type narrows its parent's signature, and a copy of X has X's signature exactly
+// — so under X it would be a subtype that narrows nothing, which is legal and
+// says nothing. As X's sibling it starts where X starts, which is what "like that
+// one" means.
+
+nrDupBtn.addEventListener('click', () => {
+  if (editingRel === null) return;
+  const source = editingRel;
+  const fields = { edit: null,
+                   supertypes: nrSuper.value ? [nrSuper.value] : [],
+                   sources: [...sourceSet],   // read before openRelForm clears it
+                   dest: destType || '',
+                   role: nrRole.value,
+                   prep: nrPrep.value,
+                   desc: nrDesc.value,
+                   note: nrNote.value };
+  openRelForm(fields);
+  nrLabel.value = source;
+  nrLabel.select();
+  setNrHint(`copy of ${source} — give it a new name, then Create`);
+});
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 // The same two-step arm the concept form uses, for the same reasons: no modal,

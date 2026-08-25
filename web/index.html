@@ -724,6 +724,10 @@
     </div>
     <button id="nt-create">Create</button>
     <button id="nt-save" hidden>Save Type Definition</button>
+    <!-- Editing only: turns the open type into the starting point for a new one.
+         Pure client state — the fields are already filled, so this only clears
+         the identity and switches Save back to Create. -->
+    <button id="nt-duplicate" hidden title="Start a new type from this one's supertypes, canonical graph and note">Duplicate</button>
     <button id="nt-cancel">Cancel</button>
     <!-- Editing only, and two-step: the first click arms it, the second commits.
          An in-page arm rather than confirm(), because a modal blocks the page
@@ -774,6 +778,7 @@
     </div>
     <button id="nr-create">Create</button>
     <button id="nr-save" hidden>Save Relation</button>
+    <button id="nr-duplicate" hidden title="Start a new relation from this one's signature, role and description">Duplicate</button>
     <button id="nr-cancel">Cancel</button>
     <!-- Same two-step arming as #nt-delete, and last in the row for the same
          reason: arming must not move any control out from under the pointer. -->

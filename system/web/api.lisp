@@ -521,8 +521,14 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                (super-syms  (mapcar (lambda (s) (intern (string-upcase s) :cg)) super-tokens))
                (pre-existed (ignore-errors (get-concept-type sym))))
           (when (type-def-in-file-p label file)
+            ;; The most likely way to reach this is Duplicate with the name left
+            ;; as the source's, so the message names the two ways out rather than
+            ;; describing what the endpoint cannot do. It used to say "editing
+            ;; existing types is not yet supported", which stopped being true
+            ;; when /api/edit-type was written.
             (error "~a is already defined in the ontology file; ~
-                    editing existing types is not yet supported" label))
+                    give the new type a different name, or use Edit Type to ~
+                    change the existing one" label))
           ;; live: create the type first (canonical attached only after it validates)
           ;; so a self-referential canonical — [WANT] in WANT's own graph — resolves.
           (define-concept-type :label sym :supertypes super-syms :canonical-graph "")
