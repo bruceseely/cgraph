@@ -86,18 +86,17 @@
        browser's own chrome: 13.3px rather than 11px, a 2px border, square
        corners. A selector that matches the bar cannot be forgotten by the next
        button put in it. */
-    /* Smaller than the forms' 11px, and spaced by the bar's own 0.5rem gap rather
-       than that plus a per-button 0.4rem, because the bar's scarce resource is
-       WIDTH: everything the button group takes is width the selected-type chips
-       do not get before they push it onto a second row. Measured at 1196px, the
-       group goes 529px -> 437px, and the chips 573px -> 665px, which is about
-       half a long type name. The buttons are a fixed cost paid on every screen;
-       the chips are what the bar is actually for. */
+    /* 12px, the size the form FIELDS already use, so a button reads as belonging
+       with the controls beside it. It was briefly 10px, to buy the chips width
+       they were competing for; that competition ended when the chips got a row
+       of their own, and with it the reason to shrink the text. Spacing is still
+       left to the bar's own 0.5rem gap rather than that plus a per-button
+       0.4rem — nothing wanted the extra. */
     #top-bar button {
       align-self: center;
       flex-shrink: 0;
-      font-size: 10px;
-      padding: 0.15rem 0.4rem;
+      font-size: 12px;
+      padding: 0.2rem 0.5rem;
       border: 1px solid #ccc;
       border-radius: 3px;
       background: #f7f7f7;
@@ -233,8 +232,8 @@
     /* a sidebar type currently chosen as a supertype */
     .type-item.is-super { background: #eef4ff; box-shadow: inset 3px 0 0 #7a9fe0; }
     #new-type-form button {
-      font-size: 11px;
-      padding: 0.18rem 0.55rem;
+      font-size: 12px;
+      padding: 0.2rem 0.5rem;
       border: 1px solid #ccc;
       border-radius: 3px;
       background: #f7f7f7;
@@ -346,8 +345,8 @@
       background: #4a90d9; color: #fff; border-color: #4a90d9;
     }
     #new-rel-form button {
-      font-size: 11px;
-      padding: 0.18rem 0.55rem;
+      font-size: 12px;
+      padding: 0.2rem 0.5rem;
       border: 1px solid #ccc;
       border-radius: 3px;
       background: #f7f7f7;
