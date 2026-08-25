@@ -170,6 +170,11 @@ Also: `<title>` at `web/index.html:6` is "CGraph Type Browser" and it browses
 only concept types. Adding relations makes the name true rather than needing
 it corrected.
 
+> **Came true, 2026-08-16.** The browser has a relation-type tab, so the title
+> is now accurate as written and no correction was needed. Left standing
+> because the prediction is the point: the name was aspirational and the work
+> caught up to it.
+
 ### What the browser already half-has
 
 `/api/relations?type=X` (`system/web/api.lisp:716`) answers "which relations
@@ -521,8 +526,8 @@ is a day of careful widening plus one line, with the genuinely open question
 | Links between the two UIs | 10 min | no |
 | ~~Concept type from the editor~~ | done 2026-08-16 | no |
 | ~~Draw a canonical graph~~ | done 2026-08-16 | lightly |
-| Relation-type endpoints | half a day | yes (mostly renames) |
-| Relation browser/editor pane | ~a day | no |
+| ~~Relation-type endpoints~~ | done 2026-08-16 — mostly renames, as estimated | yes |
+| ~~Relation browser/editor pane~~ | done 2026-08-16 | no |
 | ~~(a) registration hook~~ | done 2026-08-16 | yes |
 | ~~(b) relation hierarchy, generation only~~ | done 2026-08-16 | yes |
 | ~~(b) + projection honours it~~ | done — one line, once the predicates were widened | yes, in core |
