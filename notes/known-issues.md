@@ -6,7 +6,47 @@ was wrong about is worth as much as the fix.
 
 The first two entries were found on 2026-08-13/14 while building decomposition,
 were older than that work, and were fixed on 2026-08-14. The third was found on
-2026-08-16 and fixed the same day. Nothing is currently outstanding.
+2026-08-16 and fixed the same day. The fourth was found on 2026-08-25 and is
+**outstanding**.
+
+## `individuals-equal` ignores the id, so `simplify` can delete an assertion
+
+`system/core/individual.lisp:115`. Found on 2026-08-25 while building the
+relation join semantics, and older than that work by a long way — it has
+nothing to do with relation types and reproduces with a single relation type.
+
+    (defmethod individuals-equal ((ind1 individual) (ind2 individual))
+      (and
+       (types-equal (individual-type ind1) (individual-type ind2))
+       (properties-equal (properties ind1) (properties ind2))))
+
+**No `id`.** Two genuinely different individuals of the same type carrying no
+properties are therefore equal. `same-individual-p`, eleven lines below it,
+does compare the id — so the correct predicate exists and this is not it.
+
+The damage travels: `individuals-equal` → `referents-equal` → `objects-equal`
+→ `relations-equivalent-p` → `simplify`, which removes what it takes to be a
+duplicate relation. So
+
+    [PERSON: #603]- (loc)→[CITY: #604] (loc)→[CITY: #605]
+
+simplifies to `[PERSON: #603]→(loc)→[CITY: #604]`, and the claim that the
+person is also at #605 is **gone**. Not reordered or merged — deleted. Simplify
+is supposed to remove only what the rest of the graph already says.
+
+Named individuals are safe, which is why nothing has tripped over it: a name
+lives in `properties`, so `properties-equal` separates `[CITY: Annapolis]`
+from `[CITY: Baltimore]`. It is bare `#nnn` referents that collide, and those
+are mostly written by tests.
+
+Not fixed here because the blast radius is real and unrelated to joins:
+`individuals-equal` has eight call sites across `context`, `conformity`,
+`set`, `formation-rules` and `graph-combination`, and at least some of them
+may want the loose "same kind of thing" reading rather than identity —
+`conformity.lisp:46` in particular. Deciding which is which is its own pass.
+
+`test/relation-join-test.lisp` uses named cities throughout and says why, so
+its checks turn on relation types rather than on this.
 
 ## ~~A concept-type click with no focus corrupts a non-empty graph~~ — fixed
 

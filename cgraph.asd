@@ -137,6 +137,7 @@
                              (:file "generation-roots-lint-test")
                              (:file "relation-tables-lint-test")
                              (:file "relation-hierarchy-test")
+                             (:file "relation-join-test")
                              (:file "morphology-tables-lint-test")
                              (:file "lint-report-test")
                              ))))

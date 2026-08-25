@@ -1379,6 +1379,33 @@
 (defmethod types-eq ((type1 relation-type) (type2 relation-type))
   (eq type1 type2))
 
+;;; --- Comparing two relation types in a JOIN -------------------------------
+;;;
+;;; A join is a CONJUNCTION: the result asserts everything both graphs assert.
+;;; That is why joining relations never needs a meet, and why "there is no ⊥ for
+;;; relations" -- true as it stands -- costs nothing. A concept carries exactly
+;;; ONE type, so joining [MAN: Dave] with [DOCTOR: Dave] must find a single type
+;;; asserting both, which is MAXIMAL-COMMON-SUBTYPE's job and does need a meet.
+;;; A pair of concepts carries as MANY relations as you like, so the conjunction
+;;; of two incomparable relations is just both of them, side by side, and
+;;; loc(x,y) ∧ dest(x,y) is a perfectly good thing to have written down.
+;;;
+;;; What the hierarchy buys a join is not a merge but a CORRESPONDENCE: (ploc)
+;;; and (loc) over the same pair describe the same arc of the same situation,
+;;; one more precisely, so a mapping that lines them up is legitimate and the
+;;; two concepts either side may be identified. Redundancy is then removed
+;;; afterwards by SIMPLIFY, which drops the entailed supertype.
+(defun relation-types-comparable-p (type1 type2)
+  "True when one of TYPE1 and TYPE2 subsumes the other, so both describe the
+   same arc and one is merely more precise. Equality is the reflexive case."
+  (or (subsumes-p type1 type2)
+      (subsumes-p type2 type1)))
+
+(defun relations-comparable-p (rel1 rel2)
+  "RELATION-TYPES-COMPARABLE-P lifted to the relations themselves, so join code
+   can ask it the way it used to ask TYPES-EQUAL."
+  (relation-types-comparable-p (relation-type rel1) (relation-type rel2)))
+
 (defmethod nodes-equal ((rel relation-type) (anything t)) nil)
 
 (defmethod nodes-equal ((anything t) (rel relation-type)) nil)

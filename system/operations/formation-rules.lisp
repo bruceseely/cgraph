@@ -396,9 +396,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defmethod simplify ((concept concept))
-  "Simplify Rule: Remove duplicate relations from a concept.
-   Two relations are duplicates if they have the same type and connect to equivalent concepts."
+  "Simplify Rule: Remove relations that assert nothing the others do not.
+
+   Two kinds of redundancy, and the second is why this is not merely a
+   de-duplication. A DUPLICATE is the same type over the same concepts. An
+   ENTAILED relation is an ANCESTOR of another over the same concepts: with
+   ploc ⊑ loc, a graph carrying both ploc(x,y) and loc(x,y) says exactly what
+   ploc(x,y) says on its own, because subtyping a relation is implication. The
+   subtype survives and the supertype goes.
+
+   Joins are what make this matter. Joining [Dave]→(loc)→[Baltimore] with
+   [Dave]→(ploc)→[Baltimore] lands both arcs on one pair of concepts, and
+   without this the result keeps a (loc) that its own (ploc) already implies."
   (let* ((unique-relations (remove-duplicates (arcs concept) :test #'relations-equivalent-p))
+         (unique-relations (remove-if (lambda (rel)
+                                        (relation-entailed-by-any-p rel unique-relations))
+                                      unique-relations))
          (removed (set-difference (arcs concept) unique-relations)))
     ;; Update the concept's arcs to only include unique relations
     (setf (arcs concept) unique-relations)
@@ -417,17 +430,37 @@
              (relations-equivalent-p relation other-relation))
            relation-list))
 
-(defun relations-equivalent-p (rel1 rel2)
-  "Check if two relations are equivalent (same type, equivalent arcs).
-   Outarcs must match; inarcs can be in any order."
-  (and (types-equal rel1 rel2)
-       (= (length (arcs rel1)) (length (arcs rel2)))
+(defun relation-arcs-equivalent-p (rel1 rel2)
+  "The arc half of RELATIONS-EQUIVALENT-P, without the type: do these two
+   relations join the same concepts in the same direction? Outarcs must match;
+   inarcs can be in any order. Split out so that entailment can ask the same
+   question about arcs while asking a different one about types."
+  (and (= (length (arcs rel1)) (length (arcs rel2)))
        ;; Outarc (car) must match exactly
        (objects-equal (car (arcs rel1)) (car (arcs rel2)))
        ;; Inarcs can be in any order - use find instead of positional comparison
        (every (lambda (arc1)
                 (find arc1 (cdr (arcs rel2)) :test #'objects-equal))
               (cdr (arcs rel1)))))
+
+(defun relations-equivalent-p (rel1 rel2)
+  "Check if two relations are equivalent (same type, equivalent arcs).
+   Outarcs must match; inarcs can be in any order."
+  (and (types-equal rel1 rel2)
+       (relation-arcs-equivalent-p rel1 rel2)))
+
+(defun relation-strictly-entails-p (special general)
+  "True when SPECIAL says everything GENERAL says and more: same arcs, and
+   SPECIAL's type is a PROPER descendant of GENERAL's. Proper matters -- without
+   it every relation entails itself and SIMPLIFY would empty the concept."
+  (and (not (eq special general))
+       (relation-arcs-equivalent-p special general)
+       (subsumes-p (relation-type general) (relation-type special))
+       (not (types-eq (relation-type general) (relation-type special)))))
+
+(defun relation-entailed-by-any-p (rel relations)
+  "True when some relation in RELATIONS makes REL redundant."
+  (some (lambda (other) (relation-strictly-entails-p other rel)) relations))
 
 
 

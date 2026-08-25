@@ -18,10 +18,10 @@ mostly to hold it. The fifth turned out to have a cheerful answer.
 Written as analysis, before any of it was built. Most of it since has been:
 §1, §2, §3 and §4(a) were all built on 2026-08-16, and each section carries what
 building it settled or corrected. Struck-through headings are done; what remains
-outstanding is the one question §5 left open: what two *incomparable* relation
-types join to, given there is no `⊥` for relations. Everything else here is
-built — the header links, the last row of the sizing table and the only part
-of this note nothing had touched, on 2026-08-25.
+outstanding is nothing. The last of it — what two *incomparable* relation types
+join to, given there is no `⊥` for relations — was answered on 2026-08-25 by
+finding the question malformed: a join is a conjunction and never needs a meet.
+See §5.
 
 The analysis is left standing rather than rewritten into a description of the
 result, because in several places the thing that was wrong about it is the most
@@ -504,7 +504,63 @@ signature. Restating is probably right — the signatures are precisely what
 `check-relation-lattice` verifies, and inheriting them makes the check
 vacuous.
 
-### Joins are the actual design question
+### ~~Joins are the actual design question~~ — answered 2026-08-25
+
+**The question was malformed, and that is the answer.** A join never needs a
+meet, so "there is no `⊥` for relations" — true as it stands — costs nothing.
+
+A join is a **conjunction**: the result asserts what both graphs assert. A
+concept carries exactly *one* type, so joining `[MAN: Dave]` with
+`[DOCTOR: Dave]` must find a single type meaning both, which is what
+`maximal-common-subtype` is for and why concepts need a meet. A pair of
+concepts carries as *many* relations as you like. So two incomparable relation
+types over the same pair are simply both kept, and `part(x,y) ∧ cntns(x,y)` is
+a perfectly good thing to have written down. Leaving both arcs is not a failure
+to merge — it is the exact answer. The dilemma below ("unmerged or fail") is a
+false one.
+
+What the hierarchy *does* buy is not a merge but a **correspondence**. `(ploc)`
+and `(loc)` over the same pair describe one arc at two precisions, so a mapping
+that lines them up is legitimate — and refusing it was never the harmless
+conservatism this section assumed. Measured before the change:
+
+    g1   [PERSON: Dave]→(loc)→[CITY: Baltimore].
+    g2   [PERSON: Dave]→(ploc)→[CITY: Baltimore].
+    join [PERSON: Dave]→(loc)→[CITY: Baltimore]←(ploc)←[PERSON: Dave].
+
+**Dave twice** — one pair mapped instead of two, because the arcs were refused
+a correspondence and so the concepts were never identified. Not false, since
+both carry the same individual, but not the join either. It now gives
+`[PERSON: Dave]→(ploc)→[CITY: Baltimore].`
+
+Three pieces, none of them a meet:
+
+- the two consistency checks ask `relations-comparable-p` rather than
+  `types-equal`, which on equality is the same question and so only ever admits
+  mappings that used to be refused;
+- `execute-maximal-join` is unchanged — it joins **concepts** and carries every
+  relation across, computing no relation type at all;
+- `simplify` drops what another relation **entails**: with `ploc ⊑ loc`, a
+  concept holding both `ploc(x,y)` and `loc(x,y)` says exactly what `ploc(x,y)`
+  says alone, so the supertype goes and the subtype stays. A chain collapses to
+  its deepest member.
+
+**What is deliberately left strict.** Two graphs whose arcs are of
+*incomparable* type still do not have their endpoints identified — `part` and
+`cntns` over the same pair produce the doubled-concept shape above. That is not
+an oversight: this operation looks for a maximal *common subgraph*, and
+admitting any conjunction would make it a different operation. It is the one
+real choice left here, and nothing yet needs it made.
+
+Also found, and **not** fixed: `individuals-equal`
+(`system/core/individual.lisp:115`) compares type and properties but never the
+`id`, so two distinct bare `#nnn` individuals of one type are equal and
+`simplify` deletes a real assertion. Older than any of this and unrelated to
+relation types — see `notes/known-issues.md`.
+
+`test/relation-join-test.lisp`, 12 checks. Suite 27/27 → 28/28.
+
+The original analysis follows.
 
 Three sites compare relation types with `types-equal` and are *not*
 projection:
@@ -556,4 +612,4 @@ is a day of careful widening plus one line, with the genuinely open question
 | ~~(a) registration hook~~ | done 2026-08-16 | yes |
 | ~~(b) relation hierarchy, generation only~~ | done 2026-08-16 | yes |
 | ~~(b) + projection honours it~~ | done — one line, once the predicates were widened | yes, in core |
-| (b) + joins honour it | **still open** — needs the meet semantics decided first | yes |
+| ~~(b) + joins honour it~~ | done 2026-08-25 — no meet was needed; a join is a conjunction | yes, in core |

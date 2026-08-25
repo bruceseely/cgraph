@@ -65,6 +65,7 @@
                       graph-equality-test
                       decomposition-test
                       relation-hierarchy-test
+                      relation-join-test
                       ;; The lint suites. All four are built by cgraph.asd and
                       ;; none of them were run: the list named
                       ;; POS-ROOTS-LINT-TEST, which does not exist, and nothing

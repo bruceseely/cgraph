@@ -134,7 +134,28 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; STRUCTURAL CONSISTENCY CHECKS
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; These decide which concept mappings are LEGAL, by asking whether the two
+;;; graphs agree about the relations among the concepts being identified. They
+;;; ask RELATIONS-COMPARABLE-P and not TYPES-EQUAL, because two relations over
+;;; the same pair describe the same arc when one type subsumes the other -- one
+;;; is simply more precise. On equality the two are the same question, so this
+;;; only ever admits mappings that used to be refused.
+;;;
+;;; And refusing them was not the harmless conservatism it looked like. Joining
+;;; [PERSON: Dave]→(loc)→[CITY: Baltimore] with the same graph over (ploc) used
+;;; to map ONE pair rather than two, and the result was
+;;;
+;;;   [PERSON: Dave]→(loc)→[CITY: Baltimore]←(ploc)←[PERSON: Dave].
+;;;
+;;; -- Dave twice, because the relation check refused to line up the arcs and so
+;;; the two Dave concepts were never identified. Not false, since both carry the
+;;; same individual, but not the join either.
+;;;
+;;; Nothing here computes a relation type. EXECUTE-MAXIMAL-JOIN joins CONCEPTS
+;;; and carries every relation across; SIMPLIFY then drops the ones the others
+;;; entail. That is the whole answer to "what do two relation types join to":
+;;; they do not, any more than two sentences join to a third.
 
 (defun check-involved-relations (c1 c2 mapping relations1 relations2)
   "Check that adding (c1 . c2) to the mapping doesn't violate structural consistency.
@@ -163,8 +184,7 @@
                ;; Only check if all arcs are mapped
                (if (every #'identity mapped-arcs)
                    (some (lambda (target-rel)
-                           (and (types-equal (relation-type rel)
-                                             (relation-type target-rel))
+                           (and (relations-comparable-p rel target-rel)
                                 (= (length (arcs rel))
                                    (length (arcs target-rel)))
                                 (every #'nodes-eq
@@ -194,8 +214,7 @@
                            (arcs rel))))
              (if (every #'identity mapped-arcs)
                  (some (lambda (target-rel)
-                         (and (types-equal (relation-type rel)
-                                           (relation-type target-rel))
+                         (and (relations-comparable-p rel target-rel)
                               (= (length (arcs rel))
                                  (length (arcs target-rel)))
                               (every #'nodes-eq
