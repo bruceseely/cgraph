@@ -48,6 +48,20 @@
       align-items: center;
     }
 
+    /* When the chips cannot share row 1 with the label and the buttons, they take
+       a band of their OWN below both — full width, starting at the left margin.
+       order:1 puts them after the buttons in flex order, flex-basis:100% forces
+       the break, and #save-btn's margin-left:auto still right-justifies the group
+       on row 1.
+
+       Which of the two states applies cannot be said in CSS: it depends on
+       whether the chips WOULD overflow, and only layout knows that. syncChipRow()
+       in graph.js measures it and sets this class. */
+    #top-bar.chips-own-row #chips {
+      order: 1;
+      flex-basis: 100%;
+    }
+
     .chip {
       display: inline-flex;
       align-items: center;

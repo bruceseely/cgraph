@@ -1,4 +1,6 @@
 const chipsEl        = document.getElementById('chips');
+const topBarEl       = document.getElementById('top-bar');
+const topBarLabelEl  = document.getElementById('top-bar-label');
 const typeListEl     = document.getElementById('type-list');
 const container      = document.getElementById('graph-container');
 const errorMsg       = document.getElementById('error-msg');
@@ -68,7 +70,63 @@ function renderChips() {
       return chip;
     })
   );
+  syncChipRow();
 }
+
+// ── Which row the chips live on ─────────────────────────────────────────────
+// Two layouts, and the bar chooses between them by measuring, because no CSS
+// rule can state the condition:
+//
+//   fits      Graphing: [chip] [chip]                  [Save] … [Editor]
+//
+//   does not  Graphing:                                [Save] … [Editor]
+//             [chip] [chip] [chip] [chip] [chip] [chip] [chip] [chip]
+//
+// Plain flex-wrap does something else: the chips keep row 1 and the BUTTON GROUP
+// is what drops, so every control sits at a different height depending on how
+// many types happen to be selected — a toolbar that moves under the pointer as
+// a side effect of selecting. Pinning the buttons and moving the chips instead
+// leaves the controls where they were, and hands the chips the full width of
+// the bar rather than the gap between the label and the buttons.
+//
+// ALWAYS MEASURED FROM THE INLINE STATE. The class comes off, the browser is
+// asked whether the button group still shares the label's row, and it goes back
+// on if it does not. That cannot oscillate: applying the class is precisely what
+// returns the buttons to row 1, so the next measurement starts where this one
+// did. Deciding from the CLASSED state instead would flip forever.
+function syncChipRow() {
+  topBarEl.classList.remove('chips-own-row');
+  if (!chipsEl.children.length) return;         // no chips, nothing to place
+  // The buttons are individual flex items of the bar, not a group, so they wrap
+  // ONE AT A TIME: Editor drops to row 2 while Save is still up on row 1. So the
+  // test is the LAST button, not the first. Testing #save-btn missed four and
+  // five chips entirely — the bar had already grown to two rows and Save had not
+  // moved, so it read as fitting.
+  //
+  // The chips themselves are never the signal. #chips wraps internally only if
+  // something constrains its width, and nothing does: it grows to fit its
+  // content and pushes the buttons off instead. Measured at four chips, all of
+  // them still share one top and the chips box is one chip tall.
+  const btns = topBarEl.querySelectorAll('button');
+  const last = btns[btns.length - 1];
+  if (!last) return;
+
+  // Same row means the two boxes OVERLAP vertically, not that their tops agree.
+  // Comparing tops looks right and is wrong: the bar is align-items:flex-start,
+  // the label carries line-height 1.8rem and the buttons are align-self:center,
+  // so on one shared row the label's top sits ~6px above the buttons'. That read
+  // as a wrap, and put the chips on their own row from the very first chip.
+  const l = topBarLabelEl.getBoundingClientRect();
+  const b = last.getBoundingClientRect();
+  if (!(b.top < l.bottom && b.bottom > l.top)) {
+    topBarEl.classList.add('chips-own-row');
+  }
+}
+
+// The same question has a different answer at a different width. Window resize
+// rather than a ResizeObserver on the bar: the class changes the bar's own
+// height, so observing it would feed our own writes back in as input.
+window.addEventListener('resize', syncChipRow);
 
 // ── Sidebar list ──────────────────────────────────────────────────────────────
 
