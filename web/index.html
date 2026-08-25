@@ -65,19 +65,38 @@
     .chip:hover { background: #c0392b; }
     .chip-x { font-size: 11px; opacity: 0.8; }
 
-    #save-btn, #init-btn, #new-type-btn, #edit-type-btn {
+    /* Every button in the bar, selected by PLACE rather than by name. This was a
+       hand-kept list of ids -- #save-btn, #init-btn, #new-type-btn, #edit-type-btn
+       -- so it styled only the buttons someone had remembered to add to it.
+       #new-rel-btn and #editor-btn were both missing and fell through to the
+       browser's own chrome: 13.3px rather than 11px, a 2px border, square
+       corners. A selector that matches the bar cannot be forgotten by the next
+       button put in it. */
+    /* Smaller than the forms' 11px, and spaced by the bar's own 0.5rem gap rather
+       than that plus a per-button 0.4rem, because the bar's scarce resource is
+       WIDTH: everything the button group takes is width the selected-type chips
+       do not get before they push it onto a second row. Measured at 1196px, the
+       group goes 529px -> 437px, and the chips 573px -> 665px, which is about
+       half a long type name. The buttons are a fixed cost paid on every screen;
+       the chips are what the bar is actually for. */
+    #top-bar button {
       align-self: center;
       flex-shrink: 0;
-      font-size: 11px;
-      padding: 0.18rem 0.55rem;
+      font-size: 10px;
+      padding: 0.15rem 0.4rem;
       border: 1px solid #ccc;
       border-radius: 3px;
       background: #f7f7f7;
       color: #555;
       cursor: pointer;
     }
-    #new-type-btn, #edit-type-btn { margin-left: 0.4rem; }
-    #new-type-btn:hover, #edit-type-btn:hover { background: #e8e8e8; border-color: #aaa; }
+    /* :not(.active):not(.open) so hovering a button that is currently ON does not
+       grey out the state it is showing. Without them this rule outranks
+       #edit-type-btn.active and #options-btn.open, which it used not to. */
+    #top-bar button:hover:not(:disabled):not(.active):not(.open) {
+      background: #e8e8e8;
+      border-color: #aaa;
+    }
     #edit-type-btn.active { background: #e0e9fb; border-color: #a9bde8; color: #33507a; }
     #nt-label[readonly] { background: #eee; color: #666; cursor: default; }
 
@@ -338,7 +357,6 @@
       background: #fff6f6;
     }
     #save-btn { margin-left: auto; }
-    #save-btn:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
     #save-btn:disabled { color: #bbb; cursor: default; }
     #save-status {
       font-size: 13px;
@@ -349,23 +367,8 @@
     }
     #save-status:not(:empty) { cursor: pointer; }
     #save-status:not(:empty):hover { color: #555; text-decoration: underline; }
-    #init-btn { margin-left: 0.4rem; }
-    #init-btn:hover:not(:disabled) { background: #e8e8e8; border-color: #aaa; }
     #init-btn:disabled { color: #bbb; cursor: default; }
 
-    #options-btn {
-      align-self: center;
-      flex-shrink: 0;
-      font-size: 11px;
-      padding: 0.18rem 0.55rem;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      background: #f7f7f7;
-      color: #555;
-      cursor: pointer;
-      margin-left: 0.4rem;
-    }
-    #options-btn:hover { background: #e8e8e8; border-color: #aaa; }
     #options-btn.open { background: #4a90d9; color: #fff; border-color: #4a90d9; }
 
     /* ── options strip (inside CG pane, below header) ── */
