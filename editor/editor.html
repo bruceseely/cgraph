@@ -32,6 +32,10 @@
     #bar .title { font-weight: bold; color: #555; }
     #bar .muted { color: #999; font-size: 12px; }
     #bar .spacer { margin-left: auto; }
+    /* Navigation, not a session action, so it is a link and not a button --
+       UPDATE and Cancel end the session, this one only leaves the page. */
+    #bar .nav { color: #4a6f9a; font-size: 12px; text-decoration: none; }
+    #bar .nav:hover { text-decoration: underline; }
 
     button {
       font-size: 11px;
@@ -450,6 +454,27 @@
     #veil .headline { font-size: 17px; font-weight: 600; margin-bottom: 0.4rem; }
     #veil .detail { font-size: 13px; color: #555; }
     #veil .hint { font-size: 12px; color: #999; margin-top: 0.7rem; }
+    /* A session the browser opened has no caller to receive its graph, so the
+       veil is where the graph is handed over. Selectable, wrapping, and left
+       aligned against the card's centred text, because it is notation. */
+    #veil .result {
+      display: block; margin-top: 0.8rem; padding: 0.5rem 0.6rem;
+      background: #f6f7f9; border: 1px solid #e2e6ea; border-radius: 3px;
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+      color: #333; text-align: left; white-space: pre-wrap; word-break: break-word;
+      max-height: 12rem; overflow: auto; user-select: text;
+    }
+    #veil .result[hidden] { display: none; }
+    /* The veil covers the whole page ON PURPOSE -- nothing underneath may still
+       be clickable -- which includes the Type Browser link in the bar. So a
+       finished session that has somewhere to go needs its own way out, inside
+       the card, and the hint underneath it would only be saying it twice. */
+    #veil .nav {
+      display: inline-block; margin-top: 0.8rem;
+      color: #4a6f9a; font-size: 13px; text-decoration: none;
+    }
+    #veil .nav:hover { text-decoration: underline; }
+    #veil .nav[hidden] { display: none; }
     #veil.committed .headline { color: #2d7a4f; }
     #veil.cancelled .headline { color: #8a6d3b; }
 
@@ -464,6 +489,7 @@
   <div id="bar">
     <span class="title">CGraph Editor</span>
     <span class="muted" id="session-label"></span>
+    <a class="nav" href="/" title="Go to the type browser">Type Browser</a>
     <span class="spacer"></span>
     <button id="update">UPDATE</button>
     <button id="cancel">Cancel</button>
@@ -622,6 +648,8 @@
     <div class="card">
       <div class="headline"></div>
       <div class="detail"></div>
+      <pre class="result" hidden></pre>
+      <a class="nav" href="/" hidden>← Back to the Type Browser</a>
       <div class="hint">This session is finished — you can close this tab.</div>
     </div>
   </div>

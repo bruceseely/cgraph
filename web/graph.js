@@ -1727,4 +1727,33 @@ document.getElementById('nt-draw').addEventListener('click', async () => {
 // hand the editor is what the field means.
 function collapseWhitespace(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
 
+// ── the editor, as a place rather than as a step ─────────────────────────────
+// The other half of the Draw link above, and deliberately not the same thing.
+// Draw is a round trip: it stashes a form, carries a graph, and comes back with
+// it. This is navigation — the two pages share an origin and an acceptor and
+// have never had a way to reach each other, which is what this fixes.
+//
+// So it passes NO `back'. A `back' would send the graph to the type form, and
+// someone who clicked "Editor" did not ask to make a type; the editor's veil
+// hands the graph over instead. That also keeps the one payload path single: if
+// a stashed form is what receives a drawn graph, only Draw may stash one.
+//
+// A session is minted first because /editor is not a landing page: it reads its
+// session from the URL and every call it makes carries that id, so a bare
+// /editor is a page with nothing under it. An empty text is a supported start —
+// MAKE-WORKING-GRAPH answers NIL for one, which is what a new graph is.
+document.getElementById('editor-btn').addEventListener('click', async () => {
+  try {
+    const resp = await fetch('/api/editor/open-string?text=', { method: 'POST' });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      showError(data.error || `could not open the editor: ${resp.status}`);
+      return;
+    }
+    location.href = `/editor?session=${data.session}`;
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
 restoreTypeForm();

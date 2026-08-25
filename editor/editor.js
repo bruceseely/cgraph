@@ -1348,25 +1348,59 @@ async function removeArc(relationRef) {
 // opened, and this one was opened by the server shelling out to the OS, so the
 // browser would refuse -- better to say plainly that the tab can be closed than
 // to try and silently fail.
+// Fourth slot is the hint under the card, fifth is whether to offer a way back
+// to the type browser. A REPL-opened session has nowhere else to be, so it gets
+// the hint and no link; a session the browser opened has somewhere, so it gets
+// the link and no hint — the link says it, and saying it twice is worse.
+//
+// The link has to live INSIDE the card. The veil is `inset: 0` deliberately, so
+// that nothing underneath can still be clicked, and the one in the bar is
+// underneath it.
+const CLOSE_HINT = 'This session is finished — you can close this tab.';
+
 const VEIL_TEXT = {
   commit:   ['committed', 'Committed',
-             'The edited graph was installed and the REPL call has returned.'],
+             'The edited graph was installed and the REPL call has returned.',
+             CLOSE_HINT, false],
   cancel:   ['cancelled', 'Cancelled',
-             'Nothing was changed — the original graph is untouched.'],
+             'Nothing was changed — the original graph is untouched.',
+             CLOSE_HINT, false],
+  // A session opened from the type browser's header, rather than by a REPL call
+  // or by the Draw button on the type form. Neither of the two sentences above
+  // is true of it: nothing was installed and no call is waiting, and there is no
+  // original graph for a cancel to leave untouched. So the veil is where the
+  // graph is handed over — it is the only place it can be.
+  webCommit: ['committed', 'Committed',
+              'This session was opened from the type browser, so no caller is '
+              + 'waiting to receive the graph. Here it is:',
+              '', true],
+  webCancel: ['cancelled', 'Cancelled',
+              'Nothing was kept. This session was opened from the type browser '
+              + 'as a scratch graph, with nowhere to install one.',
+              '', true],
   // Not a failure of this page, and worth saying so: the work was not lost
   // here, it stopped being wanted there.
   orphaned: ['cancelled', 'Session ended',
              'The REPL call this page was editing is no longer waiting — it was '
              + 'interrupted, or the session was cancelled from elsewhere. '
-             + 'Nothing here can reach it now.']
+             + 'Nothing here can reach it now.',
+             CLOSE_HINT, false]
 };
 
-function showVeil(action) {
+function showVeil(action, result) {
   const veil = $('veil');
-  const [cls, headline, detail] = VEIL_TEXT[action] || VEIL_TEXT.cancel;
+  const [cls, headline, detail, hint, back] = VEIL_TEXT[action] || VEIL_TEXT.cancel;
   veil.className = cls;
   veil.querySelector('.headline').textContent = headline;
   veil.querySelector('.detail').textContent = detail;
+  veil.querySelector('.hint').textContent = hint;
+  veil.querySelector('.hint').hidden = !hint;
+  veil.querySelector('.nav').hidden = !back;
+  // An empty graph is a legitimate result and must not render as a blank box
+  // claiming to hold something, so the slot is shown only for a non-empty one.
+  const box = veil.querySelector('.result');
+  box.textContent = result || '';
+  box.hidden = !result;
   veil.hidden = false;
 }
 
@@ -1392,7 +1426,10 @@ async function finish(action) {
     }
     document.querySelectorAll('button').forEach(b => b.disabled = true);
     setStatus('');     // the veil says it, and says it where you are looking
-    showVeil(action);
+    // WEB comes from the server rather than being inferred from RESULT, which a
+    // cancelled web session does not carry any more than a REPL one does.
+    showVeil(data.web ? (action === 'commit' ? 'webCommit' : 'webCancel') : action,
+             data.result);
   } catch (err) { setStatus(err.message, 'error'); }
 }
 

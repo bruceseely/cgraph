@@ -551,10 +551,20 @@
                ;; receive it. On cancel the page keeps what it already had, so
                ;; sending SESSION-ORIGINAL back would at best be redundant and
                ;; at worst overwrite an edit made in the form meanwhile.
+               ;; WEB rides back on both outcomes, not just the commit RESULT
+               ;; does: a page with nowhere to return to has to say what kind of
+               ;; session just ended, and it cannot infer that from RESULT --
+               ;; a cancelled web session sends none, exactly like a REPL one.
+               ;;
+               ;; ~:[~;…~] and not ~@[…~]: a true ~@[ does NOT consume its
+               ;; argument, so a clause with no directive inside it to do the
+               ;; consuming leaves WEB in place for the next one, and RESULT
+               ;; came out as "T". ~:[ always consumes.
                (format nil "{\"ok\":true,\"state\":\"~(~a~)\"~@[,\"parent\":~a~]~
-                            ~@[,\"result\":\"~a\"~]}"
+                            ~:[~;,\"web\":true~]~@[,\"result\":\"~a\"~]}"
                        state
                        (and parent (session-id parent))
+                       web
                        (and web (eq state :committed)
                             (json-escape (or (session-result s) ""))))))))))
 
