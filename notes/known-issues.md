@@ -6,10 +6,11 @@ was wrong about is worth as much as the fix.
 
 The first two entries were found on 2026-08-13/14 while building decomposition,
 were older than that work, and were fixed on 2026-08-14. The third was found on
-2026-08-16 and fixed the same day. The fourth was found on 2026-08-25 and is
-**outstanding**.
+2026-08-16 and fixed the same day. The fourth was found on 2026-08-25 while
+building the relation join semantics and fixed the same day. Nothing is
+currently outstanding.
 
-## `individuals-equal` ignores the id, so `simplify` can delete an assertion
+## ~~`individuals-equal` ignores the id, so `simplify` can delete an assertion~~ — fixed
 
 `system/core/individual.lisp:115`. Found on 2026-08-25 while building the
 relation join semantics, and older than that work by a long way — it has
@@ -39,14 +40,29 @@ lives in `properties`, so `properties-equal` separates `[CITY: Annapolis]`
 from `[CITY: Baltimore]`. It is bare `#nnn` referents that collide, and those
 are mostly written by tests.
 
-Not fixed here because the blast radius is real and unrelated to joins:
-`individuals-equal` has eight call sites across `context`, `conformity`,
-`set`, `formation-rules` and `graph-combination`, and at least some of them
-may want the loose "same kind of thing" reading rather than identity —
-`conformity.lisp:46` in particular. Deciding which is which is its own pass.
+Fixed 2026-08-25, and the pass it was going to need turned out not to be
+needed. The worry above was that some of the eight call sites might want the
+loose "same kind of thing" reading — `conformity.lisp:46` in particular. Read
+one at a time, **every one of them says "same individual" in its own comment**
+and wants identity: `retrieve-concepts-having-individual`, `remove-from-set`,
+`referents-joinable-p`, and the `objects-equal` dispatch. The loose reading is
+already provided separately, under its own name, at the one site that wants it
+— `individuals-compatible-p` (`graph-combination.lisp:356`), type plus
+compatible properties and no id, sitting on the line directly below the
+`individuals-equal` call it is the alternative to.
 
-`test/relation-join-test.lisp` uses named cities throughout and says why, so
-its checks turn on relation types rather than on this.
+So `individuals-equal` now delegates to `same-individual-p` rather than
+repeating its clauses, which is what stops the two drifting apart again. The
+whole suite passed unchanged — nothing depended on the loose behaviour.
+
+`individual-identity-test` holds it (in `test/individual-test.lisp`). Checked
+that it is load-bearing by reverting the method and re-running: two of its
+seven checks fail, the predicate one and the `simplify` one, while the other
+five — reflexivity, a true duplicate still collapsing, named individuals
+unaffected — pass either way and are there to catch a fix that goes too far.
+
+`test/relation-join-test.lisp` still uses named cities throughout, and its
+comment now records why that mattered rather than why it is required.
 
 ## ~~A concept-type click with no focus corrupts a non-empty graph~~ — fixed
 

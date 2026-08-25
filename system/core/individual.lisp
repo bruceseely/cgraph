@@ -110,12 +110,45 @@
   (eq ind1 ind2))
 
 
+;;; Identity, defined ONCE. This used to be two predicates that disagreed:
+;;; INDIVIDUALS-EQUAL compared type and properties, SAME-INDIVIDUAL-P compared
+;;; those AND the id, and the one every caller reached for was the one that
+;;; could not tell two individuals apart.
+;;;
+;;; An individual marker is the CG device for saying "this particular one", so
+;;; two individuals with different ids ARE different, whatever they look like.
+;;; #604 and #605 are two cities however alike their descriptions. Comparing
+;;; only type and properties made them equal, and since a NAME lives in
+;;; properties, the failure was invisible for anything named: Annapolis and
+;;; Baltimore differed, #604 and #605 did not. Bare ids are mostly written in
+;;; tests, which is why nothing tripped over it for so long.
+;;;
+;;; What it cost: OBJECTS-EQUAL → RELATIONS-EQUIVALENT-P → SIMPLIFY, which
+;;; removes what it takes to be a duplicate relation. So
+;;;
+;;;   [PERSON: #603]- (loc)→[CITY: #604] (loc)→[CITY: #605]
+;;;
+;;; simplified to a person at #604 alone, and the claim about #605 was DELETED,
+;;; not merged. A rule that exists to drop what the graph already says was
+;;; dropping something it did not.
+;;;
+;;; The loose "could these be joined" reading still exists where it is actually
+;;; wanted, under its own name: INDIVIDUALS-COMPATIBLE-P
+;;; (graph-combination.lisp:356), which is type plus compatible properties and
+;;; no id. Every caller of INDIVIDUALS-EQUAL, checked one at a time, says "same
+;;; individual" in its own comment and wants this one.
+(defmethod same-individual-p ((ind1 individual) (ind2 individual))
+  (and (eql (id ind1) (id ind2))
+       (types-equal (individual-type ind1) (individual-type ind2))
+       (properties-equal (properties ind1) (properties ind2))))
+
+
 (defgeneric individuals-equal (individual1 individual2))
 
+;;; Delegates rather than repeating the three clauses, so the two names cannot
+;;; drift apart again. They are the same question.
 (defmethod individuals-equal ((ind1 individual) (ind2 individual))
-  (and
-   (types-equal (individual-type ind1) (individual-type ind2))
-   (properties-equal (properties ind1) (properties ind2))))
+  (same-individual-p ind1 ind2))
 
 (defmethod individuals-equal ((ind1 individual) (ind2 (eql 'nil))) nil)
 (defmethod individuals-equal ((ind1 (eql 'nil)) (ind2 individual)) nil)
@@ -124,12 +157,6 @@
 
 (defmethod nodes-equal ((ind1 individual) (ind2 individual))
   (individuals-equal ind1 ind2))
-
-
-(defmethod same-individual-p ((ind1 individual) (ind2 individual))
-  (and (eql (id ind1) (id ind2))
-       (types-equal (individual-type ind1) (individual-type ind2))
-       (properties-equal (properties ind1) (properties ind2))))
 
 
 

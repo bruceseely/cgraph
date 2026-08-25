@@ -197,10 +197,60 @@
     (and result1 result2 result3 result4)))
 
 
+;;; INDIVIDUALS-EQUAL used to compare type and properties and NOT the id, so two
+;;; distinct individuals of one type with no properties were equal. See
+;;; notes/known-issues.md. Named individuals hid it, because a name lives in
+;;; properties: Annapolis and Baltimore differed, #604 and #605 did not.
+;;;
+;;; The consequence worth guarding is not the predicate but what it reached:
+;;; OBJECTS-EQUAL → RELATIONS-EQUIVALENT-P → SIMPLIFY, which deleted a relation
+;;; that duplicated nothing.
+(defun individual-identity-test (&optional verbose)
+  (when verbose (format t "~&Individual identity --~%"))
+  (let ((ok t))
+    (flet ((check (label pass)
+             (setf ok (and ok (and pass t)))
+             (when (or verbose (not pass))
+               (format t "~&  ~:[FAIL <<<~;pass~] ~a~%" pass label))))
+
+      ;; Two bare individuals of one type: same shape, different things.
+      (let ((a (make-individual 'city '() :id (next-individual-number)))
+            (b (make-individual 'city '() :id (next-individual-number))))
+        (check "distinct ids are not equal"        (not (individuals-equal a b)))
+        (check "and same-individual-p agrees"      (not (same-individual-p a b)))
+        (check "an individual equals itself"       (individuals-equal a a))
+        (check "reflexive under same-individual-p" (same-individual-p a a)))
+
+      ;; The reach: SIMPLIFY must not delete an arc to a DIFFERENT city.
+      (let* ((g (make-cgraph "[PERSON: #603]- (loc)→[CITY: #604] (loc)→[CITY: #605]"))
+             (person (find-if (lambda (c) (types-eq (concept-type c) (get-concept-type 'person)))
+                              (collect-concepts g))))
+        (dolist (c (collect-concepts g)) (simplify c))
+        (check "simplify keeps arcs to different individuals"
+               (= 2 (length (arcs person)))))
+
+      ;; ...and must still drop a real duplicate, or the fix went too far.
+      (let* ((g (make-cgraph "[PERSON: #606]- (loc)→[CITY: #607] (loc)→[CITY: #607]"))
+             (person (find-if (lambda (c) (types-eq (concept-type c) (get-concept-type 'person)))
+                              (collect-concepts g))))
+        (dolist (c (collect-concepts g)) (simplify c))
+        (check "simplify still drops a true duplicate"
+               (= 1 (length (arcs person)))))
+
+      ;; Named individuals behaved correctly before and must still.
+      (let* ((g (make-cgraph "[PERSON: #608]- (loc)→[CITY: Annapolis] (loc)→[CITY: Baltimore]"))
+             (person (find-if (lambda (c) (types-eq (concept-type c) (get-concept-type 'person)))
+                              (collect-concepts g))))
+        (dolist (c (collect-concepts g)) (simplify c))
+        (check "two named cities both survive" (= 2 (length (arcs person)))))
+      ok)))
+
+
 (defun individual-test (&optional verbose)
   (with-test-types
     (when verbose
       (format t "~%INDIVIDUAL-TEST~%"))
     (and (individual-test-1 verbose)
          (individual-test-2 verbose)
-         (individual-test-3 verbose))))
+         (individual-test-3 verbose)
+         (individual-identity-test verbose))))
