@@ -20,7 +20,8 @@ Written as analysis, before any of it was built. Most of it since has been:
 building it settled or corrected. Struck-through headings are done; what remains
 outstanding is the one question §5 left open: what two *incomparable* relation
 types join to, given there is no `⊥` for relations. Everything else here is
-built.
+built — the header links, the last row of the sizing table and the only part
+of this note nothing had touched, on 2026-08-25.
 
 The analysis is left standing rather than rewritten into a description of the
 result, because in several places the thing that was wrong about it is the most
@@ -42,6 +43,30 @@ What they do not share is any awareness of each other. Grepping
 for cross-references turns up nothing at all. They are neighbours that have
 never spoken. A link each way in the two headers is the ten-minute version of
 this whole note, and should probably go first.
+
+> **Built 2026-08-25**, and it went last rather than first. Three things the
+> ten minutes did not include, all of them found by driving it:
+>
+> - **`/editor` is not a landing page.** It reads its session from the URL and
+>   every call it makes carries that id, so a bare `/editor` is a page with
+>   nothing under it. The browser's button mints a session first, over the same
+>   `open-string` endpoint Draw uses, with empty text.
+> - **The veil was written for a REPL caller** and lies to a browser-opened
+>   session: *"the edited graph was installed and the REPL call has returned"*
+>   is wrong twice, and *"the original graph is untouched"* describes an
+>   original that does not exist. Both got web-owned wordings, and a committed
+>   scratch graph is now shown in the card — with no caller blocked to receive
+>   it, the veil is the only place it can be handed over.
+> - **The veil covers the link.** The card said to use the Type Browser link in
+>   the bar, and `#veil` is `inset: 0` on purpose so nothing underneath stays
+>   clickable. The way out has to be *inside* the card.
+>
+> The browser→editor link passes no `back`. A `back` would deliver the graph to
+> the type form, and someone who clicked "Editor" did not ask to make a type —
+> which also keeps the payload path single: only Draw may stash a form, so only
+> Draw can receive one. The two directions are links; Draw is a round trip, and
+> conflating them is the trap this section sets by describing them both as
+> "awareness of each other".
 
 ## 1. ~~Create a concept type while editing~~ — built 2026-08-16, JS only
 
@@ -523,7 +548,7 @@ is a day of careful widening plus one line, with the genuinely open question
 
 | | estimate | touches Lisp |
 |---|---|---|
-| Links between the two UIs | 10 min | no |
+| ~~Links between the two UIs~~ | done 2026-08-25 — more than 10 min; the editor had no landing state | yes, one format string |
 | ~~Concept type from the editor~~ | done 2026-08-16 | no |
 | ~~Draw a canonical graph~~ | done 2026-08-16 | lightly |
 | ~~Relation-type endpoints~~ | done 2026-08-16 — mostly renames, as estimated | yes |
