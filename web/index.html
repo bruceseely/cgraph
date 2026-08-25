@@ -197,9 +197,32 @@
     }
     .nt-chip:hover { background: #e0e9fb; border-color: #a9bde8; }
     .nt-chip .x { color: #93a; font-size: 10px; opacity: 0.6; }
-    /* the "+" adds a supertype: click it, then click one type. A pill button in the
-       cell; the generic #new-type-form button rule is overridden here. */
-    #nt-add-super {
+    /* THE PILLS. Four controls that act on the CELL they sit in rather than
+       committing the form: the "+" that arms a one-shot type pick (a supertype
+       here, a source or destination in the relation form) and Draw, which opens
+       the editor on the canonical field beside it. That is what sets them apart
+       from the Create/Save row, and why they are round and tinted instead of
+       square and grey.
+
+       Except that until now only Draw actually was. #nt-add-super and the two
+       relation "+"s are single-id selectors, and #new-type-form button /
+       #new-rel-form button carry an id AND an element, which outranks them — so
+       the generic rule won every property the pill named and all three rendered
+       as ordinary grey buttons with 3px corners. Draw escaped because it alone
+       was written with the form id in front of it, which is a fix for exactly
+       this and was never applied to its neighbours.
+
+       So: one rule, every selector doubled, and the pills are pills. The :hover
+       and .active rules below are doubled for the same reason — against a
+       two-id base they would now lose in their old single-id form.
+
+       Note .active DID always work, being a class: the "+" went blue when armed
+       even while sitting grey at rest, which is why the styling never looked
+       broken enough to chase. */
+    #new-type-form #nt-add-super,
+    #new-type-form #nt-draw,
+    #new-rel-form #nr-add-source,
+    #new-rel-form #nr-add-dest {
       align-self: flex-start;
       font-size: 12px;
       line-height: 1;
@@ -210,25 +233,20 @@
       color: #33507a;
       cursor: pointer;
     }
-    /* Draw sits with the canonical field it acts on, matching the "+" pill
-       rather than the Create/Cancel row — it opens an editor, it does not
-       commit anything. */
-    #new-type-form #nt-draw {
-      align-self: flex-start;
-      margin-top: 0.28rem;
-      font-size: 11px;
-      line-height: 1;
-      padding: 0.18rem 0.4rem;
-      border: 1px solid #cdd9f0;
-      border-radius: 10px;
-      background: #eef4ff;
-      color: #33507a;
-      cursor: pointer;
-      flex-shrink: 0;
+    /* Draw alone: it sits beside a textarea that grows, so it must not shrink,
+       and it lines up with that field's first line rather than the cell's top. */
+    #new-type-form #nt-draw { margin-top: 0.28rem; flex-shrink: 0; }
+
+    #new-type-form #nt-add-super:hover,
+    #new-type-form #nt-draw:hover,
+    #new-rel-form #nr-add-source:hover,
+    #new-rel-form #nr-add-dest:hover { background: #e0e9fb; border-color: #a9bde8; }
+
+    #new-type-form #nt-add-super.active,
+    #new-rel-form #nr-add-source.active,
+    #new-rel-form #nr-add-dest.active {
+      background: #4a90d9; color: #fff; border-color: #4a90d9;
     }
-    #new-type-form #nt-draw:hover { background: #e0e9fb; border-color: #a9bde8; }
-    #nt-add-super:hover { background: #e0e9fb; border-color: #a9bde8; }
-    #nt-add-super.active { background: #4a90d9; color: #fff; border-color: #4a90d9; }
     /* a sidebar type currently chosen as a supertype */
     .type-item.is-super { background: #eef4ff; box-shadow: inset 3px 0 0 #7a9fe0; }
     #new-type-form button {
@@ -329,21 +347,6 @@
     }
     .nr-sep { color: #999; align-self: flex-start; margin: 0.12rem 0.15rem 0 0; font-size: 11px; }
     #nr-sources-empty, #nr-dest-empty { color: #bbb; font-style: italic; }
-    #nr-add-source, #nr-add-dest {
-      align-self: flex-start;
-      font-size: 12px;
-      line-height: 1;
-      padding: 0.1rem 0.4rem;
-      border: 1px solid #cdd9f0;
-      border-radius: 10px;
-      background: #eef4ff;
-      color: #33507a;
-      cursor: pointer;
-    }
-    #nr-add-source:hover, #nr-add-dest:hover { background: #e0e9fb; border-color: #a9bde8; }
-    #nr-add-source.active, #nr-add-dest.active {
-      background: #4a90d9; color: #fff; border-color: #4a90d9;
-    }
     #new-rel-form button {
       font-size: 12px;
       padding: 0.2rem 0.5rem;
