@@ -1351,6 +1351,116 @@
 
 
 
+;;; --- Canonical graphs as editor guidance -----------------------------------
+;;;
+;;; The editor offers the focus every relation its type may legally take part
+;;; in and every concept type there is -- for REMIND that is 15 relations and
+;;; 225 concept types, all of them consistent and most of them beside the
+;;; point. Signature-consistency is a weak filter. A canonical graph is the
+;;; strong one: it names the handful of arcs the type actually takes, and the
+;;; type each far end wants.
+;;;
+;;; Most types have no canonical graph of their own -- 39 of 225 at the time of
+;;; writing -- so the useful answer usually lives on an ancestor.
+
+(defun %own-canonical-graph-string (concept-type)
+  "CONCEPT-TYPE's own canonical graph as a non-empty string, or NIL.
+
+   Falls back to the CANONICAL-GRAPH slot because MODIFY-CONCEPT-TYPE stores
+   the string there rather than in CANONICAL-GRAPH-STRING; a type last touched
+   through the web editor has it in the wrong slot and looks graphless without
+   this."
+  (let ((s (ignore-errors (canonical-graph-string concept-type))))
+    (if (and (stringp s) (string/= s ""))
+        s
+        (let ((cg (ignore-errors (canonical-graph concept-type))))
+          (and (stringp cg) (string/= cg "") cg)))))
+
+(defun nearest-canonical-graphs (concept-type)
+  "The canonical graphs bearing on CONCEPT-TYPE, as a list of
+   (TYPE-OBJECT . GRAPH-STRING). CONCEPT-TYPE's own comes back alone if it has
+   one.
+
+   Otherwise each supertype branch is followed to its FIRST ancestor with a
+   canonical graph and no further. Stopping there is the point, not an
+   optimisation: REMIND inherits from INFORM, whose (obj) is [INFORMATION];
+   INFORM's own ancestor GIVE also has a canonical graph, but its (obj) is
+   merely [ENTITY]. Climbing past the nearest hit would show the weaker
+   constraint beside the stronger one and undo the narrowing that makes the
+   answer worth having.
+
+   The hierarchy is a lattice, so branches can disagree and more than one pair
+   may come back. The walk is breadth-first from CONCEPT-TYPE and a type
+   reachable by two paths is reported once."
+  (let ((ctype (ignore-errors (get-concept-type concept-type))))
+    (when ctype
+      (let ((own (%own-canonical-graph-string ctype)))
+        (if own
+            (list (cons ctype own))
+            (let ((found (list))
+                  (seen (list ctype))
+                  (frontier (remove nil (copy-list (direct-supertypes ctype)))))
+              (loop while frontier do
+                (let ((next (list)))
+                  (dolist (node frontier)
+                    (unless (member node seen)
+                      (push node seen)
+                      (let ((graph (%own-canonical-graph-string node)))
+                        (if graph
+                            ;; A hit ENDS this branch: its own supertypes are
+                            ;; by construction weaker than what we just found.
+                            (push (cons node graph) found)
+                            (dolist (super (direct-supertypes node))
+                              (when super (push super next)))))))
+                  (setf frontier (nreverse next))))
+              (nreverse found)))))))
+
+(defun canonical-graph-arcs (graph-string)
+  "The top-level arcs of GRAPH-STRING's head concept, as a list of plists
+   (:relation :direction :type), with DIRECTION relative to the head on the
+   same convention the editor uses -- :FORWARD when the head is the source.
+
+   Parsing rather than reading the formatted text: the arcs are wanted as data
+   the page can match against the arcs the focus already has, and matching
+   printed notation would mean re-deriving direction from arrow glyphs."
+  (let* ((*package* (find-package "CONCEPTUAL-GRAPHS"))
+         (nodes (ignore-errors (parse-cgraph graph-string)))
+         ;; PARSE-CGRAPH returns a node list whose first element is the head
+         ;; concept -- the one the canonical graph is about.
+         (head (find-if (lambda (n) (ignore-errors (concept-p n))) nodes)))
+    (when head
+      (loop for rel in (ignore-errors (arcs head))
+            when (ignore-errors (relation-p rel))
+              append (loop for other in (arcs rel)
+                           unless (eq other head)
+                             collect (list :relation (string-downcase
+                                                      (string (label (relation-type rel))))
+                                           :direction (if (relation-outarc-p rel head)
+                                                          :reverse :forward)
+                                           :type (string-downcase
+                                                  (string (label (concept-type other))))))))))
+
+(defun canonical-guidance (concept-type)
+  "What the editor should show beside CONCEPT-TYPE's arcs: a list of plists
+   (:source :inherited :text :arcs), one per NEAREST-CANONICAL-GRAPHS hit.
+
+   :TEXT is run through the formatter for display and :ARCS carries the same
+   graph decomposed. A graph the formatter refuses is passed through
+   unformatted rather than dropped -- the pane is read-only, and unreadable
+   guidance still beats none."
+  (let* ((*package* (find-package "CONCEPTUAL-GRAPHS"))
+         ;; Resolved once, and identity is what decides INHERITED: the
+         ;; argument may arrive as a string, a symbol or a type object, and
+         ;; comparing printed names would have to normalise all three.
+         (self (ignore-errors (get-concept-type concept-type))))
+    (loop for (ctype . raw) in (nearest-canonical-graphs concept-type)
+          collect (list :source (string-downcase (string (label ctype)))
+                        :inherited (not (eq ctype self))
+                        :text (or (ignore-errors (format-cgraph (parse-cgraph raw)))
+                                  raw)
+                        :arcs (canonical-graph-arcs raw)))))
+
+
 
 (defmethod record-relation-type ((type relation-type))
   (setf (gethash (label type) *relation-type-catalog*) type)

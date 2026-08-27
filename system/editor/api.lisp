@@ -96,6 +96,34 @@
 ;;; These mutate the working graph in place so node-refs stay stable for the
 ;;; life of the session -- the browser's click map depends on it.
 
+(defun json-canonical-guidance (session focus)
+  "The canonical graphs bearing on FOCUS's concept type, as a JSON array.
+
+   Null-safe by design: a focus whose type has no canonical graph anywhere up
+   its branches yields an empty array, which is the common case -- 39 of 225
+   concept types carry one -- and the pane simply says so."
+  (let* ((node (ignore-errors (editor-concept session focus)))
+         (type-label (and node (ignore-errors (label (concept-type node)))))
+         (guidance (and type-label
+                        (ignore-errors
+                         (with-cg-thread-bindings (canonical-guidance type-label))))))
+    (with-output-to-string (out)
+      (write-char #\[ out)
+      (loop for (entry . rest) on guidance do
+        (format out "{\"source\":\"~a\",\"inherited\":~:[false~;true~],\"text\":\"~a\",\"arcs\":["
+                (json-escape (getf entry :source))
+                (getf entry :inherited)
+                (json-escape (getf entry :text)))
+        (loop for (arc . more) on (getf entry :arcs) do
+          (format out "{\"relation\":\"~a\",\"direction\":\"~(~a~)\",\"type\":\"~a\"}"
+                  (json-escape (getf arc :relation))
+                  (getf arc :direction)
+                  (json-escape (getf arc :type)))
+          (when more (write-char #\, out)))
+        (write-string "]}" out)
+        (when rest (write-char #\, out)))
+      (write-char #\] out))))
+
 (defun editor-graph-json (session &optional focus created)
   "The working graph plus, when FOCUS is given, its neighbourhood.
 
@@ -108,7 +136,7 @@
    it to keep that concept in the target slot afterwards: a referent can only be
    edited on a node that exists, so without the ref the only way to name what
    you just built is to go and find it again."
-  (format nil "{\"ok\":true,\"withRefs\":\"~a\",\"plain\":\"~a\"~@[,\"created\":~a~]~@[,\"parent\":~a~]~@[,\"focus\":~a~]}"
+  (format nil "{\"ok\":true,\"withRefs\":\"~a\",\"plain\":\"~a\"~@[,\"created\":~a~]~@[,\"parent\":~a~]~@[,\"focus\":~a~]~@[,\"canonical\":~a~]}"
           (json-escape (session-render session))
           (json-escape (session-plain-render session))
           created
@@ -126,7 +154,11 @@
                         (json-escape (getf entry :concept))
                         (getf entry :prune-count))
                 (when rest (write-char #\, out)))
-              (write-char #\] out)))))
+              (write-char #\] out)))
+          ;; Guidance rides along with the arcs rather than answering a request
+          ;; of its own: the pane shows the two beside each other and a second
+          ;; round trip would let them disagree about which focus they describe.
+          (when focus (json-canonical-guidance session focus))))
 
 (defmacro define-editor-post ((name uri) lambda-list &body body)
   "A POST-only editor handler that resolves the session and turns an

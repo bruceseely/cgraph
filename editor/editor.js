@@ -1144,7 +1144,7 @@ async function refreshEnglish() {
 
 // ── display pane ─────────────────────────────────────────────────────────────
 
-function paintDisplay(arcs) {
+function paintDisplay(arcs, canonical) {
   focusArcs = arcs || [];
   displayBody.replaceChildren();
   if (!pane.focus) {
@@ -1153,6 +1153,7 @@ function paintDisplay(arcs) {
   }
   if (!arcs || !arcs.length) {
     displayBody.innerHTML = '<div class="type-empty">nothing attached</div>';
+    paintCanonical(canonical);
     return;
   }
   for (const a of arcs) {
@@ -1206,6 +1207,76 @@ function paintDisplay(arcs) {
     x.addEventListener('click', () => removeArc(a.relationRef));
     line.append(text, toll, x);
     displayBody.append(line);
+  }
+  paintCanonical(canonical);
+}
+
+// The canonical graph of the focus's type -- or, when it has none of its own,
+// of the nearest ancestor that does -- drawn under the arcs the focus actually
+// has, in the same shape.
+//
+// This is read-only on purpose for now: it answers "what does this type
+// usually take, and what have I not filled in", which is a question the editor
+// otherwise leaves entirely to the user's memory. The relation column offers
+// every signature-consistent relation (15 for REMIND) and the concept column
+// all 225 types; the canonical graph is the only thing on screen that says
+// which few of those are the point.
+function paintCanonical(canonical) {
+  if (!canonical || !canonical.length) return;
+  for (const g of canonical) {
+    const head = document.createElement('div');
+    head.className = 'canon-head';
+    const label = document.createElement('span');
+    label.textContent = 'canonical';
+    head.append(label);
+    // Never show an inherited graph as though it were this type's own: the
+    // user would reasonably conclude the type had been defined that way.
+    if (g.inherited) {
+      const from = document.createElement('span');
+      from.className = 'from';
+      from.innerHTML = 'inherited from <b></b>';
+      from.querySelector('b').textContent = g.source;
+      head.append(from);
+    }
+    displayBody.append(head);
+
+    // Matched on relation AND direction, not relation alone: the same relation
+    // running the other way is a different arc, and marking it satisfied would
+    // hide a slot that is genuinely still open.
+    const satisfied = arc => focusArcs.some(a => a.relation === arc.relation
+                                              && a.direction === arc.direction);
+    // Open slots first, then the ones already filled, alphabetical within each.
+    // The question this pane answers is "what have I not done yet", so the
+    // answer is a block at the top rather than something to pick out of an
+    // interleaved list. A row does move down as you satisfy it -- which reads
+    // as the checklist ticking over, not as the list shuffling.
+    const ordered = g.arcs.slice().sort((x, y) =>
+      (satisfied(x) - satisfied(y)) || x.relation.localeCompare(y.relation));
+
+    for (const arc of ordered) {
+      const have = satisfied(arc);
+      const line = document.createElement('div');
+      line.className = 'canon-line' + (have ? ' have' : '');
+
+      const mark = document.createElement('span');
+      mark.className = 'mark';
+      mark.textContent = have ? '✓' : '';
+
+      const text = document.createElement('span');
+      const rev = arc.direction === 'reverse';
+      text.append(document.createTextNode(
+        rev ? `←(${arc.relation})←` : `→(${arc.relation})→`));
+      const far = document.createElement('span');
+      far.className = 'far';
+      far.textContent = `[${arc.type.toUpperCase()}]`;
+      text.append(far);
+
+      line.title = have
+        ? `the focus already has an arc on (${arc.relation})`
+        : `${g.source} canonically takes (${arc.relation}) to [${arc.type.toUpperCase()}]`;
+      line.append(mark, text);
+      displayBody.append(line);
+    }
   }
 }
 
@@ -1305,7 +1376,7 @@ $('add').addEventListener('click', async () => {
       ? { ref: data.created, text: slotText(t) }
       : null;
     renderGraph(data.withRefs);
-    paintDisplay(data.focus);
+    paintDisplay(data.focus, data.canonical);
     refreshEnglish();
     setStatus('');
     await refresh({ keepGraph: true });
@@ -1319,7 +1390,7 @@ async function removeArc(relationRef) {
     })}`, { method: 'POST' });
     pane.relation = pane.target = null;
     renderGraph(data.withRefs);
-    paintDisplay(data.focus);
+    paintDisplay(data.focus, data.canonical);
     refreshEnglish();
     setStatus('');
     await refresh({ keepGraph: true });
@@ -1471,7 +1542,7 @@ async function refresh(opts = {}) {
         focus: pane.focus && pane.focus.ref !== undefined ? pane.focus.ref : null
       })}`);
       renderGraph(state.withRefs);
-      paintDisplay(state.focus);
+      paintDisplay(state.focus, state.canonical);
       // FOCUSARCS is now the server's, not a snapshot: the only point at which
       // a pull can be judged still live, and at which a row assembled against
       // an older list gets a second look.

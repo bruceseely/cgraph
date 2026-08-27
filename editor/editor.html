@@ -314,6 +314,56 @@
     .arc-line .x:hover { opacity: 1; }
     .arc-line:hover { background: #fafafa; }
 
+    /* ── canonical guidance ──
+       The arcs the focus's type is *expected* to take, under the arcs it
+       actually has. The two lists are deliberately the same shape and the same
+       left margin: read together they are a checklist, and that reading is the
+       whole point of the pane. What separates them is weight, not layout —
+       guidance is quieter than fact. */
+    .canon-head {
+      display: flex;
+      align-items: baseline;
+      gap: 0.4rem;
+      margin: 0.7rem 0 0.2rem -1.1rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid #ececec;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #999;
+    }
+    /* An inherited graph is a weaker claim than the type's own and must never
+       be mistaken for it: this type was NOT defined this way, an ancestor was.
+       Hence the named source rather than a bare CANONICAL label. */
+    .canon-head .from { text-transform: none; letter-spacing: 0; font-size: 11px; }
+    .canon-head .from b { font-weight: 600; color: #4a90d9; }
+    .canon-line {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      padding: 0.1rem 0;
+      color: #555;
+      /* The ✓ lives in the gutter so the arrows line up with the arcs above
+         rather than sitting a tick's width to their right. Alignment is what
+         makes the two lists read as one checklist; indent them differently and
+         they read as two unrelated things that happen to be stacked. */
+      margin-left: -1rem;
+    }
+    /* A canonical arc the focus already has is *done* — greyed and ticked, so
+       what stays black is exactly what is still open. That subtraction is the
+       answer the pane exists to give. */
+    .canon-line.have { color: #bbb; }
+    .canon-line .mark {
+      flex: 0 0 auto;
+      min-width: 1rem;
+      font-size: 11px;
+      color: #7ab97a;
+    }
+    .canon-line .far { color: #888; }
+    .canon-line.have .far { color: inherit; }
+
     /* ── right: two type columns ── */
     /* Each column is as wide as its widest row, within a band. Half the pane
        each was giving both of them about 17rem when the relation list needed
