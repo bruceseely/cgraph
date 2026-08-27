@@ -385,6 +385,15 @@
        be exactly what was meant -- often the honest fix is to give this type a
        canonical graph of its own rather than to change the arc. Red would read
        as "invalid", which is the signature check's word, not this one's. */
+    /* Its own division above the canonical checklist: the conflicts belong to
+       no single graph, and without the rule they run straight on from the arc
+       lines as though they were more of them. */
+    .conflict-block {
+      margin: 0.5rem 0 0 -1.1rem;
+      padding-top: 0.4rem;
+      border-top: 1px solid #ececec;
+    }
+    .conflict-block .canon-line { margin-left: 0.1rem; }
     .canon-line.conflict { color: #a06a1b; }
     .canon-line.conflict .mark { color: #c8860d; }
     .canon-line.conflict .far { color: #a06a1b; font-weight: 600; }

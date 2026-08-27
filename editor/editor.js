@@ -61,7 +61,7 @@ function activeUnder() {
   const u = pane.under;
   if (!u || !pane.relation) return null;
   return (u.relation === pane.relation.label && u.direction === pane.relation.direction)
-    ? u.types : null;
+    ? u.groups : null;
 }
 
 const OPPOSITE = d => (d === 'reverse' ? 'forward' : 'reverse');
@@ -1190,8 +1190,8 @@ function paintDisplay(arcs, canonical) {
   // where you would act, and an arc flagged only in a summary underneath is one
   // you have to match up by eye.
   const flagged = new Set();
-  for (const g of (canonical || [])) {
-    for (const c of (g.conflicts || [])) flagged.add(c.relationRef);
+  for (const c of ((canonical && canonical.conflicts) || [])) {
+    flagged.add(c.relationRef);
   }
   for (const a of arcs) {
     const line = document.createElement('div');
@@ -1260,9 +1260,24 @@ function paintDisplay(arcs, canonical) {
 // all 225 types; the canonical graph is the only thing on screen that says
 // which few of those are the point.
 function paintCanonical(canonical) {
-  focusCanonical = canonical || [];
-  if (!canonical || !canonical.length) return;
-  for (const g of canonical) {
+  const graphs = (canonical && canonical.graphs) || [];
+  const conflicts = (canonical && canonical.conflicts) || [];
+  focusCanonical = graphs;
+  if (!graphs.length) return;
+
+  // Conflicts first, and once for the whole guidance rather than under the
+  // graph they offend: an arc failing two inherited graphs is one problem.
+  // Above the CANONICAL block rather than inside it, in their own division --
+  // they belong to no single graph now, and the reading order is "what is
+  // wrong with what you have" before "what the type is still waiting for".
+  if (conflicts.length) {
+    const block = document.createElement('div');
+    block.className = 'conflict-block';
+    for (const c of conflicts) block.append(conflictLine(c));
+    displayBody.append(block);
+  }
+
+  for (const g of graphs) {
     const head = document.createElement('div');
     head.className = 'canon-head';
     const label = document.createElement('span');
@@ -1278,10 +1293,6 @@ function paintCanonical(canonical) {
       head.append(from);
     }
     displayBody.append(head);
-
-    // Conflicts first: an arc that violates the constraint is a problem with
-    // what you have written, where an unfilled slot is merely unfinished.
-    for (const c of g.conflicts || []) displayBody.append(conflictLine(c));
 
     // Open slots, then the ones already filled, alphabetical within each. The
     // question this pane answers is "what have I not done yet", so the answer
@@ -1336,7 +1347,7 @@ function paintCanonical(canonical) {
         zoneCon.title = `build (${arc.relation}) and show only types under [${farType}]`;
         zoneCon.addEventListener('click', ev => {
           ev.stopPropagation();
-          armCanonical(arc, [arc.type]);
+          armCanonical(arc, [[arc.type]]);
         });
       }
 
@@ -1382,16 +1393,24 @@ function conflictLine(c) {
   zoneCon.textContent = `[${c.type.toUpperCase()}]`;
   text.append(zoneArc, zoneCon);
 
+  // One failed graph reads as a plain list; several are parenthesised, because
+  // "[A] or [B] and [C]" does not say which way it binds and the answer
+  // (union within a graph, intersection across) is exactly what is at stake.
+  const paren = c.expected.length > 1;
+  const phrase = c.expected
+    .map(e => {
+      const alt = e.types.map(t => `[${t.toUpperCase()}]`).join(' or ');
+      return paren ? `(${alt})` : alt;
+    })
+    .join(' and ');
   const want = document.createElement('span');
   want.className = 'wants';
-  want.textContent = 'not under '
-    + c.expected.map(t => `[${t.toUpperCase()}]`).join(' or ');
+  want.textContent = `not under ${phrase}`;
 
   // Clicking pulls the offending arc into the editor row, which auto-narrows
   // the column to what the canonical graph asks for: the report and the fix
   // are the same click.
-  line.title = `replace this concept — ${c.relation} wants `
-    + c.expected.map(t => `[${t.toUpperCase()}]`).join(' or ');
+  line.title = `replace this concept — ${c.relation} wants ${phrase}`;
   zoneArc.addEventListener('click', ev => {
     ev.stopPropagation();
     const arc = focusArcs.find(a => a.relationRef === c.relationRef);
@@ -1408,7 +1427,7 @@ function conflictLine(c) {
 // not a concept -- [ANIMATE] is the constraint, and the concept you want is
 // almost always a subtype of it. Dropping [ANIMATE] into the slot would make
 // the commonest path "accept a wrong answer, then correct it".
-function armCanonical(arc, underTypes) {
+function armCanonical(arc, groups) {
   // A canonical arc is a new claim, so it ends any pull, on the same rule as
   // picking from the relation column: /api/editor/replace keeps the arc's own
   // relation, so a surviving pull would commit one relation while the pane
@@ -1416,8 +1435,8 @@ function armCanonical(arc, underTypes) {
   pane.replacing = pane.pulledTarget = null;
   pane.relation = { label: arc.relation, direction: arc.direction, legal: null };
   pane.target = null;
-  pane.under = (underTypes && underTypes.length)
-    ? { types: underTypes, relation: arc.relation, direction: arc.direction }
+  pane.under = (groups && groups.length)
+    ? { groups, relation: arc.relation, direction: arc.direction }
     : null;
   armedTarget = true;
   refresh();
@@ -1428,10 +1447,15 @@ function paintNarrow() {
   const under = activeUnder();
   const row = $('concept-narrow');
   if (!under) { row.hidden = true; return; }
-  // "or" rather than a comma: the far ends of a repeated relation are
-  // alternatives, not a set the far end has to belong to all of.
-  $('concept-narrow-label').textContent =
-    'under ' + under.map(t => `[${t.toUpperCase()}]`).join(' or ');
+  // "or" within a graph, "and" across them -- alternatives inside one
+  // canonical graph, a requirement to satisfy each of several.
+  const paren = under.length > 1;
+  $('concept-narrow-label').textContent = 'under ' + under
+    .map(g => {
+      const alt = g.map(t => `[${t.toUpperCase()}]`).join(' or ');
+      return paren ? `(${alt})` : alt;
+    })
+    .join(' and ');
   row.hidden = false;
 }
 
@@ -1457,20 +1481,32 @@ function pullArc(a) {
   refresh();
 }
 
-// The far-end types a canonical graph asks for on one relation, as the LIST
-// that constrains it: a relation named more than once constrains its far end
-// to the disjunction of those types, so all of them come back together.
+// What the canonical graphs ask of one relation, as GROUPS -- one per graph
+// that speaks about it.
+//
+// The nesting is the point, and the two levels take opposite operators. Within
+// a graph a relation may be named more than once (TIME-PERIOD takes (attr) to
+// [START-TIME] and to [END-TIME]) and the far end satisfies it by being under
+// EITHER, so those types share a group. Across graphs -- which is what
+// multiple inheritance produces -- the far end must satisfy every one of them,
+// so each graph gets its OWN group and the server intersects.
+//
+// Flattening the two into one list, as this did at first, silently offers the
+// union where the intersection was meant: types that satisfy one parent and
+// violate the other.
 function canonicalUnderFor(relation, direction) {
-  const types = [];
+  const groups = [];
   for (const g of focusCanonical) {
+    const types = [];
     for (const arc of g.arcs) {
       if (arc.relation === relation && arc.direction === direction
           && !types.includes(arc.type)) {
         types.push(arc.type);
       }
     }
+    if (types.length) groups.push(types);
   }
-  return types.length ? { types, relation, direction } : null;
+  return groups.length ? { groups, relation, direction } : null;
 }
 
 // There are two roads to a row that reproduces an arc the focus already has,
@@ -1744,7 +1780,9 @@ async function refresh(opts = {}) {
       relation: pane.relation ? pane.relation.label : null,
       direction: pane.relation ? pane.relation.direction : null,
       target: pane.target && pane.target.ref !== undefined ? pane.target.ref : null,
-      under: (activeUnder() || []).join(',') || null
+      // ';' separates groups, ',' the types within one: union inside a group,
+      // intersection across them.
+      under: (activeUnder() || []).map(g => g.join(',')).join(';') || null
     })}`);
     paintConceptList(choices.concepts);
     paintRelationList(choices.relations);

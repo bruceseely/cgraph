@@ -97,10 +97,15 @@
 ;;; life of the session -- the browser's click map depends on it.
 
 (defun json-canonical-guidance (session focus)
-  "The canonical graphs bearing on FOCUS's concept type, as a JSON array.
+  "The canonical graphs bearing on FOCUS's concept type, as a JSON object
+   {graphs: [...], conflicts: [...]}.
+
+   Conflicts sit beside the graphs rather than inside them because the verdict
+   on an arc is taken against every constraint on it at once -- an arc failing
+   two inherited graphs is one problem, not two.
 
    Null-safe by design: a focus whose type has no canonical graph anywhere up
-   its branches yields an empty array, which is the common case -- 39 of 225
+   its branches yields empty arrays, which is the common case -- 39 of 225
    concept types carry one -- and the pane simply says so."
   (let* ((node (ignore-errors (editor-concept session focus)))
          (type-label (and node (ignore-errors (label (concept-type node)))))
@@ -110,44 +115,51 @@
          ;; What the focus actually has, to judge the guidance against.
          (actual (and guidance
                       (ignore-errors (editor-focus-arcs session focus)))))
-    (with-output-to-string (out)
-      (write-char #\[ out)
-      (loop for (entry . rest) on guidance do
-        (multiple-value-bind (states conflicts)
-            (canonical-arc-conformance (getf entry :arcs) actual)
+    (multiple-value-bind (states conflicts)
+        ;; Judged over the WHOLE guidance rather than one entry at a time: a
+        ;; far end constrained by two inherited graphs has to satisfy both, and
+        ;; an entry judged alone cannot see the other's demand.
+        (canonical-arc-conformance guidance actual)
+      (with-output-to-string (out)
+        (write-string "{\"graphs\":[" out)
+        (loop for (entry . rest) on guidance do
           (format out "{\"source\":\"~a\",\"inherited\":~:[false~;true~],\"text\":\"~a\",\"arcs\":["
                   (json-escape (getf entry :source))
                   (getf entry :inherited)
                   (json-escape (getf entry :text)))
-          (loop for ((arc . state) . more) on states do
+          (loop for (arc . more) on (getf entry :arcs) do
             (format out "{\"relation\":\"~a\",\"direction\":\"~(~a~)\",\"type\":\"~a\",\"state\":\"~(~a~)\"}"
                     (json-escape (getf arc :relation))
                     (getf arc :direction)
                     (json-escape (getf arc :type))
-                    state)
+                    (or (cdr (assoc arc states :test #'eq)) :open))
             (when more (write-char #\, out)))
-          ;; Conflicts are per GROUP, not per row, so they are their own list
-          ;; rather than a third row state: an (attr)→[START-TIME] arc satisfies
-          ;; one of TIME-PERIOD's two (attr) rows and violates neither, and a
-          ;; per-row verdict has nowhere to say that.
-          (write-string "],\"conflicts\":[" out)
-          (loop for (conflict . more) on conflicts do
-            (let ((a (getf conflict :actual)))
-              (format out "{\"relationRef\":~a,\"relation\":\"~a\",\"direction\":\"~(~a~)\",~
-                           \"type\":\"~a\",\"concept\":\"~a\",\"expected\":["
-                      (getf a :relation-ref)
-                      (json-escape (getf a :relation))
-                      (getf a :direction)
-                      (json-escape (getf a :concept-type))
-                      (json-escape (getf a :concept)))
-              (loop for (want . others) on (getf conflict :expected) do
+          (write-string "]}" out)
+          (when rest (write-char #\, out)))
+        ;; Conflicts are reported ONCE for the whole guidance, not per entry:
+        ;; the verdict is about an arc against every constraint on it, and an
+        ;; arc failing two inherited graphs is one problem, not two. So they
+        ;; sit beside the graphs rather than inside any one of them.
+        (write-string "],\"conflicts\":[" out)
+        (loop for (conflict . rest) on conflicts do
+          (let ((a (getf conflict :actual)))
+            (format out "{\"relationRef\":~a,\"relation\":\"~a\",\"direction\":\"~(~a~)\",~
+                         \"type\":\"~a\",\"concept\":\"~a\",\"expected\":["
+                    (getf a :relation-ref)
+                    (json-escape (getf a :relation))
+                    (getf a :direction)
+                    (json-escape (getf a :concept-type))
+                    (json-escape (getf a :concept)))
+            (loop for ((source . types) . others) on (getf conflict :expected) do
+              (format out "{\"source\":\"~a\",\"types\":[" (json-escape source))
+              (loop for (want . more) on types do
                 (format out "\"~a\"" (json-escape want))
-                (when others (write-char #\, out)))
-              (write-string "]}" out))
-            (when more (write-char #\, out)))
-          (write-string "]}" out))
-        (when rest (write-char #\, out)))
-      (write-char #\] out))))
+                (when more (write-char #\, out)))
+              (write-string "]}" out)
+              (when others (write-char #\, out)))
+            (write-string "]}" out))
+          (when rest (write-char #\, out)))
+        (write-string "]}" out)))))
 
 (defun editor-graph-json (session &optional focus created)
   "The working graph plus, when FOCUS is given, its neighbourhood.
@@ -562,9 +574,12 @@
                  ;; of the catalog while the canonical graph says this one
                  ;; wants [INFORMATION]. Applied last, and never widening:
                  ;; what is legal is still the signature's call.
-                 ;; A relation the canonical graph names more than once
-                 ;; constrains its far end to the DISJUNCTION of those types,
-                 ;; so UNDER arrives as a comma-separated list.
+                 ;; UNDER arrives as groups: ';' separates them, ',' the
+                 ;; types within one. A relation named more than once in ONE
+                 ;; canonical graph constrains its far end to the disjunction
+                 ;; of those types (one group, several members); a relation
+                 ;; constrained by SEVERAL graphs must satisfy all of them
+                 ;; (several groups). Union within, intersection across.
                  ;;
                  ;; Narrowing is based on the SIGNATURE-legal set whenever a
                  ;; relation is known, even though a populated target would
@@ -580,8 +595,12 @@
                                      (intern (string-upcase relation) :conceptual-graphs)
                                      dir)
                                     concepts)
-                                (remove "" (uiop:split-string under :separator ",")
-                                        :test #'string=))
+                                (remove nil
+                                        (mapcar (lambda (group)
+                                                  (remove "" (uiop:split-string
+                                                              group :separator ",")
+                                                          :test #'string=))
+                                                (uiop:split-string under :separator ";"))))
                                concepts)))
             (format nil "{\"ok\":true,\"concepts\":~a,\"relations\":~a}"
                     (json-concept-choices

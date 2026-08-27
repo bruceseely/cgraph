@@ -7,8 +7,10 @@ was wrong about is worth as much as the fix.
 The first two entries were found on 2026-08-13/14 while building decomposition,
 were older than that work, and were fixed on 2026-08-14. The third was found on
 2026-08-16 and fixed the same day. The fourth was found on 2026-08-25 while
-building the relation join semantics and fixed the same day. Nothing is
-currently outstanding.
+building the relation join semantics and fixed the same day. The fifth was
+found on 2026-08-27 while building the canonical-graph guidance and is
+**outstanding** -- it is a limit of where the check stands, not a defect in
+what it does.
 
 ## ~~`individuals-equal` ignores the id, so `simplify` can delete an assertion~~ — fixed
 
@@ -159,3 +161,52 @@ The underlying design is unchanged and still a little sharp: a test *can*
 still assert on a specific id, and will get away with it only because nothing
 runs before it in its own suite. Fixtures that captured the id they were given
 rather than naming one would need no protection at all.
+
+
+## Canonical conformance does not see a shared far end
+
+Found 2026-08-27 while building the canonical-graph guidance in the editor.
+Outstanding, and probably should stay that way.
+
+The guidance pane judges each arc of the focus against the canonical graphs
+bearing on the focus's type. That judgement is **local to one focus**, and a
+concept node can be the far end of arcs from more than one of them:
+
+    [INFORM]-(obj)→[X]
+    [GIVE]  -(obj)→[X]      ← the same node
+
+X has to answer to INFORM's `(obj)→[INFORMATION]` and to GIVE's
+`(obj)→[ENTITY]` at once. Focus the INFORM and the pane judges X against
+INFORMATION alone; focus the GIVE and it judges the same node against ENTITY
+alone. Neither view is wrong and neither is the whole constraint, so a node can
+pass both inspections it is ever given and still satisfy no single type.
+
+Note this is **coreference, not inheritance**. The multiple-inheritance case --
+a type reaching two ancestors that both carry a canonical graph -- IS handled:
+`canonical-arc-conformance` takes the conjunction across graphs, and
+`narrow-to-subtypes` intersects across groups. The gap here is one node in two
+graphs, not one type with two parents.
+
+The arithmetic is the same in both, and it is the meet:
+`maximal-common-subtype` (types.lisp) is what c1ed76b already argued concepts
+need -- *"a concept carries exactly one type, so joining [MAN: Dave] with
+[DOCTOR: Dave] must find a single type meaning both"*. Two constraints on one
+node want the same answer.
+
+Why it is not simply fixed:
+
+- **The check would have to leave the focus.** Everything in the pane is about
+  the focus and its arcs. Judging a shared node means walking to every relation
+  it touches, from every concept that reaches it, which is a different question
+  than the pane is built to ask and would report problems about arcs not on
+  screen.
+- **The intersection can be empty.** `maximal-common-subtype(information, act)`
+  is NIL -- incomparable branches have no common subtype. That is a real and
+  useful finding, but it means a node can be in a state that no type satisfies,
+  so a checker that *refused* edits could reach a position with no legal move.
+  It is the last argument against ever making canonical conformance an
+  enforcement rather than a report.
+
+So the present behaviour -- report per focus, refuse nothing -- is sound as far
+as it goes, and the honest statement of the limit is that a green pane means
+"conforms as seen from here", not "conforms".

@@ -1440,56 +1440,86 @@
                                            :type (string-downcase
                                                   (string (label (concept-type other))))))))))
 
-(defun narrow-to-subtypes (types under)
-  "TYPES restricted to those at or below UNDER -- a concept type, a label, or a
-   LIST of either. The roots themselves survive: SUBTYPE-P is reflexive, and a
-   canonical far end is usually a legitimate choice in its own right.
+(defun narrow-to-subtypes (types groups)
+  "TYPES restricted to those admitted by every one of GROUPS.
 
-   Used when a canonical arc has been clicked: the relation's signature says
-   (obj) may reach most of the catalog, while the canonical graph says this
-   one wants [INFORMATION]. The signature stays the authority on what is
-   legal, so an UNDER that names nothing resolvable narrows nothing rather
-   than emptying the column.
+   GROUPS is a list of lists of concept types or labels. A type survives when
+   it is at or below SOME member of EVERY group -- union within a group,
+   intersection across them. The two levels are not decoration; they are the
+   two ways a far end comes to be constrained, and they need opposite
+   operators:
 
-   UNDER is a LIST because a canonical graph may name the same relation more
-   than once with different far ends -- TIME-PERIOD takes (attr) to both
-   [START-TIME] and [END-TIME]. The constraint on such a relation is the
-   disjunction of its far ends, so narrowing to any one of them alone would
-   hide half of what the type actually asks for.
+     within a group   one canonical graph naming a relation more than once.
+                      TIME-PERIOD takes (attr) to [START-TIME] and to
+                      [END-TIME]; an arc satisfies the relation by being
+                      under EITHER, so narrowing to one alone would hide half
+                      of what the type asks for.
 
-   An UNDER that resolves but admits nothing returns NIL rather than falling
-   back to TYPES: that means the signature and the canonical graph disagree,
-   which is worth seeing as an empty column. Quietly showing the unnarrowed
-   list under a banner naming the narrowing would be a lie."
-  (let ((roots (remove nil (mapcar (lambda (u) (ignore-errors (get-concept-type u)))
-                                   (if (listp under) under (list under))))))
+     across groups    one relation constrained by SEVERAL canonical graphs,
+                      which is what multiple inheritance produces. A far end
+                      must then satisfy BOTH parents at once, so the answer
+                      is the intersection -- offering their union would offer
+                      types that satisfy one parent and violate the other.
+
+   The roots themselves survive: SUBTYPE-P is reflexive, and a canonical far
+   end is usually a legitimate choice in its own right.
+
+   The signature stays the authority on what is legal, so a group naming
+   nothing resolvable drops out rather than emptying the column. A group that
+   resolves but admits nothing returns NIL, and so does an intersection with
+   no members: that means the constraints cannot be met together -- incomparable
+   branches have no common subtype -- which is worth seeing as an empty column.
+   Quietly showing the unnarrowed list under a banner naming the narrowing
+   would be a lie."
+  (let ((roots (remove nil
+                       (mapcar (lambda (group)
+                                 (remove nil
+                                         (mapcar (lambda (u)
+                                                   (ignore-errors (get-concept-type u)))
+                                                 (if (listp group) group (list group)))))
+                               groups))))
     (if (null roots)
         types
-        (remove-if-not (lambda (ct)
-                         (some (lambda (root) (ignore-errors (subtype-p ct root)))
-                               roots))
-                       types))))
+        (remove-if-not
+         (lambda (ct)
+           (every (lambda (group)
+                    (some (lambda (root) (ignore-errors (subtype-p ct root))) group))
+                  roots))
+         types))))
 
-(defun canonical-arc-conformance (canonical-arcs actual-arcs)
-  "Judge ACTUAL-ARCS against CANONICAL-ARCS, per relation GROUP.
+(defun canonical-arc-conformance (guidance actual-arcs)
+  "Judge ACTUAL-ARCS against GUIDANCE -- the list of plists CANONICAL-GUIDANCE
+   returns, each carrying :SOURCE and :ARCS.
 
-   Both are plists carrying :RELATION and :DIRECTION; canonical arcs carry
-   :TYPE (the constraint) and actual arcs :CONCEPT-TYPE (what is there) plus
-   whatever else the caller needs to identify them again.
+   Canonical arcs carry :RELATION, :DIRECTION and :TYPE (the constraint);
+   actual arcs carry :RELATION, :DIRECTION and :CONCEPT-TYPE (what is there)
+   plus whatever else the caller needs to identify them again.
 
-   Grouping is the whole subtlety. A canonical graph may name one relation
-   several times with different far ends -- TIME-PERIOD takes (attr) to both
-   [START-TIME] and [END-TIME] -- so the constraint on a relation is the
-   DISJUNCTION of its far ends. Judged row by row instead, an (attr)→[START-TIME]
-   arc would be reported as violating the [END-TIME] row, which is a false
-   alarm on a perfectly canonical graph.
+   Two levels of grouping, needing opposite operators.
 
-   So, per (relation, direction) group:
-     - an actual arc conforms if its far end is under ANY of the group's types
-     - a canonical row is satisfied if SOME actual arc is under THAT row's type
+   WITHIN one canonical graph, a relation may be named more than once with
+   different far ends -- TIME-PERIOD takes (attr) to both [START-TIME] and
+   [END-TIME]. The constraint on the relation is then the DISJUNCTION of those
+   types: judged row by row instead, an (attr)→[START-TIME] arc would be
+   reported as violating the [END-TIME] row, a false alarm on a perfectly
+   canonical graph.
 
-   Returns two values: an alist of (canonical-arc . :satisfied|:open), and a
-   list of the actual arcs that are under none of their group's types."
+   ACROSS canonical graphs -- what multiple inheritance produces, when a type
+   reaches two ancestors that both carry one -- the far end must satisfy every
+   one of them, so the constraint is the CONJUNCTION. A concept carries exactly
+   one type, so a node answering to two graphs needs a type under both.
+
+   So:
+     - an actual arc CONFLICTS when some constraining graph admits it under
+       none of that graph's types for its relation;
+     - a canonical row is SATISFIED when some actual arc is under that row's
+       own type. Satisfaction stays per row because a row belongs to one graph
+       and the tick is a statement about that row.
+
+   Returns two values: an alist of (canonical-arc . :satisfied|:open) covering
+   every arc of every entry, and a list of plists (:actual A :expected ((SOURCE
+   . TYPES) ...)) naming, for each conflicting arc, the graphs it fails and
+   what each of them wanted."
   (let ((states (list))
         (conflicts (list)))
     (flet ((same-group (a b)
@@ -1499,21 +1529,30 @@
              (let ((have (ignore-errors (get-concept-type (getf actual :concept-type))))
                    (want (ignore-errors (get-concept-type type-label))))
                (and have want (ignore-errors (subtype-p have want))))))
-      (dolist (arc canonical-arcs)
-        (let ((mine (remove-if-not (lambda (a) (same-group a arc)) actual-arcs)))
-          (push (cons arc (if (some (lambda (a) (under-p a (getf arc :type))) mine)
-                              :satisfied
-                              :open))
-                states)))
+      ;; Per-row satisfaction, within each graph.
+      (dolist (entry guidance)
+        (dolist (arc (getf entry :arcs))
+          (let ((mine (remove-if-not (lambda (a) (same-group a arc)) actual-arcs)))
+            (push (cons arc (if (some (lambda (a) (under-p a (getf arc :type))) mine)
+                                :satisfied
+                                :open))
+                  states))))
+      ;; Conflicts, across every graph that speaks about the arc's relation.
       (dolist (actual actual-arcs)
-        (let ((group (remove-if-not (lambda (c) (same-group c actual)) canonical-arcs)))
-          ;; A relation the canonical graph never mentions is unconstrained --
-          ;; subtypes routinely add arcs their ancestor never spoke about, and
-          ;; flagging those would make the check unusable.
-          (when (and group
-                     (notany (lambda (c) (under-p actual (getf c :type))) group))
-            (push (list :actual actual :expected (mapcar (lambda (c) (getf c :type)) group))
-                  conflicts)))))
+        (let ((failed (list)))
+          (dolist (entry guidance)
+            (let ((group (remove-if-not (lambda (c) (same-group c actual))
+                                        (getf entry :arcs))))
+              ;; A relation a graph never mentions is unconstrained BY THAT
+              ;; GRAPH -- subtypes routinely add arcs their ancestor never
+              ;; spoke about, and flagging those would make the check unusable.
+              (when (and group
+                         (notany (lambda (c) (under-p actual (getf c :type))) group))
+                (push (cons (getf entry :source)
+                            (mapcar (lambda (c) (getf c :type)) group))
+                      failed))))
+          (when failed
+            (push (list :actual actual :expected (nreverse failed)) conflicts)))))
     (values (nreverse states) (nreverse conflicts))))
 
 (defun canonical-guidance (concept-type)
