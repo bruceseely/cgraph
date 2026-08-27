@@ -505,7 +505,7 @@
 ;;; focus only        -> every relation the focus could hang off, either way
 ;;; nothing           -> everything
 (hunchentoot:define-easy-handler (handle-editor-choices :uri "/api/editor/choices")
-    (session focus relation direction target)
+    (session focus relation direction target under)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (no-store)
   (with-editor-session (s session)
@@ -530,7 +530,16 @@
                           (rel-far-end-types
                            (intern (string-upcase relation) :conceptual-graphs)
                            dir))
-                         (t (all-concept-type-objects)))))
+                         (t (all-concept-type-objects))))
+                 ;; UNDER is the canonical graph's far end, sent when an arc in
+                 ;; the guidance pane was clicked. It narrows the column the
+                 ;; signature already filtered -- (obj) may legally reach most
+                 ;; of the catalog while the canonical graph says this one
+                 ;; wants [INFORMATION]. Applied last, and never widening:
+                 ;; what is legal is still the signature's call.
+                 (concepts (if (and under (plusp (length under)))
+                               (narrow-to-subtypes concepts under)
+                               concepts)))
             (format nil "{\"ok\":true,\"concepts\":~a,\"relations\":~a}"
                     (json-concept-choices
                      (sort (copy-list concepts) #'alpha-lessp :key #'label))

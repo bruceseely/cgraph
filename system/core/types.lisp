@@ -1440,6 +1440,26 @@
                                            :type (string-downcase
                                                   (string (label (concept-type other))))))))))
 
+(defun narrow-to-subtypes (types under)
+  "TYPES restricted to those at or below UNDER, which is a concept type or its
+   label. UNDER itself survives -- SUBTYPE-P is reflexive, and the canonical
+   far end is usually a legitimate choice in its own right.
+
+   Used when a canonical arc has been clicked: the relation's signature says
+   (obj) may reach most of the catalog, while the canonical graph says this
+   one wants [INFORMATION]. The signature stays the authority on what is
+   legal, so an UNDER that names nothing resolvable narrows nothing rather
+   than emptying the column.
+
+   An UNDER that resolves but admits nothing returns NIL rather than falling
+   back to TYPES: that means the signature and the canonical graph disagree,
+   which is worth seeing as an empty column. Quietly showing the unnarrowed
+   list under a banner naming the narrowing would be a lie."
+  (let ((root (ignore-errors (get-concept-type under))))
+    (if (null root)
+        types
+        (remove-if-not (lambda (ct) (ignore-errors (subtype-p ct root))) types))))
+
 (defun canonical-guidance (concept-type)
   "What the editor should show beside CONCEPT-TYPE's arcs: a list of plists
    (:source :inherited :text :arcs), one per NEAREST-CANONICAL-GRAPHS hit.

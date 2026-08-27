@@ -363,6 +363,47 @@
     }
     .canon-line .far { color: #888; }
     .canon-line.have .far { color: inherit; }
+    /* Two click zones, the same rule the arc lines use: the part you click is
+       the part you get. The relation fills the editor row and leaves the far
+       end to you; the far-end TYPE does that and narrows the concept column to
+       what the canonical graph actually asks for. Only OPEN rows are live — a
+       satisfied one is a statement about an arc that already exists, and the
+       arc itself is two lines up with its own controls. */
+    .canon-line .zone-arc, .canon-line .zone-con { cursor: pointer; }
+    .canon-line .zone-arc:hover { background: #e8f0fb; text-decoration: underline; }
+    .canon-line .zone-con:hover { text-decoration: underline; color: #4a90d9; }
+    .canon-line.have .zone-arc, .canon-line.have .zone-con { cursor: default; }
+    .canon-line.have .zone-arc:hover { background: none; text-decoration: none; }
+    .canon-line.have .zone-con:hover { text-decoration: none; color: inherit; }
+    /* The arc currently in the editor row, so the guidance says which of its
+       lines you are acting on -- the same job .pulled does for a real arc. */
+    .canon-line.armed { background: #f0f4fb; }
+    .canon-line.armed .zone-arc { color: #4a90d9; font-weight: 600; }
+
+    /* `display: flex' beats the HIDDEN attribute's own `display: none', so
+       hiding has to be said again here or the empty banner sits over the
+       column whenever nothing is narrowed. */
+    .narrow-row[hidden] { display: none; }
+    .narrow-row {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.25rem 0.4rem;
+      background: #f0f4fb;
+      border-bottom: 1px solid #e3e9f3;
+      font-size: 11px;
+      color: #4a6d99;
+    }
+    .narrow-row button {
+      border: none;
+      background: none;
+      color: #4a6d99;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0 0.2rem;
+      opacity: 0.7;
+    }
+    .narrow-row button:hover { opacity: 1; }
 
     /* ── right: two type columns ── */
     /* Each column is as wide as its widest row, within a band. Half the pane
@@ -684,6 +725,14 @@
                  title="Narrow this list by type name. Esc clears it.">
           <button class="filter-clear" id="concept-filter-clear" hidden
                   title="Clear this filter">✕</button>
+        </div>
+        <!-- Says the column is showing less than the signature allows, and why.
+             A list silently narrowed by a click three panes away is
+             indistinguishable from a sparse lattice, so the narrowing has to
+             be visible and it has to be undoable from where it shows. -->
+        <div class="narrow-row" id="concept-narrow" hidden>
+          <span id="concept-narrow-label"></span>
+          <button id="concept-narrow-clear" title="Show everything the relation allows">✕</button>
         </div>
         <div class="type-list" id="concept-list"></div>
       </div>

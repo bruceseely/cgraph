@@ -46,7 +46,23 @@ $('session-label').textContent = SESSION ? `session ${SESSION}` : '(no session)'
 // the relation slot is not yours to choose -- the arc already decided -- and the
 // commit goes to /api/editor/replace.
 const pane = { focus: null, relation: null, target: null,
-               replacing: null, pulledTarget: null };
+               replacing: null, pulledTarget: null, under: null };
+
+// The concept column narrowed to what a canonical arc asks for -- set by
+// clicking the far-end type in the guidance pane, as {type, relation,
+// direction}.
+//
+// Stored with the relation that set it and checked against the current one
+// rather than being cleared from the dozen places a relation can change. A
+// narrowing is a statement about ONE arc; the moment the pane holds a
+// different arc it is stale, and a rule that says so cannot be forgotten at a
+// new call site the way a clear-call can.
+function activeUnder() {
+  const u = pane.under;
+  if (!u || !pane.relation) return null;
+  return (u.relation === pane.relation.label && u.direction === pane.relation.direction)
+    ? u.type : null;
+}
 
 const OPPOSITE = d => (d === 'reverse' ? 'forward' : 'reverse');
 // The focus's current arcs, as the display pane last showed them. Kept so that
@@ -382,6 +398,7 @@ function matchesFilter(text, q) {
 // repainted from the same choices either way.
 function paintConceptList(types) {
   if (types) lastConcepts = types;
+  paintNarrow();
   // Almost everything refreshes, and a repaint would take the half-typed form
   // with it. The form closes itself on Create, Cancel or Escape.
   if (creatingType) return;
@@ -627,6 +644,13 @@ for (const [id, repaint] of [['concept-filter',  () => paintConceptList()],
     if (ev.key === 'Enter') ev.preventDefault();
   });
 }
+
+// Dropping the canonical narrowing keeps the relation: you wanted this arc, you
+// just do not want to be held to the ancestor's idea of its far end.
+$('concept-narrow-clear').addEventListener('click', () => {
+  pane.under = null;
+  refresh();
+});
 
 // A type click always means a NEW concept of that type, and with a focus set it
 // always lands in the target slot — whether the slot was empty, held a concept
@@ -1264,20 +1288,80 @@ function paintCanonical(canonical) {
 
       const text = document.createElement('span');
       const rev = arc.direction === 'reverse';
-      text.append(document.createTextNode(
-        rev ? `←(${arc.relation})←` : `→(${arc.relation})→`));
-      const far = document.createElement('span');
-      far.className = 'far';
-      far.textContent = `[${arc.type.toUpperCase()}]`;
-      text.append(far);
+      const farType = arc.type.toUpperCase();
 
-      line.title = have
-        ? `the focus already has an arc on (${arc.relation})`
-        : `${g.source} canonically takes (${arc.relation}) to [${arc.type.toUpperCase()}]`;
+      // Two zones, the rule the arc lines already use: the part you click is
+      // the part you get.
+      const zoneArc = document.createElement('span');
+      zoneArc.className = 'zone-arc';
+      zoneArc.textContent = rev ? `←(${arc.relation})←` : `→(${arc.relation})→`;
+      const zoneCon = document.createElement('span');
+      zoneCon.className = 'zone-con far';
+      zoneCon.textContent = `[${farType}]`;
+      text.append(zoneArc, zoneCon);
+
+      if (have) {
+        line.title = `the focus already has an arc on (${arc.relation})`;
+      } else {
+        // The relation alone. The column then narrows to the relation's own
+        // far-end types, which is wider than the canonical graph asks for --
+        // the right default when you want this arc but not this far end.
+        zoneArc.title = `build a (${arc.relation}) arc from here`;
+        zoneArc.addEventListener('click', ev => {
+          ev.stopPropagation();
+          armCanonical(arc, null);
+        });
+        // The relation AND the narrowing. [ANIMATE] and [ENTITY] are rarely
+        // what you want in the slot itself, so clicking the far end offers
+        // what may go THERE rather than dropping an abstract type in.
+        zoneCon.title = `build (${arc.relation}) and show only types under [${farType}]`;
+        zoneCon.addEventListener('click', ev => {
+          ev.stopPropagation();
+          armCanonical(arc, arc.type);
+        });
+      }
+
+      // Says which guidance line the editor row is currently acting on.
+      if (!have && pane.relation
+          && pane.relation.label === arc.relation
+          && pane.relation.direction === arc.direction) {
+        line.classList.add('armed');
+      }
       line.append(mark, text);
       displayBody.append(line);
     }
   }
+}
+
+// Put a canonical arc into the editor row. UNDER, when given, also narrows the
+// concept column to that type and below.
+//
+// The far end is deliberately NOT filled in. A canonical graph names a type,
+// not a concept -- [ANIMATE] is the constraint, and the concept you want is
+// almost always a subtype of it. Dropping [ANIMATE] into the slot would make
+// the commonest path "accept a wrong answer, then correct it".
+function armCanonical(arc, under) {
+  // A canonical arc is a new claim, so it ends any pull, on the same rule as
+  // picking from the relation column: /api/editor/replace keeps the arc's own
+  // relation, so a surviving pull would commit one relation while the pane
+  // showed another.
+  pane.replacing = pane.pulledTarget = null;
+  pane.relation = { label: arc.relation, direction: arc.direction, legal: null };
+  pane.target = null;
+  pane.under = under
+    ? { type: under, relation: arc.relation, direction: arc.direction }
+    : null;
+  armedTarget = true;
+  refresh();
+}
+
+// The banner over the concept column while a canonical narrowing is in force.
+function paintNarrow() {
+  const under = activeUnder();
+  const row = $('concept-narrow');
+  if (!under) { row.hidden = true; return; }
+  $('concept-narrow-label').textContent = `under [${under.toUpperCase()}]`;
+  row.hidden = false;
 }
 
 // Load an existing arc into the editor so its far end can be swapped. The
@@ -1565,7 +1649,8 @@ async function refresh(opts = {}) {
       focus: pane.focus && pane.focus.ref !== undefined ? pane.focus.ref : null,
       relation: pane.relation ? pane.relation.label : null,
       direction: pane.relation ? pane.relation.direction : null,
-      target: pane.target && pane.target.ref !== undefined ? pane.target.ref : null
+      target: pane.target && pane.target.ref !== undefined ? pane.target.ref : null,
+      under: activeUnder()
     })}`);
     paintConceptList(choices.concepts);
     paintRelationList(choices.relations);
