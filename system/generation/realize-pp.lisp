@@ -83,14 +83,36 @@
         (realize-verbal-infinitive head buckets state)
         (format nil "that ~a" (realize-nested-graph inner-graph state)))))
 
+(defun realize-nested-gerund (inner-graph state)
+  "Render an embedded SITUATION as a '<verb>ing ...' gerund, for a clause that
+   sits under a preposition -- 'about eating a pie'. Otherwise
+   REALIZE-NESTED-INFINITIVE's twin, including the 'that <clause>' fallback
+   when there is no realizable predicate to inflect."
+  (let* ((head    (and (typep inner-graph 'graph) (head inner-graph)))
+         (buckets (and head (classify-relations head))))
+    (if (and head buckets)
+        (realize-verbal-gerund head buckets state)
+        (format nil "that ~a" (realize-nested-graph inner-graph state)))))
+
 (defun realize-argument (concept state &key (case :nominative) preposition)
-  "Render CONCEPT as a verb argument. A clausal complement emits 'to <verb>' when
-   it is a SITUATION (infinitival) or 'that <inner clause>' otherwise (PREPOSITION
-   suppressed either way). A non-clausal concept renders as an NP, with PREPOSITION
-   prepended when supplied."
+  "Render CONCEPT as a verb argument. A clausal SITUATION emits '<verb>ing' under
+   a preposition and 'to <verb>' without one; any other clausal complement emits
+   'that <inner clause>' with PREPOSITION suppressed. A non-clausal concept
+   renders as an NP, with PREPOSITION prepended when supplied.
+
+   The preposition is what decides infinitive against gerund, and it decides it
+   for every verb at once. English prepositions govern gerunds -- 'informs Sue
+   about eating', never 'about to eat' -- while a bare complement takes the
+   infinitive: 'wishes to eat'. INFORM reaches here with a preposition because
+   ':rcpt-direct' demotes its info-arg to a PP; WISH reaches here without one.
+   So this needs no per-verb knowledge, and every verb carrying an ':obj-prep'
+   -- notify, advise, warn, ask, remind -- is fixed by the same line."
   (cond ((clausal-situation-p concept)
          (mark-uttered state concept)
-         (realize-nested-infinitive (graph-referent concept) state))
+         (let ((inner (graph-referent concept)))
+           (if preposition
+               (format nil "~a ~a" preposition (realize-nested-gerund inner state))
+               (realize-nested-infinitive inner state))))
         ((clausal-concept-p concept)
          (mark-uttered state concept)
          (format nil "that ~a"

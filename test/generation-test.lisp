@@ -245,6 +245,18 @@
     ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: dave *j]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: dave *j]." . "Young Dave drives with his old chevy-vehicle to Baltimore.")
     ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: Dave *x]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: Dave *x]." . "Young Dave drives with his old chevy-vehicle to Baltimore.")
 
+    ;; A clausal SITUATION argument: gerund under a preposition, infinitive
+    ;; without one. INFORM demotes its info-arg to a PP (:rcpt-direct), so it
+    ;; gets the preposition and must say "about eating", never "about to eat";
+    ;; WISH takes its complement bare and must keep "to eat".
+    ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](thme)→[SITUATION: [EAT]-(agnt)→[PERSON: Sue](obj)→[PIE]]"
+     . "Bruce informs Sue about eating a pie.")
+    ("[WISH]-(expr)→[PERSON: Sue](thme)→[SITUATION: [EAT]-(agnt)→[PERSON: Sue](obj)→[PIE]]"
+     . "Sue wishes to eat a pie.")
+    ;; The non-clausal theme is untouched by that split.
+    ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](thme)→[DOG]"
+     . "Bruce informs Sue about a dog.")
+
 
     ))
 

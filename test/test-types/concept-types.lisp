@@ -66,7 +66,7 @@
 (:label heap :supertypes (collection))
 (:label inanimate :supertypes (physical))
 (:label individual :supertypes (⊤))
-(:label inform :supertypes (communicate) :canonical-graph "[INFORM]- (agnt)→[ANIMATE] (inst)→[ENTITY] (rcpt)→[ANIMATE] (obj)→[INFORMATION].")
+(:label inform :supertypes (communicate) :canonical-graph "[INFORM]- (agnt)→[ANIMATE] (inst)→[ENTITY] (rcpt)→[ANIMATE] (obj)→[INFORMATION] (thme)→[ENTITY].")
 (:label information :supertypes (abstract-object))
 (:label ingest :supertypes (act) :canonical-graph "[INGEST]-(agnt)→[ANIMATE](obj)→[SUBSTANCE](dest)→[BODY-PART]")
 (:label intention :supertypes (state) :canonical-graph "[INTENTION]- (expr)→[ANIMATE] (goal)→[SITUATION]")

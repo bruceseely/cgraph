@@ -363,6 +363,25 @@
     (format nil "~{~a~^ ~}"
             (remove-if (lambda (s) (or (null s) (zerop (length s)))) parts))))
 
+(defun realize-verbal-gerund (main buckets state)
+  "Render '<verb>ing <complements>' -- the infinitive's sister, for a clause
+   that sits under a preposition.
+
+   English prepositions govern gerunds, never infinitives: it is 'informs Sue
+   about eating', not 'about to eat'. So the choice between this and
+   REALIZE-VERBAL-INFINITIVE is not lexical and not a property of the embedded
+   clause; it is whether a preposition stands in front of it. See
+   REALIZE-ARGUMENT, which is where that is known."
+  (mark-clause-relations-traversed buckets state)
+  (mark-uttered state main)
+  (let* ((particle (lexicon-prop (concept-type main) :particle))
+         (verb     (present-participle (base-lemma main)))
+         (args     (realize-active-arguments main buckets state :particle particle))
+         (adjuncts (realize-adjuncts main buckets state))
+         (parts    (cons verb (append args adjuncts))))
+    (format nil "~{~a~^ ~}"
+            (remove-if (lambda (s) (or (null s) (zerop (length s)))) parts))))
+
 (defun realize-copula-infinitive (topic state)
   "Render 'to be <complements>' for raising — the inner copular clause
    stripped of its topic NP (which has been lifted to the outer
