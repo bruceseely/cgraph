@@ -32,7 +32,7 @@
 (:label size  :source-types collection        :dest-type number          :desc "size - the number of members in a collection")
 (:label stat  :source-types state             :dest-type proposition     :desc "statement/content - links [ENTITY] with a [SITUATION]")
 (:label temp  :source-types physical          :dest-type temperature     :desc "temperature - links [PHYSICAL] to [TEMPERATURE], where temperature is the temperature of the physical object")
-(:label thme  :source-types situation         :dest-type entity          :desc "theme - associates some [ENTITY] with a [SITUATION]")
+(:label thme  :source-types situation         :dest-type individual      :desc "theme - associates some [INDIVIDUAL] with a [SITUATION]")
 (:label time  :source-types situation         :dest-type time-period     :desc "time - links a [SITUATION] to a [TIME-PERIOD] indicating when it occurs")
 (:label and   :source-types proposition        :dest-type proposition     :desc "and - conjoins two propositions")
 (:label or    :source-types proposition        :dest-type proposition     :desc "or - disjoins two propositions")
