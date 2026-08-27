@@ -6,7 +6,10 @@ the removal cascade, the reverse control, and automatic coreference all behave
 as described below. The non-graph referent editor is built through stage 3 —
 identity, modifiers and sets — and so is the descent into a graph referent.
 What is left is stage 4, which is a decision rather than a feature — see
-"Open". The editor has been driven end to end in a browser against a live
+"Open". Canonical guidance was added on 2026-08-27 and is described under
+"Canonical guidance": the arcs a focus's type expects, shown under the arcs it
+has, with conflicts reported and — where narrowing is genuinely the fix — one
+click to apply it. The editor has been driven end to end in a browser against a live
 session — focus, the referent panel, the set controls, pulling an arc and
 replacing its far end — which is also where the members row was caught showing
 on concepts that were not sets.
@@ -644,6 +647,155 @@ tab can go on editing a graph the user believes they closed.
 Returning does not raise the veil. The veil means "this is over"; finishing a
 nested graph ends that graph, not the session you are in.
 
+## Canonical guidance
+
+Built 2026-08-27. Under the arcs the focus *has*, the pane shows the arcs its
+type is *expected* to have, in the same shape and at the same left margin, so
+the two lists read as one checklist.
+
+The reason is not that the canonical graph is hard to look up. It is that the
+editor's other two columns are too permissive to be useful on their own. With
+REMIND focused, the relation column offers 15 signature-consistent relations
+and the concept column all 225 types. Signature-consistency is a weak filter —
+`dur`, `manr`, `exch` and `part` are all legal on a REMIND and almost never
+what is wanted. The canonical graph is the only thing on screen that says
+which few of those are the point:
+
+```
+→(rcpt)→[PERSON: Sue]
+→(agnt)→[PERSON: Bruce]
+────────────────────────────────
+CANONICAL  inherited from inform
+   →(inst)→[ENTITY]
+   →(obj)→[INFORMATION]
+ ✓ →(agnt)→[ANIMATE]
+ ✓ →(rcpt)→[ANIMATE]
+```
+
+Open slots in black on top, satisfied ones greyed with a tick below. The
+subtraction is the answer: `inst` and `obj` are still open, and `obj` wants
+`[INFORMATION]` — 1 of 225 types rather than the 165 the signature admits.
+
+### Inherited guidance is labelled, never silent
+
+Only 39 of 225 concept types carry a canonical graph, so the useful answer
+usually lives on an ancestor. `nearest-canonical-graphs` walks up
+breadth-first and stops at the **first** hit on each branch.
+
+Stopping is the point, not an optimisation. REMIND inherits from INFORM, whose
+`(obj)` is `[INFORMATION]`; INFORM's own ancestor GIVE also has a canonical
+graph, but its `(obj)` is merely `[ENTITY]`. Climbing past the nearest hit
+would show the weaker constraint beside the stronger one and undo the
+narrowing that makes the answer worth having.
+
+An inherited graph says `inherited from inform` and never a bare `CANONICAL`.
+The distinction is logical, not cosmetic: REMIND was **not** defined with
+those four arcs, an ancestor was. Under REMIND they are a starting point to
+narrow; under INFORM they are the spec. Rendered identically, the two would be
+indistinguishable, and one of the two readings is false.
+
+### Union within a graph, intersection across graphs
+
+Two multi-constraint situations exist and they take **opposite** operators.
+Flattening them into one list, which the first cut did, silently gives the
+union where the intersection was meant.
+
+| | operator | example |
+|---|---|---|
+| a relation named more than once **within** one canonical graph | disjunction — under *either* | `TIME-PERIOD` takes `(attr)` to `[START-TIME]` and `[END-TIME]` |
+| a relation constrained by **several** graphs (multiple inheritance) | conjunction — under *both* | a type reaching two ancestors that both carry one |
+
+The first is not hypothetical: judged row by row, an `(attr)→[START-TIME]` arc
+would be reported as violating the `[END-TIME]` row — a false alarm on a
+perfectly canonical graph. `COMMERCIAL-EXCHANGE` is the same shape with
+`(part)` to `[PAY]` and `[GIVE]`.
+
+The second is why a concept carries exactly one type: a far end answering to
+two graphs needs a type under both. Measured on a constructed
+`BEACON <: {SIGNAL-SOURCE (obj)→[INFORMATION], PHYSICAL-EMITTER (obj)→[OBJECT]}` —
+the signature admits 165 types, the union 24, the intersection **1**, and it is
+`BOOK`, which is exactly `maximal-common-subtype(information, object)`. The 24
+included `BOTTLE` and `NEWS`, each violating one parent.
+
+So `under` travels as groups — `;` between, `,` within — and
+`narrow-to-subtypes` asks for some member of every group.
+
+### Two kinds of conflict
+
+An arc the focus **has** whose far end is under none of the types allowed for
+its relation. The kind decides whether the editor can offer to fix it, and the
+test is `subtype-p` in both directions:
+
+| kind | shape | fix |
+|---|---|---|
+| **too general** | the far end sits *above* what is asked — `[ENTITY]` under a canonical `[INFORMATION]` | Sowa's **restrict** rule: a legal derivation, a specialization of what was written, discarding nothing. Offered as a one-click `⤓`. |
+| **incomparable** | the far end is off the branch — `[DOG]`, whose `maximal-common-subtype` with `[INFORMATION]` is `NIL` | no formation rule leads there. Any change **replaces** rather than refines, so no button; clicking the ✗ pulls the arc instead. |
+
+`canonical-restriction-candidates` computes the first: a candidate must be a
+proper subtype of what is there, and with more than one constraining graph must
+satisfy all of them, not merely the one it was drawn from.
+
+Conflicts report, they never refuse. Three reasons, in increasing weight:
+
+1. A signature violation is *malformed* — the relation cannot mean what was
+   written, and `add-arc-into-relation` already errors on it. A canonical
+   violation is *unusual*: the graph is well formed and may be exactly what was
+   meant. The same treatment for both would be miscalibrated.
+2. The ontology is authored in this editor. Blocking `[REMIND]-(obj)→[ACT]`
+   because INFORM says INFORMATION would refuse the exploratory work the tool
+   exists for.
+3. **The constraint is usually inherited.** Hard-blocking on it would be the
+   editor enforcing a claim nobody made about this type — contradicting the
+   label sitting directly above.
+
+A fourth is decisive on its own: with intersection across graphs the admissible
+set can be **empty** (`maximal-common-subtype(information, act)` is `NIL`), so a
+checker that refused edits could reach a node with no legal move.
+
+### Three culprits, only one of them automatable
+
+`[INFORM]-(obj)→[DOG]` generates *"Bruce informs Sue about a dog"* — ordinary
+English. It is not obvious the **graph** is what is wrong. Three candidates,
+and the editor cannot know which:
+
+1. **the concept** — `[NEWS]` was meant, not `[DOG]`. *Built*: clicking the ✗
+   pulls the arc and auto-narrows the column.
+2. **the relation** — `[DOG]` is right and `obj` is the wrong arc.
+   `rel-uses-between(inform, dog)` gives 9 legal alternatives. *Unbuilt*, and it
+   needs an operation the editor has not got: `editor-replace-target` keeps the
+   relation and swaps the concept; this is the mirror image — keep both ends,
+   relabel the arc.
+3. **the canonical graph** — it is too tight, and the ontology is what needs
+   editing. *Unbuilt*; it would hand the graph to the type browser, which the
+   `Draw…` round trip already supports.
+
+That third route is not a fallback. It is how the INFORM frame acquired a
+`(thme)` at all: the conflict was the prompt, and the fix was the ontology.
+
+### Restriction keeps the node
+
+`editor-restrict-concept` retypes in place and is deliberately **not**
+`editor-replace-target`. Restriction refines what is already there, so the node
+keeps its referent and every arc that reaches it; replacing would drop the
+referent and detach any coreference.
+
+`restrict-by-type` brings a safety property this wanted anyway: it refuses when
+the referent is an individual that cannot conform — `[ENTITY: #77]` does not
+become `[INFORMATION]` because a canonical graph would prefer it.
+
+Keeping the node is also why this is one edit to *every* path through it, so
+the button wears the far end's arc count when it is more than one, on the same
+rule as the ✕'s `⌫` toll: a one-click is only honest if its reach is on its
+face.
+
+### The limit
+
+Conformance is judged **per focus**. A node reached by arcs from two different
+focus concepts answers to both, and neither view is the whole constraint — so a
+green pane means "conforms as seen from here", not "conforms". Recorded in
+`notes/known-issues.md` as the fifth entry. That is coreference, not
+inheritance; the multiple-inheritance case above *is* handled.
+
 ## Remove
 
 Each display-pane line has an ✕. Clicking it removes the relation, then drops
@@ -809,6 +961,10 @@ submission; returning a session handle to poll would be much worse to use.
 | `mark` / `unmark` | `node.lisp` | cycle-safe removal cascade |
 | `rel-use` | `types.lisp:1136` | relation filtering |
 | `graph-compatible-p` | `concept-type` slot | which referents are graphs |
+| `nearest-canonical-graphs` | `types.lisp` | guidance, with the first-hit-per-branch walk |
+| `narrow-to-subtypes` | `types.lisp` | union within a group, intersection across |
+| `subtype-p`, `maximal-common-subtype` | `types.lisp` | too-general vs incomparable; the empty intersection |
+| `restrict-by-type` | `formation-rules.lisp` | the one-click fix, and its referent-conformance refusal |
 | `:desc` leading token | relation-type | long-name filter matching |
 | armed one-shot pick | `graph.js:800` | the type editor's supertype pick; the editor tried it for slots and dropped it — see "Concepts have one click target each" |
 | `/api/*`, no-store static serving, kill-ring bridge | `system/web/` | server plumbing |
