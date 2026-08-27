@@ -202,6 +202,47 @@
 
 ;;; --- Replace ---------------------------------------------------------------
 
+(defun editor-restrict-concept (session concept type-label)
+  "Retype CONCEPT to TYPE-LABEL in place, which must be a subtype of what it
+   already is.
+
+   This is Sowa's RESTRICT rule and it is deliberately NOT a replacement.
+   EDITOR-REPLACE-TARGET puts a NEW concept on an arc, which is right when the
+   author has changed their mind about what is there; restriction refines what
+   is already there, so the node keeps its identity -- its referent, and every
+   other arc that reaches it. Replacing would drop the referent on the floor
+   and detach any coreference.
+
+   That identity is also why this is one edit to EVERY path through the node.
+   The caller is expected to have said so: EDITOR-FOCUS-ARCS reports the far
+   end's :CONCEPT-ARCS for exactly that purpose.
+
+   Refuses anything that is not a restriction. RESTRICT-BY-TYPE also refuses
+   when the referent is an individual that cannot conform -- [ENTITY: #77]
+   does not become [INFORMATION] just because a canonical graph would prefer
+   it -- and warns rather than signalling, so the warning is muffled and the
+   NIL turned into an error the page can show."
+  (with-cg-thread-bindings
+    (let* ((node (editor-concept session concept))
+           (new  (or (ignore-errors (get-concept-type
+                                     (intern (string-upcase type-label)
+                                             :conceptual-graphs)))
+                     (editor-error "no such concept type: ~a" type-label)))
+           (old  (concept-type node)))
+      (when (eq new old)
+        (editor-error "~a is already ~a"
+                      (format-node node) (string-downcase (string (label new)))))
+      (unless (subtype-p new old)
+        (editor-error "~a is not a subtype of ~a, so this would replace the ~
+                       concept rather than restrict it"
+                      (string-downcase (string (label new)))
+                      (string-downcase (string (label old)))))
+      (unless (handler-bind ((warning #'muffle-warning))
+                (restrict-by-type node new))
+        (editor-error "cannot restrict ~a to ~a: its referent does not conform"
+                      (format-node node) (string-downcase (string (label new)))))
+      node)))
+
 (defun editor-replace-target (session &key focus relation target target-type)
   "Put a different concept on the far end of an arc the FOCUS already has.
 
@@ -268,8 +309,8 @@
    concept per entry, with the direction the arc runs.
 
    Returns a list of plists (:relation-ref :relation :direction :concept-ref
-   :concept :concept-type :prune-count), where :direction is :FORWARD when the
-   focus is the relation's source.
+   :concept :concept-type :concept-arcs :prune-count), where :direction is
+   :FORWARD when the focus is the relation's source.
 
    :PRUNE-COUNT is what removing that line would cost, because the pane shows
    one hop and the removal acts on every hop behind it. Without the number the
@@ -297,5 +338,12 @@
                                            ;; mean parsing display text.
                                            :concept-type (string-downcase
                                                           (string (label (concept-type other))))
+                                           ;; How many arcs the FAR END carries.
+                                           ;; Retyping it in place is one edit
+                                           ;; to every path through it, so a
+                                           ;; control that offers to do so has
+                                           ;; to be able to say how far it
+                                           ;; reaches. 1 means only this arc.
+                                           :concept-arcs (length (arcs other))
                                            :prune-count (editor-prune-count
                                                          focus-node rel)))))))

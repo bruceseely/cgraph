@@ -143,13 +143,17 @@
         (write-string "],\"conflicts\":[" out)
         (loop for (conflict . rest) on conflicts do
           (let ((a (getf conflict :actual)))
-            (format out "{\"relationRef\":~a,\"relation\":\"~a\",\"direction\":\"~(~a~)\",~
-                         \"type\":\"~a\",\"concept\":\"~a\",\"expected\":["
+            (format out "{\"relationRef\":~a,\"conceptRef\":~a,\"relation\":\"~a\",~
+                         \"direction\":\"~(~a~)\",\"type\":\"~a\",\"concept\":\"~a\",~
+                         \"conceptArcs\":~a,\"restrictTo\":[~{\"~a\"~^,~}],\"expected\":["
                     (getf a :relation-ref)
+                    (getf a :concept-ref)
                     (json-escape (getf a :relation))
                     (getf a :direction)
                     (json-escape (getf a :concept-type))
-                    (json-escape (getf a :concept)))
+                    (json-escape (getf a :concept))
+                    (or (getf a :concept-arcs) 1)
+                    (mapcar #'json-escape (getf conflict :restrict-to)))
             (loop for ((source . types) . others) on (getf conflict :expected) do
               (format out "{\"source\":\"~a\",\"types\":[" (json-escape source))
               (loop for (want . more) on types do
@@ -230,6 +234,16 @@
                                      :reverse :forward))
     (declare (ignore new-rel))
     (editor-graph-json s focus (node-ref new-target))))
+
+;;; POST /api/editor/restrict?session=N&focus=REF&concept=REF&type=LABEL
+;;;
+;;; Sowa's restrict rule on one concept: narrow its type, keeping the node.
+;;; Distinct from /replace, which swaps in a new concept -- restriction refines
+;;; what is there, so the referent and every other arc through the node survive.
+(define-editor-post (handle-editor-restrict "/api/editor/restrict")
+    (session focus concept type)
+  (editor-restrict-concept s concept type)
+  (editor-graph-json s focus))
 
 ;;; POST /api/editor/replace?session=N&focus=REF&relation=REF
 ;;;      &target=REF | &target_type=LABEL

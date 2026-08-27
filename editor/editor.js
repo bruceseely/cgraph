@@ -1417,7 +1417,58 @@ function conflictLine(c) {
     if (arc) pullArc(arc);
   });
   line.append(mark, text, want);
+
+  // A conflict where the far end sits ABOVE what is asked can be fixed by
+  // narrowing it -- Sowa's restrict rule, a legal derivation and a
+  // specialization of what is already written, so it is offered as one click.
+  // An incomparable far end ([DOG] under a canonical [INFORMATION]) sends back
+  // no candidates, because any change there REPLACES rather than refines and
+  // the editor has no business guessing which replacement was meant.
+  if (c.restrictTo && c.restrictTo.length === 1) {
+    const target = c.restrictTo[0].toUpperCase();
+    const shared = c.conceptArcs || 1;
+    const fix = document.createElement('button');
+    fix.className = 'canon-fix';
+    fix.textContent = `⤓ restrict to [${target}]`;
+    // Restriction keeps the node, so it is one edit to every path through it.
+    // The count rides on the control that charges it, the way the arc lines'
+    // ⌫ toll does -- a one-click is only honest if its reach is on its face.
+    if (shared > 1) {
+      const toll = document.createElement('span');
+      toll.className = 'fix-toll';
+      toll.textContent = ` ·${shared} arcs`;
+      fix.append(toll);
+      fix.title = `narrow [${c.type.toUpperCase()}] to [${target}] — this concept `
+                + `is shared by ${shared} arcs and all of them change`;
+    } else {
+      fix.title = `narrow [${c.type.toUpperCase()}] to [${target}]`;
+    }
+    fix.addEventListener('click', ev => {
+      ev.stopPropagation();
+      restrictConcept(c.conceptRef, c.restrictTo[0]);
+    });
+    line.append(fix);
+  }
   return line;
+}
+
+// Narrow one concept's type in place. Not a Replace: the node keeps its
+// referent and every other arc, which is what makes this a restriction rather
+// than a substitution. The server refuses anything that is not one -- including
+// a referent that cannot conform, as [ENTITY: #77] cannot become [INFORMATION].
+async function restrictConcept(conceptRef, type) {
+  try {
+    const data = await call(`/api/editor/restrict?${q({
+      session: SESSION,
+      focus: pane.focus && pane.focus.ref !== undefined ? pane.focus.ref : null,
+      concept: conceptRef, type
+    })}`, { method: 'POST' });
+    renderGraph(data.withRefs);
+    paintDisplay(data.focus, data.canonical);
+    refreshEnglish();
+    setStatus('');
+    await refresh({ keepGraph: true });
+  } catch (err) { setStatus(err.message, 'error'); }
 }
 
 // Put a canonical arc into the editor row. UNDER, when given, also narrows the

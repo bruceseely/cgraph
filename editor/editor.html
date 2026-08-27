@@ -398,6 +398,24 @@
     .canon-line.conflict .mark { color: #c8860d; }
     .canon-line.conflict .far { color: #a06a1b; font-weight: 600; }
     .canon-line.conflict .wants { color: #b5924f; font-size: 11px; }
+    /* The one-click fix, offered only where narrowing IS the fix. Sized and
+       coloured as a quiet inline control rather than a button-looking button:
+       it sits inside a line of notation and should not out-shout it. */
+    .canon-fix {
+      flex: 0 0 auto;
+      border: 1px solid #e0cfa8;
+      background: #fdf7e8;
+      color: #8a6516;
+      border-radius: 3px;
+      font: inherit;
+      font-size: 11px;
+      padding: 0 0.35rem;
+      margin-left: 0.3rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .canon-fix:hover { background: #f7ecd2; border-color: #d0ba8a; }
+    .canon-fix .fix-toll { opacity: 0.75; }
     .canon-line.conflict .zone-arc { cursor: pointer; }
     .canon-line.conflict .zone-arc:hover { background: #fbf2e0; text-decoration: underline; }
     /* Same amber on the arc itself, where the controls to fix it are. Kept to a

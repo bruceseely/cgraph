@@ -1552,8 +1552,54 @@
                             (mapcar (lambda (c) (getf c :type)) group))
                       failed))))
           (when failed
-            (push (list :actual actual :expected (nreverse failed)) conflicts)))))
+            (setf failed (nreverse failed))
+            (push (list :actual actual
+                        :expected failed
+                        :restrict-to (canonical-restriction-candidates actual failed))
+                  conflicts)))))
     (values (nreverse states) (nreverse conflicts))))
+
+(defun canonical-restriction-candidates (actual failed)
+  "The types ACTUAL's far end could be RESTRICTED to so as to satisfy every
+   group in FAILED, as a list of label strings.
+
+   A candidate must be a PROPER SUBTYPE of what the concept already is. That is
+   what separates the two kinds of conflict, and it is the whole reason a
+   one-click fix can be offered for one and not the other:
+
+     too general   the far end sits ABOVE what the canonical graph asks, as
+                   [ENTITY] does under a canonical [INFORMATION]. Narrowing it
+                   is Sowa's restrict rule -- a legal derivation, and a
+                   specialization of what the author already wrote. Nothing is
+                   discarded, so it is safe to do on one click.
+
+     incomparable  the far end is off the branch entirely, as [DOG] is. No
+                   formation rule leads from here to there, and any change
+                   REPLACES what was written rather than refining it. No
+                   candidates come back, and the caller must ask rather than act.
+
+   With more than one constraining graph a candidate must also satisfy all of
+   them, not merely the one it was drawn from."
+  (let ((have (ignore-errors (get-concept-type (getf actual :concept-type)))))
+    (when have
+      (remove-duplicates
+       (loop for want in (remove-duplicates (mapcan (lambda (e) (copy-list (cdr e)))
+                                                    (copy-tree failed))
+                                            :test #'string-equal)
+             for node = (ignore-errors (get-concept-type want))
+             when (and node
+                       (not (eq node have))
+                       (ignore-errors (subtype-p node have))
+                       ;; Must answer every graph that objected, not just the
+                       ;; one it came from.
+                       (every (lambda (group)
+                                (some (lambda (type)
+                                        (let ((c (ignore-errors (get-concept-type type))))
+                                          (and c (ignore-errors (subtype-p node c)))))
+                                      (cdr group)))
+                              failed))
+               collect (string-downcase (string (label node))))
+       :test #'string=))))
 
 (defun canonical-guidance (concept-type)
   "What the editor should show beside CONCEPT-TYPE's arcs: a list of plists
