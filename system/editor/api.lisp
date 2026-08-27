@@ -106,21 +106,46 @@
          (type-label (and node (ignore-errors (label (concept-type node)))))
          (guidance (and type-label
                         (ignore-errors
-                         (with-cg-thread-bindings (canonical-guidance type-label))))))
+                         (with-cg-thread-bindings (canonical-guidance type-label)))))
+         ;; What the focus actually has, to judge the guidance against.
+         (actual (and guidance
+                      (ignore-errors (editor-focus-arcs session focus)))))
     (with-output-to-string (out)
       (write-char #\[ out)
       (loop for (entry . rest) on guidance do
-        (format out "{\"source\":\"~a\",\"inherited\":~:[false~;true~],\"text\":\"~a\",\"arcs\":["
-                (json-escape (getf entry :source))
-                (getf entry :inherited)
-                (json-escape (getf entry :text)))
-        (loop for (arc . more) on (getf entry :arcs) do
-          (format out "{\"relation\":\"~a\",\"direction\":\"~(~a~)\",\"type\":\"~a\"}"
-                  (json-escape (getf arc :relation))
-                  (getf arc :direction)
-                  (json-escape (getf arc :type)))
-          (when more (write-char #\, out)))
-        (write-string "]}" out)
+        (multiple-value-bind (states conflicts)
+            (canonical-arc-conformance (getf entry :arcs) actual)
+          (format out "{\"source\":\"~a\",\"inherited\":~:[false~;true~],\"text\":\"~a\",\"arcs\":["
+                  (json-escape (getf entry :source))
+                  (getf entry :inherited)
+                  (json-escape (getf entry :text)))
+          (loop for ((arc . state) . more) on states do
+            (format out "{\"relation\":\"~a\",\"direction\":\"~(~a~)\",\"type\":\"~a\",\"state\":\"~(~a~)\"}"
+                    (json-escape (getf arc :relation))
+                    (getf arc :direction)
+                    (json-escape (getf arc :type))
+                    state)
+            (when more (write-char #\, out)))
+          ;; Conflicts are per GROUP, not per row, so they are their own list
+          ;; rather than a third row state: an (attr)→[START-TIME] arc satisfies
+          ;; one of TIME-PERIOD's two (attr) rows and violates neither, and a
+          ;; per-row verdict has nowhere to say that.
+          (write-string "],\"conflicts\":[" out)
+          (loop for (conflict . more) on conflicts do
+            (let ((a (getf conflict :actual)))
+              (format out "{\"relationRef\":~a,\"relation\":\"~a\",\"direction\":\"~(~a~)\",~
+                           \"type\":\"~a\",\"concept\":\"~a\",\"expected\":["
+                      (getf a :relation-ref)
+                      (json-escape (getf a :relation))
+                      (getf a :direction)
+                      (json-escape (getf a :concept-type))
+                      (json-escape (getf a :concept)))
+              (loop for (want . others) on (getf conflict :expected) do
+                (format out "\"~a\"" (json-escape want))
+                (when others (write-char #\, out)))
+              (write-string "]}" out))
+            (when more (write-char #\, out)))
+          (write-string "]}" out))
         (when rest (write-char #\, out)))
       (write-char #\] out))))
 
@@ -537,8 +562,26 @@
                  ;; of the catalog while the canonical graph says this one
                  ;; wants [INFORMATION]. Applied last, and never widening:
                  ;; what is legal is still the signature's call.
+                 ;; A relation the canonical graph names more than once
+                 ;; constrains its far end to the DISJUNCTION of those types,
+                 ;; so UNDER arrives as a comma-separated list.
+                 ;;
+                 ;; Narrowing is based on the SIGNATURE-legal set whenever a
+                 ;; relation is known, even though a populated target would
+                 ;; otherwise fall through to the whole catalog. The two roads
+                 ;; to a narrowed column -- clicking a guidance row, and
+                 ;; pulling an arc that has one -- ask the same question and
+                 ;; must answer it the same way; based on whatever the column
+                 ;; happened to hold, they would not.
                  (concepts (if (and under (plusp (length under)))
-                               (narrow-to-subtypes concepts under)
+                               (narrow-to-subtypes
+                                (if (and relation (plusp (length relation)))
+                                    (rel-far-end-types
+                                     (intern (string-upcase relation) :conceptual-graphs)
+                                     dir)
+                                    concepts)
+                                (remove "" (uiop:split-string under :separator ",")
+                                        :test #'string=))
                                concepts)))
             (format nil "{\"ok\":true,\"concepts\":~a,\"relations\":~a}"
                     (json-concept-choices

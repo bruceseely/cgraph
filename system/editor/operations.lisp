@@ -268,8 +268,8 @@
    concept per entry, with the direction the arc runs.
 
    Returns a list of plists (:relation-ref :relation :direction :concept-ref
-   :concept :prune-count), where :direction is :FORWARD when the focus is the
-   relation's source.
+   :concept :concept-type :prune-count), where :direction is :FORWARD when the
+   focus is the relation's source.
 
    :PRUNE-COUNT is what removing that line would cost, because the pane shows
    one hop and the removal acts on every hop behind it. Without the number the
@@ -289,5 +289,13 @@
                                                           :reverse :forward)
                                            :concept-ref (node-ref other)
                                            :concept (format-node other)
+                                           ;; The bare type, beside the
+                                           ;; formatted node: canonical
+                                           ;; conformance is a question about
+                                           ;; the type alone, and re-deriving
+                                           ;; it from "[PERSON: Sue]" would
+                                           ;; mean parsing display text.
+                                           :concept-type (string-downcase
+                                                          (string (label (concept-type other))))
                                            :prune-count (editor-prune-count
                                                          focus-node rel)))))))

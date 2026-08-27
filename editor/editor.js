@@ -61,7 +61,7 @@ function activeUnder() {
   const u = pane.under;
   if (!u || !pane.relation) return null;
   return (u.relation === pane.relation.label && u.direction === pane.relation.direction)
-    ? u.type : null;
+    ? u.types : null;
 }
 
 const OPPOSITE = d => (d === 'reverse' ? 'forward' : 'reverse');
@@ -69,6 +69,11 @@ const OPPOSITE = d => (d === 'reverse' ? 'forward' : 'reverse');
 // picking a target already joined to the focus can fill the relation in for
 // you — the link exists, so there is nothing to choose.
 let focusArcs = [];
+// The guidance the display pane last drew, kept for the same reason FOCUSARCS
+// is: pulling an arc has to know whether a canonical graph speaks about that
+// relation, and asking the server again would be a round trip for something
+// already on screen.
+let focusCanonical = [];
 // The target slot is highlighted as the place the next pick will land. Purely a
 // cue: with a focus set, a concept type or a graph concept goes to the target
 // whether or not this is on. It is what a pull raises to say "this is the one
@@ -1180,9 +1185,18 @@ function paintDisplay(arcs, canonical) {
     paintCanonical(canonical);
     return;
   }
+  // Which arcs a canonical graph objects to. Marked on the arc line as well as
+  // reported below it: the line is where the ✕ and the pull live, so it is
+  // where you would act, and an arc flagged only in a summary underneath is one
+  // you have to match up by eye.
+  const flagged = new Set();
+  for (const g of (canonical || [])) {
+    for (const c of (g.conflicts || [])) flagged.add(c.relationRef);
+  }
   for (const a of arcs) {
     const line = document.createElement('div');
-    line.className = 'arc-line' + (pane.replacing === a.relationRef ? ' pulled' : '');
+    line.className = 'arc-line' + (pane.replacing === a.relationRef ? ' pulled' : '')
+                                + (flagged.has(a.relationRef) ? ' off-canon' : '');
     const text = document.createElement('span');
     text.className = 'text';
 
@@ -1246,6 +1260,7 @@ function paintDisplay(arcs, canonical) {
 // all 225 types; the canonical graph is the only thing on screen that says
 // which few of those are the point.
 function paintCanonical(canonical) {
+  focusCanonical = canonical || [];
   if (!canonical || !canonical.length) return;
   for (const g of canonical) {
     const head = document.createElement('div');
@@ -1264,21 +1279,25 @@ function paintCanonical(canonical) {
     }
     displayBody.append(head);
 
-    // Matched on relation AND direction, not relation alone: the same relation
-    // running the other way is a different arc, and marking it satisfied would
-    // hide a slot that is genuinely still open.
-    const satisfied = arc => focusArcs.some(a => a.relation === arc.relation
-                                              && a.direction === arc.direction);
-    // Open slots first, then the ones already filled, alphabetical within each.
-    // The question this pane answers is "what have I not done yet", so the
-    // answer is a block at the top rather than something to pick out of an
+    // Conflicts first: an arc that violates the constraint is a problem with
+    // what you have written, where an unfilled slot is merely unfinished.
+    for (const c of g.conflicts || []) displayBody.append(conflictLine(c));
+
+    // Open slots, then the ones already filled, alphabetical within each. The
+    // question this pane answers is "what have I not done yet", so the answer
+    // is a block at the top rather than something to pick out of an
     // interleaved list. A row does move down as you satisfy it -- which reads
     // as the checklist ticking over, not as the list shuffling.
+    //
+    // STATE comes from the server because satisfaction is a subtype question:
+    // (obj)→[ADVICE] satisfies a canonical (obj)→[INFORMATION], and only the
+    // lattice knows that.
     const ordered = g.arcs.slice().sort((x, y) =>
-      (satisfied(x) - satisfied(y)) || x.relation.localeCompare(y.relation));
+      ((x.state === 'satisfied') - (y.state === 'satisfied'))
+      || x.relation.localeCompare(y.relation));
 
     for (const arc of ordered) {
-      const have = satisfied(arc);
+      const have = arc.state === 'satisfied';
       const line = document.createElement('div');
       line.className = 'canon-line' + (have ? ' have' : '');
 
@@ -1317,7 +1336,7 @@ function paintCanonical(canonical) {
         zoneCon.title = `build (${arc.relation}) and show only types under [${farType}]`;
         zoneCon.addEventListener('click', ev => {
           ev.stopPropagation();
-          armCanonical(arc, arc.type);
+          armCanonical(arc, [arc.type]);
         });
       }
 
@@ -1333,6 +1352,55 @@ function paintCanonical(canonical) {
   }
 }
 
+// An arc the focus HAS whose far end is under none of the types the canonical
+// graph allows for that relation.
+//
+// Its own line rather than a third state on a canonical row, because the
+// verdict is about a GROUP of rows: TIME-PERIOD takes (attr) to [START-TIME]
+// and to [END-TIME], and an (attr)→[START-TIME] arc satisfies one of those
+// rows while violating neither. A per-row verdict has nowhere to say that.
+//
+// It reports rather than refuses. The constraint is often inherited -- a claim
+// about an ancestor that was never made about this type -- and the ontology is
+// being written in this editor, so the right answer to "[ACT] is not under
+// [INFORMATION]" is frequently to give this type a canonical graph of its own
+// rather than to back down.
+function conflictLine(c) {
+  const line = document.createElement('div');
+  line.className = 'canon-line conflict';
+  const mark = document.createElement('span');
+  mark.className = 'mark';
+  mark.textContent = '✗';
+
+  const text = document.createElement('span');
+  const rev = c.direction === 'reverse';
+  const zoneArc = document.createElement('span');
+  zoneArc.className = 'zone-arc';
+  zoneArc.textContent = rev ? `←(${c.relation})←` : `→(${c.relation})→`;
+  const zoneCon = document.createElement('span');
+  zoneCon.className = 'far';
+  zoneCon.textContent = `[${c.type.toUpperCase()}]`;
+  text.append(zoneArc, zoneCon);
+
+  const want = document.createElement('span');
+  want.className = 'wants';
+  want.textContent = 'not under '
+    + c.expected.map(t => `[${t.toUpperCase()}]`).join(' or ');
+
+  // Clicking pulls the offending arc into the editor row, which auto-narrows
+  // the column to what the canonical graph asks for: the report and the fix
+  // are the same click.
+  line.title = `replace this concept — ${c.relation} wants `
+    + c.expected.map(t => `[${t.toUpperCase()}]`).join(' or ');
+  zoneArc.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const arc = focusArcs.find(a => a.relationRef === c.relationRef);
+    if (arc) pullArc(arc);
+  });
+  line.append(mark, text, want);
+  return line;
+}
+
 // Put a canonical arc into the editor row. UNDER, when given, also narrows the
 // concept column to that type and below.
 //
@@ -1340,7 +1408,7 @@ function paintCanonical(canonical) {
 // not a concept -- [ANIMATE] is the constraint, and the concept you want is
 // almost always a subtype of it. Dropping [ANIMATE] into the slot would make
 // the commonest path "accept a wrong answer, then correct it".
-function armCanonical(arc, under) {
+function armCanonical(arc, underTypes) {
   // A canonical arc is a new claim, so it ends any pull, on the same rule as
   // picking from the relation column: /api/editor/replace keeps the arc's own
   // relation, so a surviving pull would commit one relation while the pane
@@ -1348,8 +1416,8 @@ function armCanonical(arc, under) {
   pane.replacing = pane.pulledTarget = null;
   pane.relation = { label: arc.relation, direction: arc.direction, legal: null };
   pane.target = null;
-  pane.under = under
-    ? { type: under, relation: arc.relation, direction: arc.direction }
+  pane.under = (underTypes && underTypes.length)
+    ? { types: underTypes, relation: arc.relation, direction: arc.direction }
     : null;
   armedTarget = true;
   refresh();
@@ -1360,7 +1428,10 @@ function paintNarrow() {
   const under = activeUnder();
   const row = $('concept-narrow');
   if (!under) { row.hidden = true; return; }
-  $('concept-narrow-label').textContent = `under [${under.toUpperCase()}]`;
+  // "or" rather than a comma: the far ends of a repeated relation are
+  // alternatives, not a set the far end has to belong to all of.
+  $('concept-narrow-label').textContent =
+    'under ' + under.map(t => `[${t.toUpperCase()}]`).join(' or ');
   row.hidden = false;
 }
 
@@ -1376,7 +1447,30 @@ function pullArc(a) {
   pane.relation = { label: a.relation, direction: a.direction, legal: null };
   pane.target = { ref: a.conceptRef, text: a.concept };
   armedTarget = true;                 // the slot you are about to change
+  // If a canonical graph speaks about this relation, the column narrows to
+  // what it asks for without being asked. Replacing the far end of an arc the
+  // type was built to have is the case where the guidance is least in doubt --
+  // the arc itself names which row applies, so there is nothing to click --
+  // and offering the whole catalog there is how a conforming graph quietly
+  // stops conforming. The ✕ on the banner is the way out.
+  pane.under = canonicalUnderFor(a.relation, a.direction);
   refresh();
+}
+
+// The far-end types a canonical graph asks for on one relation, as the LIST
+// that constrains it: a relation named more than once constrains its far end
+// to the disjunction of those types, so all of them come back together.
+function canonicalUnderFor(relation, direction) {
+  const types = [];
+  for (const g of focusCanonical) {
+    for (const arc of g.arcs) {
+      if (arc.relation === relation && arc.direction === direction
+          && !types.includes(arc.type)) {
+        types.push(arc.type);
+      }
+    }
+  }
+  return types.length ? { types, relation, direction } : null;
 }
 
 // There are two roads to a row that reproduces an arc the focus already has,
@@ -1650,7 +1744,7 @@ async function refresh(opts = {}) {
       relation: pane.relation ? pane.relation.label : null,
       direction: pane.relation ? pane.relation.direction : null,
       target: pane.target && pane.target.ref !== undefined ? pane.target.ref : null,
-      under: activeUnder()
+      under: (activeUnder() || []).join(',') || null
     })}`);
     paintConceptList(choices.concepts);
     paintRelationList(choices.relations);

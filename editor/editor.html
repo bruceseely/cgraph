@@ -380,6 +380,21 @@
     .canon-line.armed { background: #f0f4fb; }
     .canon-line.armed .zone-arc { color: #4a90d9; font-weight: 600; }
 
+    /* A canonical constraint the graph BREAKS, as opposed to one it has not got
+       round to. Amber rather than red: the graph is well formed and the arc may
+       be exactly what was meant -- often the honest fix is to give this type a
+       canonical graph of its own rather than to change the arc. Red would read
+       as "invalid", which is the signature check's word, not this one's. */
+    .canon-line.conflict { color: #a06a1b; }
+    .canon-line.conflict .mark { color: #c8860d; }
+    .canon-line.conflict .far { color: #a06a1b; font-weight: 600; }
+    .canon-line.conflict .wants { color: #b5924f; font-size: 11px; }
+    .canon-line.conflict .zone-arc { cursor: pointer; }
+    .canon-line.conflict .zone-arc:hover { background: #fbf2e0; text-decoration: underline; }
+    /* Same amber on the arc itself, where the controls to fix it are. Kept to a
+       left rule so it does not compete with .pulled for the row background. */
+    .arc-line.off-canon { box-shadow: inset 2px 0 0 #e0b055; }
+
     /* `display: flex' beats the HIDDEN attribute's own `display: none', so
        hiding has to be said again here or the empty banner sits over the
        column whenever nothing is narrowed. */
