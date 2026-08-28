@@ -88,7 +88,7 @@
 (:label meal-food :supertypes (food))
 (:label measure :supertypes (quality))
 (:label monkey :supertypes (animal))
-(:label move :supertypes (act))
+(:label move :supertypes (act) :canonical-graph "[MOVE]- (agnt)→[ANIMATE] (obj)→[PHYSICAL]")
 (:label news :supertypes (information))
 (:label noisy :supertypes (attribute))
 (:label number :supertypes (quality))
