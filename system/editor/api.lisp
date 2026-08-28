@@ -96,6 +96,29 @@
 ;;; These mutate the working graph in place so node-refs stay stable for the
 ;;; life of the session -- the browser's click map depends on it.
 
+(defun session-defining-type (session)
+  "The concept type whose canonical graph SESSION is drafting, or NIL.
+
+   Walks to the root of the session tree, because a nested editor opened on a
+   graph referent inside a canonical graph is still drafting that canonical
+   graph -- the job belongs to the tree, not to the one session that was
+   handed the flag."
+  (loop for s = session then (session-parent s)
+        while s
+        thereis (session-defining s)))
+
+(defun drafting-own-canonical-p (session concept-type-label)
+  "True when SESSION is drafting the canonical graph of CONCEPT-TYPE-LABEL.
+
+   The test is against the FOCUS's type, not merely against the session, and
+   that is the whole subtlety. Drafting DRIVE's canonical graph, a focus on
+   [DRIVE] wants TRANSPORT's guidance -- but a focus on the [VEHICLE] hanging
+   off it wants VEHICLE's own graph, exactly as in any other session. Only the
+   concept that IS the type under definition is looking at its own draft."
+  (let ((defining (session-defining-type session)))
+    (and defining concept-type-label
+         (string-equal defining (string concept-type-label)))))
+
 (defun json-canonical-guidance (session focus)
   "The canonical graphs bearing on FOCUS's concept type, as a JSON object
    {graphs: [...], conflicts: [...]}.
@@ -109,9 +132,14 @@
    concept types carry one -- and the pane simply says so."
   (let* ((node (ignore-errors (editor-concept session focus)))
          (type-label (and node (ignore-errors (label (concept-type node)))))
+         ;; Drafting the type's OWN canonical graph inverts which hit is
+         ;; wanted: its own graph is the draft on the canvas, so the guidance
+         ;; has to come from the supertypes. See NEAREST-CANONICAL-GRAPHS.
+         (skip-own (drafting-own-canonical-p session type-label))
          (guidance (and type-label
                         (ignore-errors
-                         (with-cg-thread-bindings (canonical-guidance type-label)))))
+                         (with-cg-thread-bindings
+                           (canonical-guidance type-label :skip-own skip-own)))))
          ;; What the focus actually has, to judge the guidance against.
          (actual (and guidance
                       (ignore-errors (editor-focus-arcs session focus)))))
@@ -698,14 +726,22 @@
 ;;; that same shape with no parent, so WEB-OWNED is what distinguishes it: a
 ;;; session with neither a parent nor a blocked caller.
 
-(defun open-web-string-session (text)
+(defun open-web-string-session (text &optional defining)
   "A :STRING session over TEXT for the browser to edit, with nobody waiting on
    it. The caller is a web page, so there is no *STANDARD-OUTPUT* worth
-   capturing and no REPL to announce a disconnect to."
+   capturing and no REPL to announce a disconnect to.
+
+   DEFINING names the concept type whose canonical graph is being drafted, for
+   the type browser's Draw round trip. It only changes which canonical
+   guidance the pane shows -- see the slot's comment in session.lisp -- so an
+   unknown or misspelled name costs nothing and is not worth refusing: the
+   guidance falls back to what an ordinary session would have shown."
   (let ((session (make-editor-session
                   :original (or text "")
                   :kind :string
                   :web-owned t
+                  :defining (and defining (plusp (length defining))
+                                 (string-downcase defining))
                   :working (make-working-graph (or text "")))))
     (register-editor-session session)
     session))
@@ -722,7 +758,7 @@
 ;;; string and return its id. The page then navigates to /editor?session=N.
 (hunchentoot:define-easy-handler (handle-editor-open-string
                                   :uri "/api/editor/open-string")
-    (text)
+    (text defining)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (no-store)
   (unless (eq (hunchentoot:request-method*) :post)
@@ -734,6 +770,6 @@
         ;; refused by the form that submitted it, where the field it came from
         ;; is still on screen -- not by an editor page you have already
         ;; navigated to and would have to navigate back from.
-        (let ((session (open-web-string-session text)))
+        (let ((session (open-web-string-session text defining)))
           (format nil "{\"ok\":true,\"session\":~a}" (session-id session))))
     (error (e) (json-error (princ-to-string e)))))

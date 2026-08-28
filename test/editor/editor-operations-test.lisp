@@ -21,19 +21,30 @@
 ;;;   - removal prunes to reachability rather than walking outward guessing at
 ;;;     a stopping condition, which is what makes shared nodes survive (E)
 
-(defun %editor-test-session (source)
-  "A bare session over SOURCE, with no browser and no blocked caller."
+(defun %editor-test-session (source &optional defining)
+  "A bare session over SOURCE, with no browser and no blocked caller.
+   DEFINING names the type whose canonical graph the session is drafting."
   (let ((s (make-editor-session :original nil :kind :string
+                                :defining defining
                                 :working (make-working-graph source))))
     (register-editor-session s)
     s))
 
-(defmacro %with-editor-session ((var source) &body body)
+(defmacro %with-editor-session ((var source &optional defining) &body body)
   "Sessions live in a global registry, so drop this one on the way out
    whatever happens -- a failing assertion must not leak into later tests."
-  `(let ((,var (%editor-test-session ,source)))
+  `(let ((,var (%editor-test-session ,source ,defining)))
      (unwind-protect (progn ,@body)
        (forget-editor-session ,var))))
+
+(defun %guidance-sources (session type-label)
+  "The types whose canonical graphs SESSION would show for a focus of
+   TYPE-LABEL, lowercase. Goes through DRAFTING-OWN-CANONICAL-P so the test
+   exercises the decision the JSON handler makes, not a reimplementation."
+  (mapcar (lambda (e) (getf e :source))
+          (canonical-guidance
+           type-label
+           :skip-own (drafting-own-canonical-p session type-label))))
 
 (defun %editor-ref (session label)
   "node-ref of the first concept in SESSION's working graph typed LABEL."
@@ -187,7 +198,47 @@
                  (nth-value 1 (ignore-errors
                                (editor-add-arc s :focus (%editor-ref s "eat")
                                                  :relation "obj"
-                                                 :target-type "no-such-type"))))))
+                                                 :target-type "no-such-type")))))
+
+        ;; --- I. canonical guidance while DRAFTING a canonical graph ---------
+        ;; Two jobs want opposite guidance and the graph alone cannot tell them
+        ;; apart, so the session carries which one it is. Editing a graph that
+        ;; USES [INFORM], INFORM's own canonical graph is the answer; drafting
+        ;; INFORM's canonical graph, that answer is a copy of the canvas and
+        ;; GIVE's is the one with anything to say.
+
+        (%with-editor-session (s "[INFORM]- (agnt)→[ANIMATE].")
+          (check "an ordinary session gets the focus type's own graph"
+                 (equal '("inform") (%guidance-sources s "inform"))))
+
+        (%with-editor-session (s "[INFORM]- (agnt)→[ANIMATE]." "inform")
+          (check "drafting it gets the supertype's instead"
+                 (equal '("give") (%guidance-sources s "inform")))
+          ;; The narrowing rule still holds one level up: GIVE's own ancestor
+          ;; ACT also has a graph, and the walk must not climb past GIVE to it.
+          (check "and stops at the first hit, as it always did"
+                 (not (member "act" (%guidance-sources s "inform") :test #'string=))))
+
+        ;; The flag is about the focus, not about the session. Drafting INFORM,
+        ;; a focus on some other concept in the draft is an ordinary focus and
+        ;; must see that type's own graph -- MAN's, not ADULT's.
+        (%with-editor-session (s "[INFORM]- (agnt)→[MAN]." "inform")
+          (check "a focus that is not the type under definition is unaffected"
+                 (equal '("man") (%guidance-sources s "man"))))
+
+        ;; A name nothing matches is not worth refusing: it can only fail to
+        ;; turn the flag on, and the guidance is then what it always was.
+        (%with-editor-session (s "[INFORM]- (agnt)→[ANIMATE]." "no-such-type")
+          (check "an unknown defining name falls back to ordinary guidance"
+                 (equal '("inform") (%guidance-sources s "inform"))))
+
+        ;; Drafting is a property of the session TREE: a nested editor opened
+        ;; on a graph referent inside a canonical graph is still drafting it.
+        (%with-editor-session (parent "[INFORM]- (agnt)→[ANIMATE]." "inform")
+          (%with-editor-session (child "[INFORM].")
+            (setf (session-parent child) parent)
+            (check "a nested session inherits the flag from its parent"
+                   (equal '("give") (%guidance-sources child "inform"))))))
 
       (when verbose
         (format t "~&editor-operations-test: ~:[FAILED <<<~;passed~]~%" ok))

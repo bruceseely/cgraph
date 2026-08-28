@@ -694,6 +694,51 @@ those four arcs, an ancestor was. Under REMIND they are a starting point to
 narrow; under INFORM they are the spec. Rendered identically, the two would be
 indistinguishable, and one of the two readings is false.
 
+### Drafting a canonical graph inverts which hit is wanted
+
+The stopping rule above assumes you are editing a graph that **uses** the
+type. The type browser's Draw link breaks that assumption: there the graph on
+the canvas *is* the type's canonical graph, and the nearest hit is your own
+draft. Guidance then says nothing — every arc reads as satisfied because you
+just drew it, and the constraint you actually have to restate is the parent's.
+
+This is not rare. 17 of the 40 types that carry a canonical graph sit under
+another type that also has one, and **all 17 restate the parent's arcs**
+rather than adding to them: TRANSPORT repeats RELOCATION's `agnt`/`obj`/`dest`
+and adds `inst`; TRANSFER repeats GIVE's three; BOY repeats CHILD's
+`(life-stage)` and adds `sex`. That convention is precisely what lets the walk
+stop at the first hit — the nearest graph is assumed *complete* — so authoring
+one means having the parent's in front of you, and that is the one moment the
+pane used to hide it.
+
+So `nearest-canonical-graphs` takes `:skip-own`, which starts the walk at the
+supertypes even when the type has a graph of its own. It does not relax the
+stopping rule; it moves the starting line by one, and each branch still stops
+at its first hit — drafting INFORM shows GIVE, never ACT behind it.
+
+Which mode applies is a fact about **why the session was opened**, not about
+the graph, so it is carried in: `defining=drive` on `/api/editor/open-string`,
+the `defining` slot on the session, `drafting-own-canonical-p` at the point of
+use. Two details are load-bearing:
+
+- The flag is tested against the **focus's type**, not merely against the
+  session. Drafting DRIVE, a focus on `[DRIVE]` wants TRANSPORT's guidance —
+  but a focus on the `[VEHICLE]` hanging off it is an ordinary focus and wants
+  VEHICLE's own graph. Only the concept that *is* the type under definition is
+  looking at its own draft.
+- It is inherited down the session **tree**. A nested editor opened on a graph
+  referent inside a canonical graph is still drafting that canonical graph.
+
+An unknown or misspelled name is not refused. It can only fail to turn the
+flag on, and the guidance is then exactly what an ordinary session shows.
+
+What this does **not** yet do: check that the restatement is complete. Nothing
+verifies that a child's graph carries the arcs its parent asks for, and because
+the walk stops at the first hit, a dropped arc silently weakens the constraint
+for the whole subtree — DRIVE without `dest` would make a destinationless drive
+canonical for DRIVE and everything under it. The guidance is now computed at
+the moment that could be caught; the warning is not written.
+
 ### Union within a graph, intersection across graphs
 
 Two multi-constraint situations exist and they take **opposite** operators.
@@ -961,7 +1006,7 @@ submission; returning a session handle to poll would be much worse to use.
 | `mark` / `unmark` | `node.lisp` | cycle-safe removal cascade |
 | `rel-use` | `types.lisp:1136` | relation filtering |
 | `graph-compatible-p` | `concept-type` slot | which referents are graphs |
-| `nearest-canonical-graphs` | `types.lisp` | guidance, with the first-hit-per-branch walk |
+| `nearest-canonical-graphs` | `types.lisp` | guidance, with the first-hit-per-branch walk; `:skip-own` for drafting |
 | `narrow-to-subtypes` | `types.lisp` | union within a group, intersection across |
 | `subtype-p`, `maximal-common-subtype` | `types.lisp` | too-general vs incomparable; the empty intersection |
 | `restrict-by-type` | `formation-rules.lisp` | the one-click fix, and its referent-conformance refusal |

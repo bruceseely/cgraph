@@ -1876,7 +1876,20 @@ document.getElementById('nt-draw').addEventListener('click', async () => {
   const text = collapseWhitespace(ntCanon.value);
   setNtHint('opening the editor…');
   try {
-    const resp = await fetch(`/api/editor/open-string?text=${encodeURIComponent(text)}`,
+    // `defining' tells the editor that this graph IS a type's canonical graph
+    // rather than a graph that uses the type — which decides whose constraints
+    // the guidance pane shows. Editing a graph that uses [DRIVE], DRIVE's own
+    // canonical graph is the guidance; drafting DRIVE's canonical graph, that
+    // answer is a copy of the canvas and TRANSPORT's is the one that has
+    // anything to say. The editor cannot tell the two apart from the graph
+    // alone, so the page that knows says so.
+    //
+    // Read from the form, not from the graph's head concept: while CREATING a
+    // type the head names a type that does not exist yet, and the name may
+    // still be half-typed. An unknown name simply yields ordinary guidance.
+    const defining = (editingLabel || ntLabel.value.trim() || '');
+    const resp = await fetch(`/api/editor/open-string?text=${encodeURIComponent(text)}`
+                             + `&defining=${encodeURIComponent(defining)}`,
                              { method: 'POST' });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {

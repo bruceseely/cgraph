@@ -1376,7 +1376,7 @@
         (let ((cg (ignore-errors (canonical-graph concept-type))))
           (and (stringp cg) (string/= cg "") cg)))))
 
-(defun nearest-canonical-graphs (concept-type)
+(defun nearest-canonical-graphs (concept-type &key skip-own)
   "The canonical graphs bearing on CONCEPT-TYPE, as a list of
    (TYPE-OBJECT . GRAPH-STRING). CONCEPT-TYPE's own comes back alone if it has
    one.
@@ -1391,10 +1391,22 @@
 
    The hierarchy is a lattice, so branches can disagree and more than one pair
    may come back. The walk is breadth-first from CONCEPT-TYPE and a type
-   reachable by two paths is reported once."
+   reachable by two paths is reported once.
+
+   SKIP-OWN starts the walk at the supertypes even when CONCEPT-TYPE has a
+   graph of its own -- for the one caller that is AUTHORING that graph. There
+   the type's own graph is the draft under the cursor, so returning it is
+   tautological: every arc reads as satisfied because it was just drawn, and
+   the constraint the author actually has to restate is the parent's. This is
+   not a relaxation of the stopping rule above; it moves the starting line by
+   one, and each branch still stops at its first hit.
+
+   Ordinary graph editing must NOT pass it. There the nearest hit is the
+   strongest true statement about the type, and climbing past it is exactly
+   the REMIND/INFORM/GIVE mistake."
   (let ((ctype (ignore-errors (get-concept-type concept-type))))
     (when ctype
-      (let ((own (%own-canonical-graph-string ctype)))
+      (let ((own (and (not skip-own) (%own-canonical-graph-string ctype))))
         (if own
             (list (cons ctype own))
             (let ((found (list))
@@ -1601,20 +1613,25 @@
                collect (string-downcase (string (label node))))
        :test #'string=))))
 
-(defun canonical-guidance (concept-type)
+(defun canonical-guidance (concept-type &key skip-own)
   "What the editor should show beside CONCEPT-TYPE's arcs: a list of plists
    (:source :inherited :text :arcs), one per NEAREST-CANONICAL-GRAPHS hit.
 
    :TEXT is run through the formatter for display and :ARCS carries the same
    graph decomposed. A graph the formatter refuses is passed through
    unformatted rather than dropped -- the pane is read-only, and unreadable
-   guidance still beats none."
+   guidance still beats none.
+
+   SKIP-OWN is passed through: see NEAREST-CANONICAL-GRAPHS. Under it every
+   entry is :INHERITED by construction, which is the honest label -- the
+   author is being shown what a supertype asks of the graph being written."
   (let* ((*package* (find-package "CONCEPTUAL-GRAPHS"))
          ;; Resolved once, and identity is what decides INHERITED: the
          ;; argument may arrive as a string, a symbol or a type object, and
          ;; comparing printed names would have to normalise all three.
          (self (ignore-errors (get-concept-type concept-type))))
-    (loop for (ctype . raw) in (nearest-canonical-graphs concept-type)
+    (loop for (ctype . raw) in (nearest-canonical-graphs concept-type
+                                                         :skip-own skip-own)
           collect (list :source (string-downcase (string (label ctype)))
                         :inherited (not (eq ctype self))
                         :text (or (ignore-errors (format-cgraph (parse-cgraph raw)))

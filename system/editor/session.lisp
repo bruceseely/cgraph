@@ -77,6 +77,21 @@
   ;; exactly why it needs its own flag rather than being inferred from PARENT.
   ;; The result travels back in the FINISH response instead of a return value.
   (web-owned nil)
+  ;; The concept type whose CANONICAL GRAPH this session is drafting, as a
+  ;; lowercase string -- or NIL, which is every session opened to edit an
+  ;; ordinary graph.
+  ;;
+  ;; It exists because those two jobs want OPPOSITE canonical guidance and the
+  ;; editor cannot tell them apart from the graph alone. Editing a graph that
+  ;; USES [DRIVE], the guidance is DRIVE's own canonical graph. Drafting
+  ;; DRIVE's canonical graph, that same answer is a copy of what is on the
+  ;; canvas; the constraint worth showing is TRANSPORT's. Which one applies is
+  ;; a fact about why the session was opened, so it has to be carried in.
+  ;;
+  ;; A NAME rather than a type object: it arrives as a query parameter and the
+  ;; lattice may be reinitialized under a long-lived session, which would leave
+  ;; a stale object pointing at a type no catalog holds any more.
+  defining
   ;; The caller's *STANDARD-OUTPUT*, captured at EDIT-CGRAPH time. Handler
   ;; threads inherit none of the caller's bindings, so without this there is no
   ;; way to tell the REPL that its browser went away -- and a blocked REPL that
