@@ -521,6 +521,77 @@ function setDisplayMode(mode) {
   for (const key of cgEntries.keys()) applyDisplayMode(key);
 }
 
+// Fetch one type's canonical graph and draw it into an entry that already
+// exists. Split out of ADDCGENTRY so a pinned entry can be RELOADED without
+// being rebuilt: the entry element stays put, so a refresh leaves the pane's
+// order and its scroll position exactly where they were.
+async function loadCgEntry(key, label) {
+  const entryData = cgEntryData.get(key);
+  if (!entryData) return;
+  const bodyEl = entryData.bodyEl;
+  // Both render forms are dropped before the fetch, not after: a reload that
+  // came back with no canonical graph would otherwise fall through to
+  // APPLYDISPLAYMODE and repaint the old one, which is the exact staleness
+  // this function exists to end.
+  entryData.svg = null;
+  entryData.linear = null;
+  bodyEl.className = 'cg-entry-body loading';
+  bodyEl.textContent = '…';
+
+  try {
+    const resp = await fetch(`/api/relations?type=${encodeURIComponent(label)}`);
+    if (!resp.ok) {
+      bodyEl.className = 'cg-entry-body empty';
+      bodyEl.textContent = '(lookup failed)';
+      return;
+    }
+    const data = await resp.json();
+    bodyEl.classList.remove('loading');
+
+    if (data.canonical_graph_format_error) {
+      console.warn('[cgraph] pcg format error for', key, ':', data.canonical_graph_format_error);
+    }
+
+    // Store linear text: prefer formatted (pcg output), fall back to raw string.
+    entryData.linear = data.canonical_graph_formatted || data.canonical_graph || null;
+
+    // Build SVG from raw CG text.
+    const cgText = data.canonical_graph;
+    if (cgText) {
+      const arcs = parseCgString(cgText);
+      if (arcs.length > 0) {
+        try {
+          const dot = arcsToDot(key, arcs);
+          const viz = await getViz();
+          const svg = viz.renderSVGElement(dot);
+          svg.removeAttribute('width');
+          svg.removeAttribute('height');
+          entryData.svg = svg;
+        } catch (_) {}
+      }
+    }
+
+    // Display based on current mode; fall back to empty message if neither available.
+    if (entryData.svg || entryData.linear) {
+      applyDisplayMode(key);
+    } else {
+      bodyEl.className = 'cg-entry-body empty';
+      bodyEl.textContent = 'no canonical graph';
+    }
+  } catch (err) {
+    bodyEl.className = 'cg-entry-body empty';
+    bodyEl.textContent = '(error)';
+  }
+}
+
+// One pinned entry, re-read from the server. Silent when the type is not
+// pinned: an edit to a type nobody is looking at has nothing to update.
+function refreshCgEntry(label) {
+  const key = label.toUpperCase();
+  if (!cgEntries.has(key)) return Promise.resolve();
+  return loadCgEntry(key, label);
+}
+
 async function addCgEntry(label) {
   const key = label.toUpperCase();
 
@@ -561,52 +632,7 @@ async function addCgEntry(label) {
   cgEntriesEl.prepend(entryEl);
   cgEntriesEl.scrollTop = 0;
 
-  try {
-    const resp = await fetch(`/api/relations?type=${encodeURIComponent(label)}`);
-    if (!resp.ok) {
-      bodyEl.className = 'cg-entry-body empty';
-      bodyEl.textContent = '(lookup failed)';
-      return;
-    }
-    const data = await resp.json();
-    bodyEl.classList.remove('loading');
-
-    if (data.canonical_graph_format_error) {
-      console.warn('[cgraph] pcg format error for', key, ':', data.canonical_graph_format_error);
-    }
-
-    const entryData = cgEntryData.get(key);
-
-    // Store linear text: prefer formatted (pcg output), fall back to raw string.
-    entryData.linear = data.canonical_graph_formatted || data.canonical_graph || null;
-
-    // Build SVG from raw CG text.
-    const cgText = data.canonical_graph;
-    if (cgText) {
-      const arcs = parseCgString(cgText);
-      if (arcs.length > 0) {
-        try {
-          const dot = arcsToDot(key, arcs);
-          const viz = await getViz();
-          const svg = viz.renderSVGElement(dot);
-          svg.removeAttribute('width');
-          svg.removeAttribute('height');
-          entryData.svg = svg;
-        } catch (_) {}
-      }
-    }
-
-    // Display based on current mode; fall back to empty message if neither available.
-    if (entryData.svg || entryData.linear) {
-      applyDisplayMode(key);
-    } else {
-      bodyEl.className = 'cg-entry-body empty';
-      bodyEl.textContent = 'no canonical graph';
-    }
-  } catch (err) {
-    bodyEl.className = 'cg-entry-body empty';
-    bodyEl.textContent = '(error)';
-  }
+  await loadCgEntry(key, label);
 
   redraw();
 }
@@ -1087,6 +1113,7 @@ async function deleteType() {
     }
     hideForm();
     selected.delete(label);      // a deleted type must not linger as a chip
+    removeCgEntry(label);        // nor as a canonical graph for a type that is gone
     await refreshTypeList();
     await redraw();
   } catch (err) {
@@ -1178,6 +1205,15 @@ async function submitType() {
     // (A create is picked up by refreshTypeList's selectType; an edit of an
     // already-selected type needs an explicit redraw.)
     if (editing) redraw();
+    // The canonical-graph pane is pinned INDEPENDENTLY of selection, so an
+    // edited type's entry stays on screen still showing what the type said when
+    // it was pinned. Deselecting and clicking the type again does not clear it:
+    // deselection leaves the entry alone (only the entry's own ✕, a
+    // double-click on the node, or Clear removes one) and ADDCGENTRY treats an
+    // entry that exists as already done, scrolling to it without refetching.
+    // Only a new browser instance showed the change. Reload it here, where the
+    // change is known -- the same edit, in the same place, as the redraw above.
+    await refreshCgEntry(data.label || label);
   } catch (err) {
     setNtHint('');
     showError(err.message);
