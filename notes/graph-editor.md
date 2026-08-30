@@ -704,7 +704,7 @@ just drew it, and the constraint you actually have to restate is the parent's.
 
 This is not rare. 17 of the 40 types that carry a canonical graph sit under
 another type that also has one, and **all 17 restate the parent's arcs**
-rather than adding to them: TRANSPORT repeats RELOCATION's `agnt`/`obj`/`dest`
+rather than adding to them: TRANSPORT repeats RELOCATE's `agnt`/`obj`/`dest`
 and adds `inst`; TRANSFER repeats GIVE's three; BOY repeats CHILD's
 `(life-stage)` and adds `sex`. That convention is precisely what lets the walk
 stop at the first hit — the nearest graph is assumed *complete* — so authoring
