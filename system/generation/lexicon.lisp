@@ -454,6 +454,9 @@
 (register-lexicon-entry 'remind :rcpt-direct t :obj-prep "of")
 (register-lexicon-entry 'warn   :rcpt-direct t :obj-prep "about")
 (register-lexicon-entry 'ask    :rcpt-direct t :obj-prep "about")
+;; Same frame, plus a lemma: the verb is "call", not the label "phone-call".
+;; As an NP the same lemma reads "a call", which is what English says too.
+(register-lexicon-entry 'phone-call :lemma "call" :rcpt-direct t :obj-prep "about")
 ;; Double-object verbs: the info NP follows the recipient with no preposition
 ;; ("tell her the news", "teach the kids math").
 (register-lexicon-entry 'tell   :rcpt-direct t :obj-prep nil)
