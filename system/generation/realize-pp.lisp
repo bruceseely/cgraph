@@ -136,9 +136,22 @@
             when (find lemma (rest entry) :test #'string=)
               return lemma))))
 
+(defun instrument-preposition (rel other)
+  "The preposition an instrument arc wants, when its filler asks for one.
+   :inst defaults to \"with\", which is right for a device and wrong for a
+   medium -- you reach someone BY telephone but WITH a telephone. A type that
+   is carried out BY rather than used WITH registers :inst-prep; anything else
+   returns NIL and the relation's own preposition stands."
+  (and other
+       (concept-p other)
+       (string-equal (label (relation-type rel)) "inst")
+       (lexicon-prop (concept-type other) :inst-prep)))
+
 (defun realize-pp (rel main-concept state)
-  (let* ((prep  (or (relation-preposition rel) ""))
-         (other (other-end rel main-concept))
+  (let* ((other (other-end rel main-concept))
+         (prep  (or (instrument-preposition rel other)
+                    (relation-preposition rel)
+                    ""))
          (rel-label (label (relation-type rel))))
     ;; 'time' arc with a deictic adverb target ('yesterday', 'tomorrow', ...)
     ;; surfaces as a bare adverb instead of 'at <Name>'.

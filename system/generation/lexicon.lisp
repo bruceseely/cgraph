@@ -21,7 +21,8 @@
                  :particle
      Noun class: :pos :mass-p :proper-p :gender (:masc/:fem) :ungendered
                  :human-p :animate-p
-     Verb frame: :raising :rcpt-direct :obj-prep :adv-form")
+     Verb frame: :raising :rcpt-direct :obj-prep :adv-form
+     Arc prep:   :inst-prep")
 
 (defparameter *lexicon-override-keys*
   '((:lemma       :reader "BASE-LEMMA")
@@ -43,6 +44,7 @@
     (:raising     :reader "GRAPH-TO-TEXT dispatch")
     (:rcpt-direct :reader "REALIZE-CLAUSE")
     (:obj-prep    :reader "REALIZE-CLAUSE")
+    (:inst-prep   :reader "REALIZE-PP")
     (:adv-form    :reader "REALIZE-ADV (realize-pp.lisp)")
     ;; Declared but inert. The morphology functions take a bare lemma string
     ;; rather than a concept, so they have no way to reach a per-type override;
@@ -376,13 +378,28 @@
 ;;; the systems already do, generation onto core.
 (setf *mass-type-p* (lambda (ctype) (lexicon-prop ctype :mass-p)))
 
-;;; --- Multi-word noun lemmas ------------------------------------------------
-;;; BASE-LEMMA falls back to the downcased type label, so a hyphenated label
-;;; surfaces with its hyphen ("a text-message"). Where the English is two
-;;; words, say so; pluralization appends to the whole string, which is what
-;;; "text messages" wants.
+;;; --- Noun lemma overrides --------------------------------------------------
+;;; BASE-LEMMA falls back to the downcased type label, which is wrong whenever
+;;; the label was chosen to disambiguate rather than to name. A hyphenated
+;;; label keeps its hyphen ("a text-message"), and a label qualified to split a
+;;; polysemous word says more than the English does: the word for an
+;;; EMAIL-MESSAGE is just "email", the word for TELEPHONY is "telephone".
+;;; Pluralization appends to the whole string, so "text messages" comes out
+;;; right.
 
-(register-lexicon-entry 'text-message :lemma "text message")
+(register-lexicon-entry 'text-message  :lemma "text message")
+(register-lexicon-entry 'email-message :lemma "email")
+
+;;; --- Communication media ---------------------------------------------------
+;;; A medium is mass ("she told him by email"); the countable thing is the
+;;; message that travels on it (EMAIL-MESSAGE, LETTER). On an instrument arc
+;;; it wants "by" rather than :inst's default "with" -- you reach someone BY
+;;; telephone but WITH a telephone, which is the TELEPHONY/TELEPHONE split
+;;; stated in prepositions.
+
+(register-lexicon-entry 'email     :mass-p t :inst-prep "by")
+(register-lexicon-entry 'post      :mass-p t :inst-prep "by")
+(register-lexicon-entry 'telephony :mass-p t :inst-prep "by" :lemma "telephone")
 
 ;;; --- Adverb-form overrides -------------------------------------------------
 ;;; Some types are abstract category labels rather than specific adjectives,
