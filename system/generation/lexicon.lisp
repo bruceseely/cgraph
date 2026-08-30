@@ -391,6 +391,23 @@
 (register-lexicon-entry 'text-message  :lemma "text message")
 (register-lexicon-entry 'email-message :lemma "email")
 
+;;; Compound labels whose hyphen is ontology, not English. A hyphenated label
+;;; surfaces with its hyphen ("a body-part"), and these are types you would
+;;; actually write in a graph, so the hyphen reaches the reader. The label
+;;; stays as it is in every case: BODY-PART and the rest are named to sit in
+;;; the lattice, and GEOGRAPHICAL-STATE earns its qualifier by not being
+;;; STATE-the-situation. Only the English needs saying. (Purely structural
+;;; types -- ABSTRACT-OBJECT, the *-ATTRIBUTEs, the *-EXTENTs -- are left
+;;; alone: they read no better, but nothing puts them in a graph.)
+(register-lexicon-entry 'body-part            :lemma "body part")
+(register-lexicon-entry 'food-item            :lemma "food item")
+(register-lexicon-entry 'city-government      :lemma "city government")
+(register-lexicon-entry 'geological-landform  :lemma "landform")
+;; English says "state" for both the land and the polity; the split that
+;; matters here is one the ontology makes and the word does not.
+(register-lexicon-entry 'geographical-state   :lemma "state")
+(register-lexicon-entry 'geopolitical-state   :lemma "state")
+
 ;;; --- Communication media ---------------------------------------------------
 ;;; A medium is mass ("she told him by email"); the countable thing is the
 ;;; message that travels on it (EMAIL-MESSAGE, LETTER). On an instrument arc
@@ -410,6 +427,12 @@
 (register-lexicon-entry 'manner :adv-form "somehow")
 ;; keyed on the TIME-PERIOD concept, not the `time' relation (which is not a
 ;; concept type) -- completes the somehow/sometime/somewhere trio.
+;; NO :lemma here, though "a time-period" reads as badly as the rest. BASE-LEMMA
+;; ranks an override ABOVE a referent name, and this type's instances carry
+;; their meaning in the referent -- [TIME-PERIOD: yesterday]. An override
+;; shadows that, TEMPORAL-ADVERB-FORM stops recognising the deictic, and
+;; "A girl ate a pie yesterday" becomes "A girl eats a pie at Time period".
+;; Four generation-test cases catch it; this comment is so it is not re-added.
 (register-lexicon-entry 'time-period :adv-form "sometime")
 (register-lexicon-entry 'place  :adv-form "somewhere")
 
