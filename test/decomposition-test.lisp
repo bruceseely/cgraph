@@ -149,7 +149,7 @@
              (cut (find 'person (cut-concepts nodes)
                         :key (lambda (c) (label (concept-type c))))))
         (check "an individual is pronominalized on the second sentence"
-               (string= "Dave drives with his old chevy-vehicle to Baltimore. He is young."
+               (string= "Dave drives with his old Chevy to Baltimore. He is young."
                         (graphs-to-text (decompose-cgraph nodes :at cut)))))
 
       ;; Every clause path must agree about who is a second mention. Three of
@@ -159,7 +159,7 @@
       ;; ancient bag. He is young."
       (check "every sentence after the first refers back, not afresh"
              (string= (concatenate 'string
-                                   "Dave drives with his chevy-vehicle to Baltimore. "
+                                   "Dave drives with his Chevy to Baltimore. "
                                    "He has an ancient bag containing a cake. "
                                    "He is young. It is old.")
                       (graph-to-text-decomposed
@@ -180,9 +180,9 @@
       ;; them, so "it" is still safe.
       (check "a second man in the graph costs everyone the pronoun"
              (string= (concatenate 'string
-                                   "Young Dave drives with a chevy-vehicle to Baltimore. "
+                                   "Young Dave drives with a Chevy to Baltimore. "
                                    "Bob has an ancient bag containing a cake and "
-                                   "the chevy-vehicle. It is old.")
+                                   "the Chevy. It is old.")
                       (graph-to-text-decomposed
                        (parse-cgraph "[CHEVY-VEHICLE]-
                                         (attr)→[OLD]

@@ -230,7 +230,7 @@
     ("[FOOD]<-(obj)<-[EAT]."            . "Food is eaten.")
     ("[PIE]<-(obj)<-[GIVE]->(rcpt)->[GIRL]." . "A pie is given to a girl.")
     ;; POSS direction + HAVE construction.
-    ("[PERSON: dave]->(poss)->[CHEVY-VEHICLE]." . "Dave has a chevy-vehicle.")
+    ("[PERSON: dave]->(poss)->[CHEVY-VEHICLE]." . "Dave has a Chevy.")
     ("[BOY]->(poss)->[DOG]."                    . "A boy has a dog.")
     ;; Leftover POSS: a verbal clause plus a possession assertion that the
     ;; parser didn't fold into the main NP (typically because coref across
@@ -242,8 +242,8 @@
      . "Dave gives food to Spot, and he has Spot.")
     ("[PERSON: Dexter]-(agnt)<-[GIVE]-(obj)->[FOOD] (rcpt)->[DOG: spot], (poss)->[DOG: spot]."
      . "Dexter gives food to Spot, and he has Spot.")
-    ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: dave *j]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: dave *j]." . "Young Dave drives with his old chevy-vehicle to Baltimore.")
-    ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: Dave *x]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: Dave *x]." . "Young Dave drives with his old chevy-vehicle to Baltimore.")
+    ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: dave *j]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: dave *j]." . "Young Dave drives with his old Chevy to Baltimore.")
+    ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: Dave *x]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: Dave *x]." . "Young Dave drives with his old Chevy to Baltimore.")
 
     ;; A clausal SITUATION argument: gerund under a preposition, infinitive
     ;; without one. INFORM demotes its info-arg to a PP (:rcpt-direct), so it

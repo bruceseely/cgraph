@@ -408,6 +408,14 @@
 (register-lexicon-entry 'geographical-state   :lemma "state")
 (register-lexicon-entry 'geopolitical-state   :lemma "state")
 
+;;; Marques. The -VEHICLE suffix distinguishes the car from the company that
+;;; makes it, a distinction English drops entirely -- you say "a Chevy". Not
+;;; :proper-p, which means no article and would give "Dave has Chevy": a marque
+;;; used for the car is an ordinary count noun that happens to be capitalized.
+(register-lexicon-entry 'chevy-vehicle :lemma "Chevy")
+(register-lexicon-entry 'ford-vehicle  :lemma "Ford")
+(register-lexicon-entry 'tesla-vehicle :lemma "Tesla")
+
 ;;; --- Communication media ---------------------------------------------------
 ;;; A medium is mass ("she told him by email"); the countable thing is the
 ;;; message that travels on it (EMAIL-MESSAGE, LETTER). On an instrument arc
