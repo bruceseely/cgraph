@@ -91,7 +91,8 @@
                                            (:file "realize-pp")
                                            (:file "realize-clause")
                                            (:file "generate")
-                                           (:file "lexicon-lint")))))
+                                           (:file "lexicon-lint")
+                                           (:file "classify-word")))))
 
                (:module "support"
                 :serial t
