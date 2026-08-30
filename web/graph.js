@@ -2,6 +2,8 @@ const chipsEl        = document.getElementById('chips');
 const topBarEl       = document.getElementById('top-bar');
 const topBarLabelEl  = document.getElementById('top-bar-label');
 const typeListEl     = document.getElementById('type-list');
+const filterBox      = document.getElementById('side-filter');
+const filterClear    = document.getElementById('side-filter-clear');
 const container      = document.getElementById('graph-container');
 const errorMsg       = document.getElementById('error-msg');
 const placeholder    = document.getElementById('placeholder');
@@ -130,38 +132,108 @@ window.addEventListener('resize', syncChipRow);
 
 // ── Sidebar list ──────────────────────────────────────────────────────────────
 
+// The catalog the list paints from, kept so the filter can repaint without
+// asking the server: the choices are whatever the last fetch produced, so
+// typing is instant and a filter survives every refresh — which matters here,
+// because creating, editing and deleting a type all reload this list.
+let lastTypeNames = [];
+
+// Prefix on the whole name or on any hyphen-separated part of it: `message'
+// finds MESSAGE, EMAIL-MESSAGE and TEXT-MESSAGE; `stage' finds LIFE-STAGE.
+// Plain substring matching would file BREAKFAST-EVENT under `ast', which is
+// noise in a vocabulary this hyphenated, and whole-string prefix alone would
+// put the second half of every compound name out of reach. Same rule as the
+// editor's type columns (MATCHESFILTER in editor.js) — one gesture to learn,
+// not two. Copied rather than shared: the two pages load no common module, and
+// five lines is a poor reason to introduce one.
+function matchesFilter(text, q) {
+  if (!q) return true;
+  const s = String(text || '').toLowerCase();
+  return s.startsWith(q) || s.split(/[-\s/]+/).some(part => part.startsWith(q));
+}
+
+function filterQuery() { return filterBox.value.trim().toLowerCase(); }
+
+// Says the list is showing less than the catalog holds, and why. An empty list
+// and "your filter matches nothing" are different problems.
+function listEmptyEl(q, whenEmpty) {
+  const el = document.createElement('div');
+  el.className = 'list-empty';
+  el.textContent = q ? `nothing starts with “${q}” — Esc clears the filter` : whenEmpty;
+  return el;
+}
+
+function typeRowEl(name) {
+  const el = document.createElement('div');
+  el.className = 'type-item'
+               + (selected.has(name) ? ' selected' : '')
+               + (superSet.has(name) ? ' is-super' : '');
+  el.dataset.name = name;
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'type-item-name';
+  nameEl.textContent = name;
+
+  // Shows the canonical graph WITHOUT touching the selection — the one thing
+  // the row click cannot do, since clicking a row means "put this in the
+  // lattice". Always visible rather than revealed on hover: a target that is
+  // always there can be aimed at, while one that appears only once the pointer
+  // has arrived asks you to find it first and hold still afterwards. It spans
+  // the full row height for the same reason.
+  const cgBtn = document.createElement('button');
+  cgBtn.className = 'type-item-cg';
+  cgBtn.textContent = '▤';
+  cgBtn.title = `Show ${name}'s canonical graph — leaves the lattice alone`;
+  cgBtn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    // While a one-shot pick is armed the whole row means "this one"; hitting
+    // the button rather than the name should not defeat the gesture.
+    if (pickTargetMode) { loadTypeForEdit(name); return; }
+    if (pickSuperMode)  { addSupertypeAndExit(name); return; }
+    if (pickRelSlot)    { fillRelSlotAndExit(name); return; }
+    addCgEntry(name);
+  });
+
+  el.append(nameEl, cgBtn);
+
+  el.addEventListener('click', () => {
+    // After "Edit Type", the next click chooses which type to edit.
+    if (pickTargetMode) { loadTypeForEdit(name); return; }
+    // After "+" in the supertypes cell, the next click adds ONE supertype;
+    // otherwise clicks explore the graph normally, even while the form is open.
+    if (pickSuperMode) { addSupertypeAndExit(name); return; }
+    // Same one-shot gesture, aimed at the relation form's two type slots.
+    if (pickRelSlot) { fillRelSlotAndExit(name); return; }
+    if (selected.has(name)) deselect(name);
+    else selectType(name);
+    addCgEntry(name);
+  });
+
+  el.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (revealed.has(name))      revealType(name);   // toggle an active reveal off
+    else if (isDisplayed(name))  toggleExpand(name); // shown: normal subtype expand
+    else if (selected.size > 0)  revealType(name);   // hidden: expose + connect
+    // else: empty lattice — nothing to connect to, ignore
+  });
+
+  return el;
+}
+
+function paintTypeList() {
+  const q = filterQuery();
+  const shown = lastTypeNames.filter(name => matchesFilter(name, q));
+  if (!shown.length) {
+    typeListEl.replaceChildren(listEmptyEl(q, 'no concept types'));
+    return;
+  }
+  typeListEl.replaceChildren(...shown.map(typeRowEl));
+}
+
 function renderSidebar(names) {
   console.log('[cgraph] renderSidebar:', names.length, 'types');
-  typeListEl.replaceChildren(
-    ...names.map(name => {
-      const el = document.createElement('div');
-      el.className = 'type-item'
-                   + (selected.has(name) ? ' selected' : '')
-                   + (superSet.has(name) ? ' is-super' : '');
-      el.textContent = name;
-      el.dataset.name = name;
-      el.addEventListener('click', () => {
-        // After "Edit Type", the next click chooses which type to edit.
-        if (pickTargetMode) { loadTypeForEdit(name); return; }
-        // After "+" in the supertypes cell, the next click adds ONE supertype;
-        // otherwise clicks explore the graph normally, even while the form is open.
-        if (pickSuperMode) { addSupertypeAndExit(name); return; }
-        // Same one-shot gesture, aimed at the relation form's two type slots.
-        if (pickRelSlot) { fillRelSlotAndExit(name); return; }
-        if (selected.has(name)) deselect(name);
-        else selectType(name);
-        addCgEntry(name);
-      });
-      el.addEventListener('contextmenu', e => {
-        e.preventDefault();
-        if (revealed.has(name))      revealType(name);   // toggle an active reveal off
-        else if (isDisplayed(name))  toggleExpand(name); // shown: normal subtype expand
-        else if (selected.size > 0)  revealType(name);   // hidden: expose + connect
-        // else: empty lattice — nothing to connect to, ignore
-      });
-      return el;
-    })
-  );
+  lastTypeNames = names;
+  paintTypeList();
 }
 
 function updateSidebarItem(name) {
@@ -264,10 +336,14 @@ async function redraw() {
           !(baselineNodeIds.size > 0 && !baselineNodeIds.has(node.id)))
         shape.setAttribute('fill', '#eafaf1');
 
-      // Single click: select/deselect + add CG entry.
-      // Double click: toggle CG entry out.
-      let singleClickTimer = null;
-      node.addEventListener('click', e => {
+      // Click: select/deselect, and pin the canonical graph. There is no
+      // double-click gesture here, and the 350ms deferral that used to protect
+      // one is gone with it: ADDCGENTRY ends in a REDRAW that replaces every
+      // node element, so the second click of a pair landed on a fresh element
+      // whose own SINGLECLICKTIMER was null and cancelled nothing. Every click
+      // paid the delay; no double-click could ever collect on it. An entry is
+      // unpinned from the ✕ on the entry itself.
+      node.addEventListener('click', () => {
         // After "Edit Type", a graph-node click chooses which type to edit.
         if (pickTargetMode) { loadTypeForEdit(node.id); return; }
         // After "+" in the supertypes cell, a graph-node click adds ONE supertype;
@@ -277,17 +353,9 @@ async function redraw() {
         // the whole reason the relation form lives here rather than in a pane of
         // its own: picking a signature means pointing at the lattice.
         if (pickRelSlot) { fillRelSlotAndExit(node.id); return; }
-        if (e.detail >= 2) {
-          if (singleClickTimer) { clearTimeout(singleClickTimer); singleClickTimer = null; }
-          if (cgEntries.has(node.id)) removeCgEntry(node.id);
-        } else {
-          addCgEntry(node.id);   // immediate — async fetch starts now
-          singleClickTimer = setTimeout(() => {
-            singleClickTimer = null;
-            if (selected.has(node.id)) deselect(node.id);
-            else                       selectType(node.id);
-          }, 350);
-        }
+        addCgEntry(node.id);
+        if (selected.has(node.id)) deselect(node.id);
+        else                       selectType(node.id);
       });
 
       // Right-click: toggle subtype expansion.
@@ -1389,6 +1457,17 @@ function showSidebarTab(which) {
   placeholder.textContent = which === 'relations'
     ? 'Relations are edited from the list on the left. Select a concept type to draw the lattice here — “+” in a relation form picks from it.'
     : 'Select a type from the list on the left.';
+  // One box serves both catalogs, since the sidebar shows one at a time — and
+  // it clears on the way across. A word typed for the concept list would
+  // otherwise silently narrow the relation list, and a list narrowed by a
+  // filter you have forgotten reads as a catalog that has run out of answers.
+  // The placeholder names the tab, which is what makes the clearing read as
+  // deliberate rather than as lost work.
+  filterBox.placeholder = which === 'relations'
+    ? 'Filter relation types…'
+    : 'Filter concept types…';
+  filterBox.value = '';
+  syncFilter();
   // Fetched on first view rather than at startup: the concept list is what the
   // page opens on, and one more request before first paint buys nothing.
   if (which === 'relations' && !lastRelTypes.length) refreshRelationList();
@@ -1396,6 +1475,30 @@ function showSidebarTab(which) {
 
 for (const btn of document.querySelectorAll('.side-tab'))
   btn.addEventListener('click', () => showSidebarTab(btn.dataset.tab));
+
+// ── The sidebar filter ────────────────────────────────────────────────────────
+//
+// Repaint on every keystroke — nothing is fetched, so there is nothing to
+// debounce. Escape clears, and so does the ✕, which comes and goes with the
+// text: an ✕ on an empty box is a control that cannot do anything.
+
+function syncFilter() {
+  const live = !!filterBox.value.trim();
+  filterBox.classList.toggle('on', live);
+  filterClear.hidden = !live;
+  paintTypeList();
+  paintRelationTypes();
+}
+
+filterBox.addEventListener('input', syncFilter);
+filterBox.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') { ev.preventDefault(); filterBox.value = ''; syncFilter(); }
+});
+filterClear.addEventListener('click', () => {
+  filterBox.value = '';
+  syncFilter();
+  filterBox.focus();
+});
 
 // ── The relation list ─────────────────────────────────────────────────────────
 
@@ -1454,12 +1557,13 @@ function relationRowEl(r) {
 }
 
 function paintRelationTypes() {
-  relationListEl.replaceChildren();
-  if (!lastRelTypes.length) {
-    relationListEl.innerHTML = '<div class="rel-item-sig" style="padding:.5rem .75rem">no relation types</div>';
+  const q = filterQuery();
+  const shown = lastRelTypes.filter(r => matchesFilter(r.label, q));
+  if (!shown.length) {
+    relationListEl.replaceChildren(listEmptyEl(q, 'no relation types'));
     return;
   }
-  relationListEl.append(...lastRelTypes.map(relationRowEl));
+  relationListEl.replaceChildren(...shown.map(relationRowEl));
 }
 
 async function refreshRelationList(selectName) {

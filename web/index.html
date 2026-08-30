@@ -492,6 +492,44 @@
     .side-tab:hover { color: #888; }
     .side-tab.active { color: #555; border-bottom-color: #4a90d9; }
 
+    #sidebar-filter {
+      display: flex;
+      align-items: center;
+      padding: 0.25rem 0.5rem 0.3rem 0.75rem;
+      border-bottom: 1px solid #eee;
+      flex-shrink: 0;
+    }
+    /* FLEX-BASIS 0 with MIN-WIDTH 0, not WIDTH 100%: an <input> carries an
+       intrinsic width of about twenty characters that a percentage width does
+       not suppress, and the sidebar is resizable down past that. */
+    #side-filter {
+      font-family: inherit;
+      font-size: 11px;
+      flex: 1 1 0;
+      min-width: 0;
+      box-sizing: border-box;
+      padding: 0.15rem 0.3rem;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: #fff;
+    }
+    /* A filter that is doing something says so: the list it narrows scrolls
+       well away from the box, and a short list under a forgotten filter looks
+       like a catalog that has run out of answers. */
+    #side-filter.on { border-color: #4a90d9; background: #f0f4fb; }
+    #side-filter-clear {
+      border: none; background: none; padding: 0 0.15rem; margin-left: 0.15rem;
+      color: #c0392b; opacity: 0.55; cursor: pointer; font-size: 11px;
+      line-height: 1;
+    }
+    #side-filter-clear:hover { opacity: 1; }
+    .list-empty {
+      padding: 0.5rem 0.75rem;
+      font-size: 11px;
+      color: #999;
+      line-height: 1.4;
+    }
+
     #type-list, #relation-list {
       overflow-y: auto;
       flex: 1;
@@ -545,15 +583,37 @@
     .rel-item-super { font-size: 10px; color: #8a7; margin-left: 0.3rem; }
 
     .type-item {
+      display: flex;
+      align-items: center;
       padding: 0.3rem 0.75rem;
       cursor: pointer;
       user-select: none;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
       transition: background 0.1s, color 0.1s;
       text-transform: uppercase;
     }
+    .type-item-name {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* Shows the type's canonical graph without disturbing the lattice. Negative
+       margins pull it to the row's edges so the whole right end of the row is
+       the target: aiming should not be the cost of using it. */
+    .type-item-cg {
+      flex: 0 0 auto;
+      margin: -0.3rem -0.75rem -0.3rem 0.25rem;
+      padding: 0.3rem 0.75rem 0.3rem 0.4rem;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: #ccc;
+      font-size: 12px;
+      line-height: 1;
+      font-family: inherit;
+    }
+    .type-item-cg:hover { color: #4a90d9; }
     .type-item:hover { background: #f0f4ff; }
     .type-item.selected {
       color: #aaa;
@@ -816,6 +876,14 @@
       <div id="sidebar-header">
         <button class="side-tab active" data-tab="concepts">Concept Types</button>
         <button class="side-tab" data-tab="relations">Relation Types</button>
+      </div>
+      <!-- One box for both tabs: the sidebar shows one catalog at a time, so a
+           second filter would be a control for a list that is not on screen. -->
+      <div id="sidebar-filter">
+        <input type="text" id="side-filter" placeholder="Filter concept types…"
+               autocomplete="off" spellcheck="false"
+               title="Narrow the list below. Esc clears it.">
+        <button id="side-filter-clear" hidden title="Clear this filter">✕</button>
       </div>
       <div id="type-list"></div>
       <div id="relation-list" hidden></div>
