@@ -123,6 +123,13 @@
 (defun cw-plural-frame (label)   (format nil "[~a: {*}@2]←(poss)←[PERSON: Sue]." label))
 (defun cw-verb-frame (label)     (format nil "[~a]→(agnt)→[PERSON: John]." label))
 
+(defun cw-lone-frame (label)
+  "A frame introducing the type and NOTHING ELSE. The pronoun question needs
+   one: \"Sue has a cake. ___ was there too\" has two antecedents, so the
+   question is ambiguous however it is worded, and Sue -- a name the gender
+   registry knows -- primes the answer besides."
+  (format nil "[~a]→(attr)→[OLD]." label))
+
 (defun cw-subject-frame (label)
   "The frame whose lemma the user corrects: a noun in an NP, a verb inflected."
   (if (eq (pos-from-hierarchy (get-concept-type label)) :verb)
@@ -235,13 +242,21 @@
   "Which pronoun the word takes -- the one question whose carrier sentence is
    fixed rather than generated, because a pronoun needs a second clause that
    no single-concept frame produces. The NP in it is still generated."
-  (let ((ctype (get-concept-type label))
-        (sentence (cw-with-entry (label plist) (cw-say (cw-noun-frame label)))))
+  (let* ((ctype (get-concept-type label))
+         (sentence (cw-with-entry (label plist)
+                     (or (cw-say (cw-lone-frame label))
+                         (cw-say (cw-noun-frame label)))))
+         ;; The word the question points at, taken from the answers so far --
+         ;; so a lemma just corrected is the one the question uses.
+         (target (or (getf plist :lemma)
+                     (lexicon-prop ctype :lemma)
+                     (string-downcase (symbol-name (label ctype))))))
     (when sentence
       (let ((choice (cw-ask-choice
                      stream
-                     (format nil "\"~a ___ was there too.\"  Which word fits the blank?"
-                             sentence)
+                     (format nil "\"~a ___ was there too.\"~
+                                ~&Which word fits the blank, talking about the ~a?"
+                             sentence target)
                      '((:masc . "he")
                        (:fem  . "she")
                        (:they . "they")
