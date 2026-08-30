@@ -926,6 +926,42 @@
         (let ((cg (ignore-errors (canonical-graph node))))
           (when (stringp cg) cg)))))
 
+(defun canonical-graph-ancestors (node)
+  "The nearest ancestors of NODE that carry a canonical graph, or NIL.
+
+   Breadth-first up the supertype DAG, stopping at the first level that has
+   one. A canonical graph IS inherited -- CHECK-TYPE-LATTICE enforces that a
+   subtype's graph contain every relation its ancestors' graphs have -- so a
+   type without one of its own is still constrained by the nearest one above
+   it, and that is the graph in force. Multiple inheritance can put two of them
+   the same distance up; both are returned rather than one picked arbitrarily."
+  (let ((frontier (direct-supertypes node))
+        (seen (list node)))
+    (loop while frontier do
+      (let ((hits (remove-if-not
+                   (lambda (ancestor)
+                     (let ((cg (effective-canonical-graph-string ancestor)))
+                       (and cg (plusp (length cg)))))
+                   frontier)))
+        (when hits (return hits))
+        (let ((next '()))
+          (dolist (ancestor frontier)
+            (push ancestor seen)
+            (dolist (super (direct-supertypes ancestor))
+              (unless (or (member super seen) (member super next))
+                (push super next))))
+          (setf frontier (nreverse next)))))))
+
+(defun concept-type-cg-state (node)
+  "Where NODE's canonical graph comes from: :OWN, :INHERITED or :NONE.
+   Second value is the ancestors it is inherited from, for :INHERITED."
+  (let ((cg (effective-canonical-graph-string node)))
+    (cond ((and cg (plusp (length cg))) (values :own nil))
+          (t (let ((ancestors (canonical-graph-ancestors node)))
+               (if ancestors
+                   (values :inherited ancestors)
+                   (values :none nil)))))))
+
 (defun extract-cg-type-names (cg-string)
   "Return a list of uppercase type-name strings found inside [...] brackets in CG-STRING.
    Strips any referent after a colon (e.g. [PERSON: John] → \"PERSON\") and

@@ -215,13 +215,34 @@
             (t      "linear"))))
 
 ;;; GET /api/types — list all registered concept types as a JSON array.
-(hunchentoot:define-easy-handler (handle-api-types :uri "/api/types") ()
+;;;
+;;; With ?detail=1 each element is an object carrying where the type's
+;;; canonical graph comes from: {"name":..,"cg":"own"|"inherited"|"none",
+;;; "cg_from":[..]}. The plain array of names stays the default because it is
+;;; the published shape and other callers may hold it; the detail form is a
+;;; superset asked for by the one caller that wants it. Either way this is ONE
+;;; request for the whole catalog — the state is computed here, beside the type
+;;; objects, rather than by asking the server once per row or once per hover.
+(defun concept-type-cg-json (ctype name)
+  (multiple-value-bind (state ancestors) (concept-type-cg-state ctype)
+    (format nil "{\"name\":\"~a\",\"cg\":\"~a\",\"cg_from\":~a}"
+            (json-escape name)
+            (string-downcase (symbol-name state))
+            (json-string-array
+             (mapcar (lambda (a) (string-downcase (symbol-name (label a))))
+                     ancestors)))))
+
+(hunchentoot:define-easy-handler (handle-api-types :uri "/api/types") (detail)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
-  (let ((names (loop for k being the hash-keys of *concept-type-catalog*
-                     using (hash-value v)
-                     unless (bottom-concept-type-p v)
-                     collect (string-downcase (symbol-name k)))))
-    (json-string-array (sort names #'string<))))
+  (let ((rows (loop for k being the hash-keys of *concept-type-catalog*
+                    using (hash-value v)
+                    unless (bottom-concept-type-p v)
+                    collect (cons (string-downcase (symbol-name k)) v))))
+    (setf rows (sort rows #'string< :key #'car))
+    (if (and detail (plusp (length detail)) (not (string= detail "0")))
+        (format nil "[~{~a~^,~}]"
+                (mapcar (lambda (row) (concept-type-cg-json (cdr row) (car row))) rows))
+        (json-string-array (mapcar #'car rows)))))
 
 ;;; ── Concept-type editor: create + persist ─────────────────────────────────────
 ;;; Slice 1 is append-only: create a new type (or persist a runtime-only :create
@@ -776,11 +797,30 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                     (formatted-canonical-graph-string type-name)
                   (error (e)
                     (setf cg-format-error (princ-to-string e))
-                    nil)))))
-        (format nil "{\"canonical_graph\":\"~a\",\"canonical_graph_formatted\":\"~a\",\"canonical_graph_format_error\":\"~a\",\"as_input\":~a,\"as_output\":~a}"
+                    nil))))
+             ;; A type with no graph of its own is not unconstrained: the
+             ;; nearest one above it is in force, and CHECK-TYPE-LATTICE will
+             ;; demand its relations back from any graph written here later.
+             ;; Sent as its own fields, never folded into CANONICAL_GRAPH --
+             ;; the edit form reads /api/type-def and must keep seeing the
+             ;; type's own graph, empty when that is the truth.
+             (inherited (unless (and cg-str (plusp (length cg-str)))
+                          (first (canonical-graph-ancestors ct))))
+             (inherited-name (and inherited
+                                  (string-downcase (symbol-name (label inherited)))))
+             (inherited-str (and inherited
+                                 (effective-canonical-graph-string inherited)))
+             (inherited-formatted
+              (when inherited-name
+                (handler-case (formatted-canonical-graph-string inherited-name)
+                  (error () nil)))))
+        (format nil "{\"canonical_graph\":\"~a\",\"canonical_graph_formatted\":\"~a\",\"canonical_graph_format_error\":\"~a\",\"inherited_from\":\"~a\",\"inherited_graph\":\"~a\",\"inherited_graph_formatted\":\"~a\",\"as_input\":~a,\"as_output\":~a}"
                 (json-escape (or cg-str ""))
                 (json-escape (or cg-formatted ""))
                 (json-escape (or cg-format-error ""))
+                (json-escape (or inherited-name ""))
+                (json-escape (or inherited-str ""))
+                (json-escape (or inherited-formatted ""))
                 (json-relation-array input-entries)
                 (json-relation-array output-entries))))))
 

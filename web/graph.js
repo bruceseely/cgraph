@@ -136,7 +136,30 @@ window.addEventListener('resize', syncChipRow);
 // asking the server: the choices are whatever the last fetch produced, so
 // typing is instant and a filter survives every refresh — which matters here,
 // because creating, editing and deleting a type all reload this list.
-let lastTypeNames = [];
+//
+// Rows, not bare names: /api/types?detail=1 says where each type's canonical
+// graph comes from, so the list can be drawn right the first time. The state
+// arrives with the catalog in the one request the page already makes — there
+// is nothing to ask per row, and nothing to ask on hover.
+let lastTypeRows = [];
+
+function typeNames() { return lastTypeRows.map(row => row.name); }
+
+// 'own' | 'inherited' | 'none'. Unknown names answer 'own', so anything the
+// catalog has not described stays as pinnable as it was.
+function cgStateOf(name) {
+  const row = lastTypeRows.find(r => r.name.toLowerCase() === String(name).toLowerCase());
+  return row ? row.cg : 'own';
+}
+
+// Nothing anywhere up the lattice means an entry that could only say so, and
+// the list already says it by not offering the mark. Applied at BOTH places a
+// click can pin one, so the lattice and the sidebar agree about what is worth
+// showing.
+function pinCgEntry(name) {
+  if (cgStateOf(name) === 'none') return;
+  addCgEntry(name);
+}
 
 // Prefix on the whole name or on any hyphen-separated part of it: `message'
 // finds MESSAGE, EMAIL-MESSAGE and TEXT-MESSAGE; `stage' finds LIFE-STAGE.
@@ -163,7 +186,8 @@ function listEmptyEl(q, whenEmpty) {
   return el;
 }
 
-function typeRowEl(name) {
+function typeRowEl(row) {
+  const name = row.name;
   const el = document.createElement('div');
   el.className = 'type-item'
                + (selected.has(name) ? ' selected' : '')
@@ -180,21 +204,36 @@ function typeRowEl(name) {
   // always there can be aimed at, while one that appears only once the pointer
   // has arrived asks you to find it first and hold still afterwards. It spans
   // the full row height for the same reason.
-  const cgBtn = document.createElement('button');
-  cgBtn.className = 'type-item-cg';
-  cgBtn.textContent = '▤';
-  cgBtn.title = `Show ${name}'s canonical graph — leaves the lattice alone`;
-  cgBtn.addEventListener('click', ev => {
-    ev.stopPropagation();
-    // While a one-shot pick is armed the whole row means "this one"; hitting
-    // the button rather than the name should not defeat the gesture.
-    if (pickTargetMode) { loadTypeForEdit(name); return; }
-    if (pickSuperMode)  { addSupertypeAndExit(name); return; }
-    if (pickRelSlot)    { fillRelSlotAndExit(name); return; }
-    addCgEntry(name);
-  });
-
-  el.append(nameEl, cgBtn);
+  //
+  // Three states, because there are three: a type with a graph of its own, one
+  // constrained by the nearest graph above it, and one with nothing anywhere up
+  // the lattice. The third gets NO button — a control that cannot do anything
+  // should not be offered, the same rule the filter's ✕ follows — so the mark's
+  // presence is the answer and no hovering is needed to ask the question. The
+  // second is marked ⇡, which already means "inherited" in the relation list.
+  if (row.cg !== 'none') {
+    const inherited = row.cg === 'inherited';
+    const from = (row.cg_from && row.cg_from[0]) || '';
+    const cgBtn = document.createElement('button');
+    cgBtn.className = 'type-item-cg' + (inherited ? ' inherited' : '');
+    cgBtn.textContent = inherited ? '⇡' : '▤';
+    cgBtn.title = inherited
+      ? `${name} has no canonical graph of its own — show ${from.toUpperCase()}'s, `
+        + `the nearest one above it, which constrains ${name} too`
+      : `Show ${name}'s canonical graph — leaves the lattice alone`;
+    cgBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      // While a one-shot pick is armed the whole row means "this one"; hitting
+      // the button rather than the name should not defeat the gesture.
+      if (pickTargetMode) { loadTypeForEdit(name); return; }
+      if (pickSuperMode)  { addSupertypeAndExit(name); return; }
+      if (pickRelSlot)    { fillRelSlotAndExit(name); return; }
+      addCgEntry(name);
+    });
+    el.append(nameEl, cgBtn);
+  } else {
+    el.append(nameEl);
+  }
 
   el.addEventListener('click', () => {
     // After "Edit Type", the next click chooses which type to edit.
@@ -206,7 +245,7 @@ function typeRowEl(name) {
     if (pickRelSlot) { fillRelSlotAndExit(name); return; }
     if (selected.has(name)) deselect(name);
     else selectType(name);
-    addCgEntry(name);
+    pinCgEntry(name);
   });
 
   el.addEventListener('contextmenu', e => {
@@ -222,7 +261,7 @@ function typeRowEl(name) {
 
 function paintTypeList() {
   const q = filterQuery();
-  const shown = lastTypeNames.filter(name => matchesFilter(name, q));
+  const shown = lastTypeRows.filter(row => matchesFilter(row.name, q));
   if (!shown.length) {
     typeListEl.replaceChildren(listEmptyEl(q, 'no concept types'));
     return;
@@ -230,9 +269,12 @@ function paintTypeList() {
   typeListEl.replaceChildren(...shown.map(typeRowEl));
 }
 
-function renderSidebar(names) {
-  console.log('[cgraph] renderSidebar:', names.length, 'types');
-  lastTypeNames = names;
+// Accepts either shape /api/types can return, so a caller that only wants
+// names is not forced to ask for detail it will not read.
+function renderSidebar(rows) {
+  console.log('[cgraph] renderSidebar:', rows.length, 'types');
+  lastTypeRows = rows.map(row =>
+    typeof row === 'string' ? { name: row, cg: 'none', cg_from: [] } : row);
   paintTypeList();
 }
 
@@ -353,7 +395,7 @@ async function redraw() {
         // the whole reason the relation form lives here rather than in a pane of
         // its own: picking a signature means pointing at the lattice.
         if (pickRelSlot) { fillRelSlotAndExit(node.id); return; }
-        addCgEntry(node.id);
+        pinCgEntry(node.id);
         if (selected.has(node.id)) deselect(node.id);
         else                       selectType(node.id);
       });
@@ -620,16 +662,34 @@ async function loadCgEntry(key, label) {
       console.warn('[cgraph] pcg format error for', key, ':', data.canonical_graph_format_error);
     }
 
+    // A type with no graph of its own is still constrained by the nearest one
+    // above it, so that is what gets shown, marked with where it came from.
+    // "no canonical graph" is reserved for the types where it is the whole
+    // truth — nothing anywhere up the lattice.
+    const own  = data.canonical_graph || '';
+    const from = data.inherited_from || '';
+    if (entryData.fromEl) {
+      entryData.fromEl.hidden = !from;
+      entryData.fromEl.textContent = from ? `⇡ ${from.toUpperCase()}` : '';
+      entryData.fromEl.title = from
+        ? `${key} has no canonical graph of its own. This is ${from.toUpperCase()}'s, `
+          + `the nearest one above it — CHECK-TYPE-LATTICE requires any graph `
+          + `${key} is given later to keep these relations.`
+        : '';
+    }
+
     // Store linear text: prefer formatted (pcg output), fall back to raw string.
-    entryData.linear = data.canonical_graph_formatted || data.canonical_graph || null;
+    entryData.linear = own
+      ? (data.canonical_graph_formatted || own)
+      : (data.inherited_graph_formatted || data.inherited_graph || null);
 
     // Build SVG from raw CG text.
-    const cgText = data.canonical_graph;
+    const cgText = own || data.inherited_graph || '';
     if (cgText) {
       const arcs = parseCgString(cgText);
       if (arcs.length > 0) {
         try {
-          const dot = arcsToDot(key, arcs);
+          const dot = arcsToDot(from ? from.toUpperCase() : key, arcs);
           const viz = await getViz();
           const svg = viz.renderSVGElement(dot);
           svg.removeAttribute('width');
@@ -678,6 +738,11 @@ async function addCgEntry(label) {
   nameEl.className = 'cg-entry-name';
   nameEl.textContent = key;
 
+  // Filled in by LOADCGENTRY when the graph shown is not this type's own.
+  const fromEl = document.createElement('span');
+  fromEl.className = 'cg-entry-from';
+  fromEl.hidden = true;
+
   const removeBtn = document.createElement('button');
   removeBtn.className = 'cg-entry-remove';
   removeBtn.title = `Remove ${key}`;
@@ -685,6 +750,7 @@ async function addCgEntry(label) {
   removeBtn.addEventListener('click', () => removeCgEntry(key));
 
   headEl.appendChild(nameEl);
+  headEl.appendChild(fromEl);
   headEl.appendChild(removeBtn);
 
   const bodyEl = document.createElement('div');
@@ -695,7 +761,7 @@ async function addCgEntry(label) {
   entryEl.appendChild(bodyEl);
 
   cgEntries.set(key, entryEl);
-  cgEntryData.set(key, { bodyEl, svg: null, linear: null });
+  cgEntryData.set(key, { bodyEl, fromEl, svg: null, linear: null });
   cgPlaceholder.hidden = true;
   cgEntriesEl.prepend(entryEl);
   cgEntriesEl.scrollTop = 0;
@@ -887,9 +953,10 @@ document.getElementById('init-btn').addEventListener('click', async () => {
       return;
     }
     // Reload the type list.
-    const typesResp = await fetch('/api/types');
+    const typesResp = await fetch('/api/types?detail=1');
     if (!typesResp.ok) { showError(`Could not reload types: ${typesResp.status}`); return; }
-    const names = await typesResp.json();
+    const rows = await typesResp.json();
+    const names = rows.map(row => row.name);
 
     // Drop any selected types that no longer exist.
     const nameSet = new Set(names);
@@ -901,7 +968,7 @@ document.getElementById('init-btn').addEventListener('click', async () => {
     revealed.clear();
     baselineNodeIds.clear();
 
-    renderSidebar(names);
+    renderSidebar(rows);
     renderChips();
     updateSaveBtn();
     document.getElementById('save-status').textContent = '';
@@ -938,14 +1005,14 @@ async function loadOptions() {
 
 loadOptions();
 
-fetch('/api/types')
+fetch('/api/types?detail=1')
   .then(resp => {
     if (!resp.ok) throw new Error(`/api/types returned ${resp.status}`);
     return resp.json();
   })
-  .then(names => {
-    console.log('[cgraph] got', names.length, 'types');
-    renderSidebar(names);
+  .then(rows => {
+    console.log('[cgraph] got', rows.length, 'types');
+    renderSidebar(rows);
   })
   .catch(err => showError(`Could not load type list: ${err.message}`));
 
@@ -1231,10 +1298,10 @@ async function loadTypeForEdit(name) {
 }
 
 async function refreshTypeList(selectName) {
-  const resp = await fetch('/api/types');
+  const resp = await fetch('/api/types?detail=1');
   if (!resp.ok) throw new Error(`could not reload types: ${resp.status}`);
-  const names = await resp.json();
-  renderSidebar(names);
+  const rows = await resp.json();
+  renderSidebar(rows);
   if (selectName && !selected.has(selectName)) selectType(selectName);
 }
 

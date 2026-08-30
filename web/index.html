@@ -614,6 +614,10 @@
       font-family: inherit;
     }
     .type-item-cg:hover { color: #4a90d9; }
+    /* An inherited graph is real but second-hand, and the row says which it is
+       before you click: no mark at all means there is nothing to show. */
+    .type-item-cg.inherited { color: #c3cfe4; font-size: 11px; }
+    .type-item-cg.inherited:hover { color: #4a90d9; }
     .type-item:hover { background: #f0f4ff; }
     .type-item.selected {
       color: #aaa;
@@ -729,6 +733,17 @@
       text-transform: uppercase;
       color: #333;
     }
+    /* Says the graph below is not this type's own but the nearest one above it.
+       Same ⇡ the relation list uses for an inherited syntax role — a mark that
+       already means "real, but second-hand" here. */
+    .cg-entry-from {
+      font-family: monospace;
+      font-size: 11px;
+      color: #7a9fe0;
+      margin-left: 0.4rem;
+      white-space: nowrap;
+    }
+    .cg-entry-from[hidden] { display: none; }
 
     .cg-entry-remove {
       margin-left: auto;
