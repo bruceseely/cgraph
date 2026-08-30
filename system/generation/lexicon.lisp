@@ -376,6 +376,14 @@
 ;;; the systems already do, generation onto core.
 (setf *mass-type-p* (lambda (ctype) (lexicon-prop ctype :mass-p)))
 
+;;; --- Multi-word noun lemmas ------------------------------------------------
+;;; BASE-LEMMA falls back to the downcased type label, so a hyphenated label
+;;; surfaces with its hyphen ("a text-message"). Where the English is two
+;;; words, say so; pluralization appends to the whole string, which is what
+;;; "text messages" wants.
+
+(register-lexicon-entry 'text-message :lemma "text message")
+
 ;;; --- Adverb-form overrides -------------------------------------------------
 ;;; Some types are abstract category labels rather than specific adjectives,
 ;;; so suffix-derivation produces nonsense (MANNER -> "mannerly"). Provide
