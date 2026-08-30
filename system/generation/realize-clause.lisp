@@ -26,6 +26,38 @@
                                :person person :numbr numbr)))
     (list verb)))
 
+(defun dobj-bucket-relation (buckets label)
+  "The relation in BUCKETS' :dobj bucket whose type is LABEL, or NIL."
+  (find label (gethash :dobj buckets)
+        :key (lambda (rel) (label (relation-type rel)))
+        :test #'string-equal))
+
+(defun clause-object-relation (buckets)
+  "Which :dobj-bucket relation is the verb's actual object. OBJ and THME both
+   bucket as :dobj and only one can hold the slot: on a communication verb OBJ
+   is what is given and THME is what it is ABOUT, so OBJ wins. Fall back to
+   whatever is in the bucket -- a graph carrying only a THME has it surface as
+   the object, which is the reading THME-alone already had."
+  (or (dobj-bucket-relation buckets "obj")
+      (first (gethash :dobj buckets))))
+
+(defun theme-modifier (predicate buckets state)
+  "THME rendered as a post-modifier of the object NP -- 'news of IBM'. NIL
+   when there is no THME, or when THME is itself the object. Since it modifies
+   the information rather than competing with it, both survive; the loser of
+   that competition used to be dropped, taking the graph's content out of the
+   sentence with it."
+  (let ((thme-rel (dobj-bucket-relation buckets "thme")))
+    (when (and thme-rel (not (eq thme-rel (clause-object-relation buckets))))
+      (let ((other (other-end thme-rel predicate)))
+        (when other
+          (format nil "~a ~a"
+                  (lexicon-prop (concept-type predicate) :thme-prep "of")
+                  (realize-np other state :case :accusative)))))))
+
+(defun np-with-modifier (np modifier)
+  (if modifier (format nil "~a ~a" np modifier) np))
+
 (defun realize-active-arguments (predicate buckets state &key particle)
   "Render the direct- and indirect-object NPs of PREDICATE in surface
    order. Default frame: CG :dobj surfaces as the verb's direct object,
@@ -42,7 +74,7 @@
    ('he shows off')."
   (let* ((ptype             (concept-type predicate))
          (rcpt-direct       (lexicon-prop ptype :rcpt-direct))
-         (cg-dobj-rel       (first (gethash :dobj buckets)))
+         (cg-dobj-rel       (clause-object-relation buckets))
          (cg-iobj-rel       (first (gethash :iobj buckets)))
          (surface-dobj-rel  (if rcpt-direct cg-iobj-rel cg-dobj-rel))
          (surface-iobj-rel  (if rcpt-direct cg-dobj-rel cg-iobj-rel))
@@ -56,17 +88,25 @@
          (split-particle-p (and particle dobj-concept
                                 (would-surface-as-pronoun-p dobj-concept state)))
          (parts '()))
-    (when (and particle (not split-particle-p))
-      (push particle parts))
-    (when dobj-concept
-      (push (realize-argument dobj-concept state :case :accusative) parts))
-    (when split-particle-p
-      (push particle parts))
-    (when surface-iobj-rel
-      (push (realize-argument (other-end surface-iobj-rel predicate) state
-                              :case :accusative
-                              :preposition surface-iobj-prep)
-            parts))
+    ;; The THME modifier is rendered at the point of use, not hoisted: it has
+    ;; to be uttered after the NP it modifies for anaphora to come out right.
+    (flet ((add-theme (str rel)
+             (np-with-modifier str (and (eq rel cg-dobj-rel)
+                                        (theme-modifier predicate buckets state)))))
+      (when (and particle (not split-particle-p))
+        (push particle parts))
+      (when dobj-concept
+        (push (add-theme (realize-argument dobj-concept state :case :accusative)
+                         surface-dobj-rel)
+              parts))
+      (when split-particle-p
+        (push particle parts))
+      (when surface-iobj-rel
+        (push (add-theme (realize-argument (other-end surface-iobj-rel predicate) state
+                                           :case :accusative
+                                           :preposition surface-iobj-prep)
+                         surface-iobj-rel)
+              parts)))
     (nreverse parts)))
 
 (defun realize-adjuncts (predicate buckets state)
@@ -202,13 +242,14 @@
    subject and the AGNT is demoted to a 'by X' phrase. Used when the graph
    head is the patient/object rather than the agent."
   (mark-clause-relations-traversed buckets state)
-  (let* ((dobj-rel     (first (gethash :dobj buckets)))
+  (let* ((dobj-rel     (clause-object-relation buckets))
          (surface-subj (and dobj-rel (other-end dobj-rel predicate)))
          (agent        (clause-subject-concept predicate buckets))
          (parts        '()))
     (labels ((push-part (s) (when (and s (plusp (length s))) (push s parts))))
       (when surface-subj
-        (push-part (realize-np surface-subj state :case :nominative)))
+        (push-part (np-with-modifier (realize-np surface-subj state :case :nominative)
+                                     (theme-modifier predicate buckets state))))
       (mapc #'push-part (passive-verb-form predicate surface-subj))
       (mark-uttered state predicate)
       (when agent
@@ -224,9 +265,9 @@
    For verbs like INFORM that take rcpt-as-direct, this is the recipient."
   (let* ((rcpt-direct (and predicate
                            (lexicon-prop (concept-type predicate) :rcpt-direct)))
-         (surface-dobj-rel (first (if rcpt-direct
-                                      (gethash :iobj buckets)
-                                      (gethash :dobj buckets)))))
+         (surface-dobj-rel (if rcpt-direct
+                               (first (gethash :iobj buckets))
+                               (clause-object-relation buckets))))
     (and head surface-dobj-rel (eq head (other-end surface-dobj-rel predicate)))))
 
 (defun realize-passive-clause (predicate buckets state)
@@ -234,12 +275,13 @@
    the rest of the complements. Used when there is no AGNT/EXPR but the
    verb has a direct object (Phase 6)."
   (mark-clause-relations-traversed buckets state)
-  (let* ((dobj-rel     (first (gethash :dobj buckets)))
+  (let* ((dobj-rel     (clause-object-relation buckets))
          (surface-subj (and dobj-rel (other-end dobj-rel predicate)))
          (parts        '()))
     (labels ((push-part (s) (when (and s (plusp (length s))) (push s parts))))
       (when surface-subj
-        (push-part (realize-np surface-subj state :case :nominative)))
+        (push-part (np-with-modifier (realize-np surface-subj state :case :nominative)
+                                     (theme-modifier predicate buckets state))))
       (mapc #'push-part (passive-verb-form predicate surface-subj))
       (mark-uttered state predicate)
       (push-part (realize-iobj-pp predicate buckets state))

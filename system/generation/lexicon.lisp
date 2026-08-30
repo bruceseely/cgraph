@@ -22,7 +22,7 @@
      Noun class: :pos :mass-p :proper-p :gender (:masc/:fem) :ungendered
                  :human-p :animate-p
      Verb frame: :raising :rcpt-direct :obj-prep :adv-form
-     Arc prep:   :inst-prep")
+     Arc prep:   :inst-prep :thme-prep")
 
 (defparameter *lexicon-override-keys*
   '((:lemma       :reader "BASE-LEMMA")
@@ -45,6 +45,7 @@
     (:rcpt-direct :reader "REALIZE-CLAUSE")
     (:obj-prep    :reader "REALIZE-CLAUSE")
     (:inst-prep   :reader "REALIZE-PP")
+    (:thme-prep   :reader "THEME-MODIFIER (realize-clause.lisp)")
     (:adv-form    :reader "REALIZE-ADV (realize-pp.lisp)")
     ;; Declared but inert. The morphology functions take a bare lemma string
     ;; rather than a concept, so they have no way to reach a per-type override;

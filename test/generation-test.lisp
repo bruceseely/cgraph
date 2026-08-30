@@ -257,6 +257,16 @@
     ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](thme)→[DOG]"
      . "Bruce informs Sue about a dog.")
 
+    ;; OBJ and THME together. Both bucket as :dobj and only one can hold the
+    ;; slot, so THME steps aside and modifies the information instead of
+    ;; competing with it -- "news of a dog". The bug this pins down dropped
+    ;; the loser silently, and the sentence lost what the graph said.
+    ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](obj)→[NEWS](thme)→[DOG]"
+     . "Bruce informs Sue about news of a dog.")
+    ;; THME alone still surfaces AS the object; only the pair reorders.
+    ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](obj)→[NEWS]"
+     . "Bruce informs Sue about news.")
+
 
     ))
 
