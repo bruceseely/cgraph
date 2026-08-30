@@ -265,6 +265,77 @@
                               (first warning) (json-escape (second warning))))
                     warnings))))
 
+;;; GET /api/classify?label=..&parents=..&lemma=..&mass=..&plural=..&pronoun=..
+;;;              [&commit=1]
+;;;
+;;; The browser wizard. Stateless on purpose: the page holds the answers so
+;;; far and sends them back with every step, so the server keeps no session and
+;;; a reload loses nothing but the current question. A parameter that is ABSENT
+;;; has not been asked; one that is PRESENT AND EMPTY was asked and left alone.
+;;; That distinction is the whole state machine.
+;;;
+;;; The questions come from *CLASSIFICATION-QUESTIONS*, the same table the REPL
+;;; interview walks -- one set of questions, two front ends.
+(defun classify-answers-alist (parents lemma mass plural pronoun)
+  (let ((answers '()))
+    (loop for (id value) in (list (list :parents parents) (list :lemma lemma)
+                                  (list :mass mass) (list :plural plural)
+                                  (list :pronoun pronoun))
+          when value do (push (cons id value) answers))
+    (nreverse answers)))
+
+(defun classify-question-json (label answers question)
+  (format nil "{\"question\":{\"id\":\"~(~a~)\",\"kind\":\"~(~a~)\",\"prompt\":\"~a\",\"options\":[~{~a~^,~}]}}"
+          (cq-id question)
+          (cq-kind question)
+          (json-escape (funcall (cq-prompt question) label answers))
+          (mapcar (lambda (option)
+                    (format nil "{\"value\":\"~a\",\"text\":\"~a\"}"
+                            (json-escape (car option)) (json-escape (cdr option))))
+                  (and (cq-options question)
+                       (funcall (cq-options question) label answers)))))
+
+(defun classify-summary-json (label answers &key commit)
+  (let* ((preview (classification-preview label answers))
+         (plist (getf preview :plist))
+         (line (when (and commit plist) (commit-classification label answers))))
+    (format nil "{\"done\":true,\"empty\":~:[false~;true~],\"committed\":~:[false~;true~],~
+                 \"line\":\"~a\",\"changes\":[~{~a~^,~}],\"breaks\":[~{~a~^,~}],~
+                 \"notes\":[~{~a~^,~}],\"testCasesLoaded\":~:[false~;true~]}"
+            (null plist)
+            line
+            (json-escape (or line ""))
+            (mapcar (lambda (change)
+                      (format nil "{\"before\":\"~a\",\"after\":\"~a\"}"
+                              (json-escape (car change)) (json-escape (cdr change))))
+                    (getf preview :changes))
+            (mapcar (lambda (break)
+                      (format nil "{\"graph\":\"~a\",\"expected\":\"~a\",\"actual\":\"~a\"}"
+                              (json-escape (first break)) (json-escape (second break))
+                              (json-escape (third break))))
+                    (getf preview :breaks))
+            (mapcar (lambda (note) (format nil "\"~a\"" (json-escape note)))
+                    (getf preview :notes))
+            (getf preview :test-cases-loaded))))
+
+(hunchentoot:define-easy-handler (handle-api-classify :uri "/api/classify")
+    (label parents lemma mass plural pronoun commit)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (let* ((sym (and label (plusp (length label))
+                   (intern (string-upcase label) :conceptual-graphs)))
+         (ctype (and sym (ignore-errors (get-concept-type sym)))))
+    (cond
+      ((null ctype)
+       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+       (format nil "{\"error\":\"no such type: ~a\"}" (json-escape (or label ""))))
+      (t
+       (let* ((answers (classify-answers-alist parents lemma mass plural pronoun))
+              (question (next-classification-question sym answers)))
+         (if (and question (not (and commit (plusp (length commit)))))
+             (classify-question-json sym answers question)
+             (classify-summary-json sym answers
+                                    :commit (and commit (plusp (length commit))))))))))
+
 ;;; ── Concept-type editor: create + persist ─────────────────────────────────────
 ;;; Slice 1 is append-only: create a new type (or persist a runtime-only :create
 ;;; type) and add its form to the ontology source file. Editing a type already IN

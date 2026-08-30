@@ -1042,6 +1042,7 @@ const ntCreateBtn = document.getElementById('nt-create');
 const ntSaveBtn   = document.getElementById('nt-save');
 const ntDeleteBtn = document.getElementById('nt-delete');
 const ntDupBtn    = document.getElementById('nt-duplicate');
+const ntClassifyBtn = document.getElementById('nt-classify');
 const editTypeBtn = document.getElementById('edit-type-btn');
 
 // Supertypes are chosen by clicking existing types (sidebar or graph), never typed —
@@ -1194,6 +1195,7 @@ function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
   ntSaveBtn.hidden   = !isEdit;
   ntDeleteBtn.hidden = !isEdit;              // nothing to delete while creating
   ntDupBtn.hidden    = !isEdit;              // nor anything to copy
+  ntClassifyBtn.hidden = !isEdit;            // a type must exist to be read aloud
   disarmDelete();                            // never inherit an arm from a previous type
   clearError();
   setNtHint(isEdit ? `editing ${edit} — “+” adds a supertype; explore the graph freely`
@@ -1411,6 +1413,9 @@ async function submitType() {
     // Only a new browser instance showed the change. Reload it here, where the
     // change is known -- the same edit, in the same place, as the redraw above.
     await refreshCgEntry(data.label || label);
+    // A new type is the moment its English is undecided and free to settle.
+    // Only on create: an edit is a type that has been read before.
+    if (!editing) startWizard(data.label || label);
   } catch (err) {
     setNtHint('');
     showError(err.message);
@@ -2200,3 +2205,176 @@ document.getElementById('editor-btn').addEventListener('click', async () => {
 });
 
 restoreTypeForm();
+
+// ── The classification wizard ────────────────────────────────────────────────
+//
+// The browser front end for *CLASSIFICATION-QUESTIONS* -- the same table
+// (CLASSIFY-WORD 'x) walks at the listener. Two front ends, one set of
+// questions, because a layman is not sitting at a REPL and an interview built
+// for one that only runs there does not reach the person it was built for.
+//
+// Stateless across the wire: this page holds the answers and sends all of them
+// with every step, so the server keeps no session. An answer that is ABSENT has
+// not been asked; one that is PRESENT AND EMPTY was asked and left alone. That
+// distinction is the entire state machine, and it is why "leave it alone" is a
+// button rather than an empty submit.
+
+const cwPanel    = document.getElementById('cw-panel');
+const cwTitle    = document.getElementById('cw-title');
+const cwPromptEl = document.getElementById('cw-prompt');
+const cwControls = document.getElementById('cw-controls');
+const cwSummary  = document.getElementById('cw-summary');
+
+let cwLabel = null;
+let cwAnswers = {};
+
+function cwQuery(extra = {}) {
+  const params = new URLSearchParams({ label: cwLabel, ...cwAnswers, ...extra });
+  return `/api/classify?${params.toString()}`;
+}
+
+function closeWizard() {
+  cwPanel.hidden = true;
+  cwLabel = null;
+  cwAnswers = {};
+  cwControls.replaceChildren();
+  cwSummary.replaceChildren();
+  cwSummary.hidden = true;
+}
+
+document.getElementById('cw-close').addEventListener('click', closeWizard);
+
+function startWizard(label) {
+  cwLabel = label;
+  cwAnswers = {};
+  cwTitle.textContent = `How does ${label.toUpperCase()} read?`;
+  cwSummary.hidden = true;
+  cwSummary.replaceChildren();
+  cwPanel.hidden = false;
+  cwStep();
+}
+
+async function cwStep(extra = {}) {
+  cwPromptEl.textContent = '…';
+  cwControls.replaceChildren();
+  try {
+    const resp = await fetch(cwQuery(extra));
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) { showError(data.error || 'classification failed'); closeWizard(); return; }
+    if (data.done) cwRenderSummary(data);
+    else           cwRenderQuestion(data.question);
+  } catch (err) { showError(err.message); closeWizard(); }
+}
+
+function cwAnswer(id, value) {
+  cwAnswers[id] = value;
+  cwStep();
+}
+
+function cwButton(text, onClick, className = 'cw-option') {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = className;
+  b.textContent = text;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function cwRenderQuestion(q) {
+  cwPromptEl.textContent = q.prompt;
+  const parts = [];
+  if (q.kind === 'yes-no') {
+    parts.push(cwButton('Yes', () => cwAnswer(q.id, 'yes')),
+               cwButton('No',  () => cwAnswer(q.id, 'no')));
+  } else if (q.kind === 'choice') {
+    for (const opt of q.options) parts.push(cwButton(opt.text, () => cwAnswer(q.id, opt.value)));
+  } else {
+    const input = document.createElement('input');
+    input.id = 'cw-text';
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    const submit = () => cwAnswer(q.id, input.value.trim());
+    input.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); submit(); }
+    });
+    parts.push(input,
+               cwButton('Use this', submit),
+               // Not the same as submitting an empty box: an answered-but-empty
+               // question is how the server knows to move on rather than ask
+               // again, so leaving it alone has to be a deliberate click.
+               cwButton('Leave it alone', () => cwAnswer(q.id, ''), 'cw-option cw-skip'));
+  }
+  cwControls.replaceChildren(...parts);
+  const first = cwControls.querySelector('input, button');
+  if (first) first.focus();
+}
+
+function cwLine(text, className) {
+  const el = document.createElement('div');
+  el.className = className;
+  el.textContent = text;
+  return el;
+}
+
+function cwRenderSummary(data) {
+  cwControls.replaceChildren();
+  cwSummary.hidden = false;
+  const rows = [];
+
+  for (const note of data.notes || []) rows.push(cwLine(note, 'cw-note'));
+
+  if (data.committed) {
+    cwPromptEl.textContent = `${cwLabel.toUpperCase()} now reads the way you said.`;
+    rows.push(cwLine('Registered for this session. To keep it, add this line to '
+                     + 'system/generation/lexicon.lisp:', 'cw-change'));
+    const code = document.createElement('code');
+    code.textContent = data.line;
+    const wrap = document.createElement('div');
+    wrap.append(code);
+    rows.push(wrap);
+    cwSummary.replaceChildren(...rows);
+    return;
+  }
+
+  if (data.empty) {
+    cwPromptEl.textContent =
+      `Nothing to change — ${cwLabel.toUpperCase()} already reads the way you would say it.`;
+    cwSummary.replaceChildren(...rows);
+    cwControls.replaceChildren(cwButton('Done', closeWizard));
+    return;
+  }
+
+  cwPromptEl.textContent = 'Before this is written — here is what it changes.';
+  if (data.changes.length) {
+    for (const c of data.changes) {
+      rows.push(cwLine(`was: ${c.before}`, 'cw-was'));
+      rows.push(cwLine(`now: ${c.after}`, 'cw-change'));
+    }
+  } else {
+    rows.push(cwLine('Nothing else in the ontology says this word.', 'cw-was'));
+  }
+  for (const b of data.breaks) {
+    rows.push(cwLine(`⚠ a test case stops matching: expected "${b.expected}", `
+                     + `would be "${b.actual}"`, 'cw-break'));
+  }
+  if (data.breaks.length) {
+    rows.push(cwLine('An answer that is right about this word can still be wrong for '
+                     + 'the ontology: a lemma outranks a referent name, so it can hide '
+                     + `[${cwLabel.toUpperCase()}: something] from the realizer.`, 'cw-break'));
+  } else if (!data.testCasesLoaded) {
+    rows.push(cwLine('(No test cases loaded for this type — load '
+                     + 'test/generation-test.lisp to check the sentences that carry '
+                     + 'referents.)', 'cw-was'));
+  }
+  cwSummary.replaceChildren(...rows);
+  cwControls.replaceChildren(
+    cwButton('Keep it', () => cwStep({ commit: '1' })),
+    cwButton('Leave it alone', closeWizard, 'cw-option cw-skip'));
+}
+
+// On demand, for a type that already exists: the wizard runs itself after a
+// create, and this is how you reach it afterwards without going to the REPL.
+ntClassifyBtn.addEventListener('click', () => {
+  if (editingLabel) startWizard(editingLabel);
+});

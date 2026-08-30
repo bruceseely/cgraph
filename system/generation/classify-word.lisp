@@ -194,131 +194,274 @@
                       ~&   to check the sentences that carry referents.)~%"))
     broke))
 
-;;; --- the interview --------------------------------------------------------
+;;; --- the questions, as data -----------------------------------------------
+;;;
+;;; One table, two front ends. The REPL driver below and the browser wizard
+;;; behind /api/classify both walk this list, so the questions a layman is
+;;; asked in the form and the questions asked at the listener cannot drift
+;;; apart -- which they would within a week if each had its own copy.
+;;;
+;;; An ANSWERS alist maps question id -> the user's string. A question is
+;;; "asked already" when its id is present, even with an empty string: empty
+;;; means "leave it alone", and telling that apart from "not yet asked" is
+;;; what lets the browser send its state back one question at a time without
+;;; the server remembering anything.
 
-(defun cw-confirm-parents (stream ctype)
-  "Confirm the placement rather than elicit it. \"Is every X a kind of Y\" is
-   an entailment judgment, not a grammaticality one, and it is where a layman
-   is least reliable -- `is a kind of' gets read as `is associated with'. So
-   the interview only asks whether the parent already chosen is right, and
-   says something rather than fixing it when the answer is no."
-  (let ((label (string-upcase (symbol-name (label ctype))))
-        (parents (mapcar (lambda (p) (string-upcase (symbol-name (label p))))
-                         (direct-supertypes ctype))))
-    (when parents
-      (unless (cw-ask-yes-no
-               stream
-               (format nil "Is every ~a a kind of ~{~a~^ and of ~}?" label parents))
-        (format stream "~&~%  Then the type is in the wrong place, and no wording will fix~
-                        ~&  that. Move it in the type browser first; the questions below~
-                        ~&  are only about how ~a should READ.~%" label)))))
+(defstruct (cq (:constructor make-cq (id kind applicable prompt options to-plist)))
+  id kind applicable prompt options to-plist)
 
-(defun cw-ask-lemma (stream label)
-  (let ((sentence (cw-say (cw-subject-frame label))))
-    (when sentence
-      (format stream "~&~%Right now ~a comes out like this:~&~%    ~a~%" label sentence)
-      (let ((word (cw-ask-line stream "If that is not the word you would use, type the word:")))
-        (and word (list :lemma word))))))
+(defun cw-answer (answers id)
+  (cdr (assoc id answers)))
 
-(defun cw-ask-mass (stream label plist)
-  "Mass or count, asked as the pair the slot produces."
-  (let ((frame (cw-noun-frame label)))
-    (let ((count-form (cw-with-entry (label (cw-merge-plist plist '(:mass-p nil))) (cw-say frame)))
-          (mass-form  (cw-with-entry (label (cw-merge-plist plist '(:mass-p t)))   (cw-say frame))))
-      (when (and count-form mass-form (not (string= count-form mass-form)))
-        (let ((choice (cw-ask-choice stream "Which of these sounds right?"
-                                     (list (cons :count count-form)
-                                           (cons :mass  mass-form)))))
-          (when (eq choice :mass) (list :mass-p t)))))))
+(defun cw-answered-p (answers id)
+  (and (assoc id answers) t))
 
-(defun cw-ask-plural (stream label plist)
-  (let ((sentence (cw-with-entry (label plist) (cw-say (cw-plural-frame label)))))
-    (when sentence
-      (format stream "~&~%And more than one:~&~%    ~a~%" sentence)
-      (let ((word (cw-ask-line stream "If that plural is wrong, type the right one:")))
-        (and word (list :plural word))))))
+(defun cw-answers-plist (label answers)
+  "The lexicon plist ANSWERS add up to."
+  (let ((plist '()))
+    (dolist (question *classification-questions* plist)
+      (when (cw-answered-p answers (cq-id question))
+        (setf plist (cw-merge-plist
+                     plist
+                     (funcall (cq-to-plist question)
+                              label answers (cw-answer answers (cq-id question)))))))))
 
-(defun cw-ask-pronoun (stream label plist)
-  "Which pronoun the word takes -- the one question whose carrier sentence is
-   fixed rather than generated, because a pronoun needs a second clause that
-   no single-concept frame produces. The NP in it is still generated."
-  (let* ((ctype (get-concept-type label))
-         (sentence (cw-with-entry (label plist)
-                     (or (cw-say (cw-lone-frame label))
-                         (cw-say (cw-noun-frame label)))))
-         ;; The word the question points at, taken from the answers so far --
-         ;; so a lemma just corrected is the one the question uses.
-         (target (or (getf plist :lemma)
-                     (lexicon-prop ctype :lemma)
-                     (string-downcase (symbol-name (label ctype))))))
-    (when sentence
-      (let ((choice (cw-ask-choice
-                     stream
-                     (format nil "\"~a ___ was there too.\"~
-                                ~&Which word fits the blank, talking about the ~a?"
-                             sentence target)
-                     '((:masc . "he")
-                       (:fem  . "she")
-                       (:they . "they")
-                       (:it   . "it")))))
-        (case choice
-          (:masc '(:gender :masc :human-p t :animate-p t))
-          (:fem  '(:gender :fem  :human-p t :animate-p t))
-          ;; Not (:gender :unknown): GENDER-OF consults the lexicon BEFORE the
-          ;; given-name registry, so any gender value here would shadow a name
-          ;; and turn [CHILD: Mary] from "she" into "they". :UNGENDERED records
-          ;; that the lack was decided rather than overlooked.
-          (:they '(:ungendered t :human-p t :animate-p t))
-          (:it   (progn
-                   (when (or (safe-subtype-p (label ctype) 'person)
-                             (safe-subtype-p (label ctype) 'animate))
-                     (format stream "~&~%  Noted, but the lattice outranks it: HUMAN-P and~
-                                     ~&  ANIMATE-CONCEPT-P answer yes for anything under~
-                                     ~&  PERSON or ANIMATE whatever the lexicon says, so~
-                                     ~&  nothing is written. Move the type if that is wrong.~%"))
-                   nil)))))))
+(defparameter *classification-questions* nil
+  "Filled in below; declared first so CW-ANSWERS-PLIST can close over it.")
+
+(setf *classification-questions*
+ (list
+  (make-cq
+   :parents :yes-no
+   ;; Confirm the placement, never elicit it. "Is every X a kind of Y" is an
+   ;; entailment judgment, not a grammaticality one, and it is where a layman
+   ;; is least reliable -- `is a kind of' gets read as `is associated with'.
+   (lambda (label answers)
+     (declare (ignore answers))
+     (and (direct-supertypes (get-concept-type label)) t))
+   (lambda (label answers)
+     (declare (ignore answers))
+     (format nil "Is every ~:@(~A~) a kind of ~{~:@(~A~)~^ and of ~}?"
+             label (mapcar (lambda (p) (symbol-name (label p)))
+                           (direct-supertypes (get-concept-type label)))))
+   (lambda (label answers) (declare (ignore label answers)) nil)
+   (lambda (label answers answer) (declare (ignore label answers answer)) nil))
+
+  (make-cq
+   :lemma :text
+   (lambda (label answers) (declare (ignore answers))
+     (and (cw-say (cw-subject-frame label)) t))
+   (lambda (label answers) (declare (ignore answers))
+     (format nil "Right now it comes out like this: \"~A\"  If that is not the ~
+                  word you would use, type the word you would use."
+             (cw-say (cw-subject-frame label))))
+   (lambda (label answers) (declare (ignore label answers)) nil)
+   (lambda (label answers answer)
+     (declare (ignore label answers))
+     (when (and answer (plusp (length answer))) (list :lemma answer))))
+
+  (make-cq
+   :mass :choice
+   (lambda (label answers)
+     (and (eq (pos-from-hierarchy (get-concept-type label)) :noun)
+          (destructuring-bind (count-form . mass-form) (cw-mass-pair label answers)
+            (and count-form mass-form (not (string= count-form mass-form))))))
+   (lambda (label answers) (declare (ignore label answers))
+     "Which of these sounds right?")
+   (lambda (label answers)
+     (destructuring-bind (count-form . mass-form) (cw-mass-pair label answers)
+       (list (cons "count" count-form) (cons "mass" mass-form))))
+   (lambda (label answers answer)
+     (declare (ignore label answers))
+     (when (equal answer "mass") (list :mass-p t))))
+
+  (make-cq
+   :plural :text
+   (lambda (label answers)
+     (and (eq (pos-from-hierarchy (get-concept-type label)) :noun)
+          (not (getf (cw-answers-plist label answers) :mass-p))
+          (cw-with-entry (label (cw-answers-plist label answers))
+            (and (cw-say (cw-plural-frame label)) t))))
+   (lambda (label answers)
+     (format nil "And more than one: \"~A\"  If that plural is wrong, type the ~
+                  right one."
+             (cw-with-entry (label (cw-answers-plist label answers))
+               (cw-say (cw-plural-frame label)))))
+   (lambda (label answers) (declare (ignore label answers)) nil)
+   (lambda (label answers answer)
+     (declare (ignore label answers))
+     (when (and answer (plusp (length answer))) (list :plural answer))))
+
+  (make-cq
+   :pronoun :choice
+   (lambda (label answers)
+     (declare (ignore answers))
+     (eq (pos-from-hierarchy (get-concept-type label)) :noun))
+   (lambda (label answers)
+     ;; The one carrier sentence that is fixed rather than generated -- a
+     ;; pronoun needs a second clause no single-concept frame produces. The
+     ;; frame names ONLY this type, so there is nothing else the blank could
+     ;; refer to, and the question names the word besides.
+     (format nil "\"~A ___ was there too.\"  Which word fits the blank, ~
+                  talking about the ~A?"
+             (cw-with-entry (label (cw-answers-plist label answers))
+               (or (cw-say (cw-lone-frame label)) (cw-say (cw-noun-frame label))))
+             (cw-question-target label answers)))
+   (lambda (label answers) (declare (ignore label answers))
+     (list (cons "he" "he") (cons "she" "she")
+           (cons "they" "they") (cons "it" "it")))
+   (lambda (label answers answer)
+     (declare (ignore label answers))
+     (cond ((equal answer "he")  (list :gender :masc :human-p t :animate-p t))
+           ((equal answer "she") (list :gender :fem  :human-p t :animate-p t))
+           ;; Not (:gender :unknown): GENDER-OF consults the lexicon BEFORE the
+           ;; given-name registry, so any gender value here would shadow a name
+           ;; and turn [CHILD: Mary] from "she" into "they".
+           ((equal answer "they") (list :ungendered t :human-p t :animate-p t))
+           (t nil))))))
+
+(defun cw-mass-pair (label answers)
+  "The count and mass readings of the same frame -- a minimal pair, both of
+   them real generator output, differing only in the slot under test."
+  (let ((plist (cw-answers-plist label answers))
+        (frame (cw-noun-frame label)))
+    (cons (cw-with-entry (label (cw-merge-plist plist '(:mass-p nil))) (cw-say frame))
+          (cw-with-entry (label (cw-merge-plist plist '(:mass-p t)))   (cw-say frame)))))
+
+(defun cw-question-target (label answers)
+  "The word a question points at, taken from the answers so far -- so a lemma
+   just corrected is the one the next question uses."
+  (let ((ctype (get-concept-type label)))
+    (or (getf (cw-answers-plist label answers) :lemma)
+        (lexicon-prop ctype :lemma)
+        (string-downcase (symbol-name (label ctype))))))
+
+(defun next-classification-question (label answers)
+  "The next question to put, or NIL when there are none left."
+  (find-if (lambda (question)
+             (and (not (cw-answered-p answers (cq-id question)))
+                  (funcall (cq-applicable question) label answers)))
+           *classification-questions*))
+
+;;; --- what the answers would do --------------------------------------------
+
+(defun classification-preview (label answers)
+  "(:PLIST p :CHANGES ((before . after) ...) :BREAKS ((graph expected actual) ...)
+    :NOTES (string ...)) for the answers so far.
+
+   The BREAKS list is the reason this exists. An answer can be locally right
+   and globally wrong: \"a time period\" reads badly, a :LEMMA fixes it, and
+   four sentences break, because BASE-LEMMA ranks an override above a referent
+   name and the override hides [TIME-PERIOD: yesterday]. Nothing is written
+   until this has been seen."
+  (let* ((plist (cw-answers-plist label answers))
+         (ctype (get-concept-type label))
+         (graphs (append (mapcar #'cdr (cw-canonical-graphs-mentioning label))
+                         (mapcar #'car (cw-test-cases-mentioning label))))
+         (changes '())
+         (breaks '())
+         (notes '()))
+    (when (and (cw-answered-p answers :parents)
+               (not (cw-yes-p (cw-answer answers :parents))))
+      (push (format nil "You said ~:@(~A~) is not a kind of its parents. No wording ~
+                         will fix that -- move it in the type browser; these ~
+                         questions only decide how it READS."
+                    label)
+            notes))
+    (when (and (equal (cw-answer answers :pronoun) "it")
+               (or (safe-subtype-p (label ctype) 'person)
+                   (safe-subtype-p (label ctype) 'animate)))
+      (push (format nil "Noted, but the lattice outranks it: HUMAN-P and ~
+                         ANIMATE-CONCEPT-P answer yes for anything under PERSON ~
+                         or ANIMATE whatever the lexicon says, so nothing is ~
+                         written for that answer.")
+            notes))
+    (when plist
+      (dolist (graph graphs)
+        (let ((before (cw-say graph))
+              (after  (cw-with-entry (label plist) (cw-say graph))))
+          (when (and before after (not (string= before after)))
+            (push (cons before after) changes))))
+      (dolist (test-case (cw-test-cases-mentioning label))
+        (let ((after (cw-with-entry (label plist) (cw-say (car test-case)))))
+          (when (and after (not (string= after (cdr test-case))))
+            (push (list (car test-case) (cdr test-case) after) breaks)))))
+    (list :plist plist
+          :changes (nreverse changes)
+          :breaks (nreverse breaks)
+          :notes (nreverse notes)
+          :test-cases-loaded (and (cw-test-cases-mentioning label) t))))
+
+(defun cw-yes-p (answer)
+  (member answer '("y" "yes" "true" "1") :test #'string-equal))
+
+(defun commit-classification (label answers)
+  "Register what ANSWERS add up to, and return the line that makes it stick."
+  (let ((plist (cw-answers-plist label answers)))
+    (when plist
+      (apply #'register-lexicon-entry label
+             (cw-merge-plist (lexicon-entry label) plist))
+      (let ((*print-case* :downcase))
+        (format nil "(register-lexicon-entry '~(~A~)~{ ~S~})"
+                label (cw-merge-plist (lexicon-entry label) plist))))))
+
+;;; --- the REPL front end ---------------------------------------------------
 
 (defun classify-word (label &key (stream *query-io*))
   "Interview a speaker about how LABEL should read, and offer the lexicon
    entry their answers imply. The type must already exist -- this decides how
-   a word SOUNDS, not where it belongs."
+   a word SOUNDS, not where it belongs.
+
+   The browser wizard asks the same questions from the same table; this is the
+   listener's way in."
   (let* ((label (intern (string-upcase (string label)) :cg))
          (ctype (ignore-errors (get-concept-type label))))
     (unless ctype
-      (format stream "~&There is no type called ~a. Add it first, then classify it.~%" label)
+      (format stream "~&There is no type called ~A. Add it first, then classify it.~%" label)
       (return-from classify-word nil))
-    (let* ((pos (or (lexicon-prop ctype :pos) (pos-from-hierarchy ctype)))
-           (plist '()))
-      (format stream "~&~%=== ~a ===~&Answer as a speaker, not as an ontologist:~
-                      ~& judge what sounds right, and ignore what it says about the type.~%"
-              label)
-      (cw-confirm-parents stream ctype)
-      (setf plist (cw-merge-plist plist (cw-ask-lemma stream label)))
-      (when (eq pos :noun)
-        (setf plist (cw-merge-plist plist (cw-ask-mass stream label plist)))
-        (unless (getf plist :mass-p)
-          (setf plist (cw-merge-plist plist (cw-ask-plural stream label plist))))
-        (setf plist (cw-merge-plist plist (cw-ask-pronoun stream label plist))))
-      (cond
-        ((null plist)
-         (format stream "~&~%Nothing to change -- ~a already reads the way you would say it.~%" label)
-         nil)
-        (t
-         (let ((broke (cw-report-changes stream label plist)))
-           (when broke
-             (format stream "~&  An answer that is right about this word can still be wrong~
-                             ~&  for the ontology: a :LEMMA outranks a referent name, so it~
-                             ~&  can hide [~a: something] from the realizer.~%" label))
+    (format stream "~&~%=== ~A ===~&Answer as a speaker, not as an ontologist:~
+                    ~& judge what sounds right, and ignore what it says about the type.~%"
+            label)
+    (let ((answers '()))
+      (loop for question = (next-classification-question label answers)
+            while question
+            do (let ((answer
+                       (ecase (cq-kind question)
+                         (:yes-no (if (cw-ask-yes-no stream (funcall (cq-prompt question) label answers))
+                                      "yes" "no"))
+                         (:text   (or (cw-ask-line stream (funcall (cq-prompt question) label answers)) ""))
+                         (:choice (cw-ask-choice stream
+                                                 (funcall (cq-prompt question) label answers)
+                                                 (funcall (cq-options question) label answers))))))
+                 (push (cons (cq-id question) answer) answers)))
+      (let* ((preview (classification-preview label answers))
+             (plist (getf preview :plist)))
+        (dolist (note (getf preview :notes))
+          (format stream "~&~%  ~A~%" note))
+        (cond
+          ((null plist)
+           (format stream "~&~%Nothing to change -- ~A already reads the way you would say it.~%" label)
+           nil)
+          (t
+           (format stream "~&~%--- what this changes ------------------------------~%")
+           (if (getf preview :changes)
+               (dolist (change (getf preview :changes))
+                 (format stream "~&  was: ~A~&  now: ~A~%~%" (car change) (cdr change)))
+               (format stream "~&  nothing else in the ontology says this word.~%"))
+           (dolist (break (getf preview :breaks))
+             (format stream "~&  !! a test case stops matching:~
+                             ~&     graph:    ~A~
+                             ~&     expected: ~A~
+                             ~&     would be: ~A~%~%"
+                     (first break) (second break) (third break)))
+           (unless (getf preview :test-cases-loaded)
+             (format stream "~&  (no test cases loaded for this type -- load ~
+                             test/generation-test.lisp~&   to check the sentences ~
+                             that carry referents.)~%"))
            (cond
-             ((cw-ask-yes-no stream "Keep this?" :default (not broke))
-              (apply #'register-lexicon-entry label
-                     (cw-merge-plist (lexicon-entry label) plist))
-              ;; Downcased so the line can be pasted straight into the file,
-              ;; which is written in lower case throughout.
-              (let ((*print-case* :downcase))
+             ((cw-ask-yes-no stream "Keep this?" :default (null (getf preview :breaks)))
+              (let ((line (commit-classification label answers)))
                 (format stream "~&~%Registered for this session. To keep it, add this to~
-                                ~& system/generation/lexicon.lisp:~&~%~
-                                ~&(register-lexicon-entry '~(~a~)~{ ~s~})~%"
-                        label (cw-merge-plist (lexicon-entry label) plist)))
+                                ~& system/generation/lexicon.lisp:~&~%~&~A~%" line))
               plist)
              (t (format stream "~&~%Left alone.~%") nil))))))))

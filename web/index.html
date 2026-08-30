@@ -279,6 +279,42 @@
       padding-top: 0.1rem;
     }
     #nt-advice[hidden] { display: none; }
+
+    /* ── classification wizard ── */
+    #cw-panel {
+      padding: 0.5rem 0.75rem 0.6rem;
+      background: #f7faff;
+      border-bottom: 1px solid #d8e3f3;
+      font-size: 12px;
+    }
+    #cw-panel[hidden] { display: none; }
+    #cw-head { display: flex; align-items: baseline; gap: 0.5rem; }
+    #cw-title { font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em;
+                font-size: 11px; color: #4a6a9b; }
+    #cw-sub { color: #999; font-size: 11px; }
+    #cw-close { margin-left: auto; border: none; background: none; color: #bbb;
+                cursor: pointer; font-size: 12px; line-height: 1; }
+    #cw-close:hover { color: #c0392b; }
+    #cw-prompt { margin: 0.45rem 0 0.4rem; color: #333; line-height: 1.5; }
+    #cw-controls { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+    /* An option IS the sentence being judged, so it is set in the reading face
+       and given room, not squeezed into a chip. */
+    .cw-option {
+      font-family: inherit; font-size: 12px; text-align: left;
+      padding: 0.3rem 0.6rem; border: 1px solid #c3d3ea; border-radius: 3px;
+      background: #fff; color: #333; cursor: pointer;
+    }
+    .cw-option:hover { background: #eaf1fb; border-color: #7a9fe0; }
+    .cw-skip { color: #888; border-color: #ddd; }
+    #cw-text { font-family: inherit; font-size: 12px; padding: 0.25rem 0.4rem;
+               border: 1px solid #c3d3ea; border-radius: 3px; min-width: 12rem; }
+    #cw-summary { margin-top: 0.5rem; line-height: 1.5; }
+    #cw-summary[hidden] { display: none; }
+    #cw-summary .cw-change { color: #555; }
+    #cw-summary .cw-was { color: #999; }
+    #cw-summary .cw-break { color: #c0392b; }
+    #cw-summary .cw-note { color: #a76b2e; }
+    #cw-summary code { background: #eef2f8; padding: 0.1rem 0.25rem; border-radius: 2px; }
     #nt-advice div { padding-left: 0.9rem; text-indent: -0.9rem; }
     #new-type-form input.field-error,
     #new-type-form textarea.field-error {
@@ -816,6 +852,21 @@
     <button id="editor-btn" title="Open the graph editor on an empty graph">Editor</button>
   </div>
 
+  <!-- The classification wizard. Same questions as (CLASSIFY-WORD 'x) at the
+       listener, from the same table on the server -- but a layman is not
+       sitting at a REPL, and an interview built for one that only runs there
+       does not reach the person it was built for. -->
+  <div id="cw-panel" hidden>
+    <div id="cw-head">
+      <span id="cw-title"></span>
+      <span id="cw-sub">Answer as a speaker, not as an ontologist — judge what sounds right.</span>
+      <button id="cw-close" type="button" title="Stop, without writing anything">✕</button>
+    </div>
+    <div id="cw-prompt"></div>
+    <div id="cw-controls"></div>
+    <div id="cw-summary" hidden></div>
+  </div>
+
   <div id="new-type-form" hidden>
     <div id="nt-fields">
       <input id="nt-label" type="text" placeholder="new type name" autocomplete="off" spellcheck="false">
@@ -837,6 +888,10 @@
          Pure client state — the fields are already filled, so this only clears
          the identity and switches Save back to Create. -->
     <button id="nt-duplicate" hidden title="Start a new type from this one's supertypes, canonical graph and note">Duplicate</button>
+    <!-- The wizard on demand, for a type that already exists. It runs itself
+         after a create, when the English is undecided; this is how you reach it
+         later, without going to the listener. -->
+    <button id="nt-classify" hidden title="Answer a few questions about how this type should read">How does it read?</button>
     <button id="nt-cancel">Cancel</button>
     <!-- Editing only, and two-step: the first click arms it, the second commits.
          An in-page arm rather than confirm(), because a modal blocks the page
