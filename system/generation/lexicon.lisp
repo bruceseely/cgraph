@@ -22,7 +22,8 @@
      Noun class: :pos :mass-p :proper-p :gender (:masc/:fem) :ungendered
                  :human-p :animate-p
      Verb frame: :raising :rcpt-direct :obj-prep :adv-form
-     Arc prep:   :inst-prep :thme-prep")
+     Arc prep:   :inst-prep :thme-prep
+     Lint only:  :synonym-ok")
 
 (defparameter *lexicon-override-keys*
   '((:lemma       :reader "BASE-LEMMA")
@@ -39,6 +40,11 @@
     ;; value here, even :unknown, would shadow the name and turn
     ;; [CHILD: Mary] from "she" into "they".
     (:ungendered  :reader "%LINT-PERSON-SUBTYPES-WITHOUT-GENDER (lexicon-lint.lisp)")
+    ;; Read by the lint, like :UNGENDERED and for the same reason: it records
+    ;; that two types saying the same English word was decided rather than
+    ;; overlooked. GEOGRAPHICAL-STATE and GEOPOLITICAL-STATE are both "state"
+    ;; on purpose.
+    (:synonym-ok  :reader "%LINT-ENGLISH-COLLISIONS (lexicon-lint.lisp)")
     (:human-p     :reader "HUMAN-P")
     (:animate-p   :reader "ANIMATE-CONCEPT-P")
     (:raising     :reader "GRAPH-TO-TEXT dispatch")
@@ -389,7 +395,7 @@
 ;;; right.
 
 (register-lexicon-entry 'text-message  :lemma "text message")
-(register-lexicon-entry 'email-message :lemma "email")
+(register-lexicon-entry 'email-message :lemma "email" :synonym-ok t)
 
 ;;; Compound labels whose hyphen is ontology, not English. A hyphenated label
 ;;; surfaces with its hyphen ("a body-part"), and these are types you would
@@ -425,7 +431,7 @@
 
 (register-lexicon-entry 'email     :mass-p t :inst-prep "by")
 (register-lexicon-entry 'post      :mass-p t :inst-prep "by")
-(register-lexicon-entry 'telephony :mass-p t :inst-prep "by" :lemma "telephone")
+(register-lexicon-entry 'telephony :mass-p t :inst-prep "by" :lemma "telephone" :synonym-ok t)
 
 ;;; --- Adverb-form overrides -------------------------------------------------
 ;;; Some types are abstract category labels rather than specific adjectives,

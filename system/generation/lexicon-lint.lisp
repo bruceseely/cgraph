@@ -480,6 +480,97 @@
                       findings)))))))
     (nreverse findings)))
 
+(defun %relation-gloss (rel)
+  "The English word a relation's :DESC opens with. The convention in
+   relation-types.lisp is `gloss - explanation' -- \"instrument - links
+   [ENTITY] to [EVENT]...\" -- and the gloss is the word someone would search
+   for. A desc with no dash is all gloss, which is how CNTNS says \"contains\"."
+  (let* ((desc (or (desc rel) ""))
+         (dash (search " - " desc)))
+    (string-downcase (string-trim " " (if dash (subseq desc 0 dash) desc)))))
+
+(defun %concept-english (ctype)
+  "The English a concept type comes out as. A phrasal verb is its lemma plus
+   its particle -- CARRY-OUT is \"carry out\", not \"carry\", which is a
+   different type."
+  (let ((lemma (or (lexicon-prop ctype :lemma)
+                   (string-downcase (symbol-name (label ctype)))))
+        (particle (lexicon-prop ctype :particle)))
+    (string-downcase (if particle (format nil "~A ~A" lemma particle) lemma))))
+
+(defun %relation-names-type-p (rel ctype)
+  "True when CTYPE appears in REL's signature. A relation and the type it
+   points at share a name all over this ontology -- (attr)→[ATTRIBUTE],
+   (dur)→[DURATION] -- and that is the naming convention doing its job, not
+   two things competing for one word. Only a relation whose signature does
+   NOT mention the type is worth reporting against it."
+  (or (eq ctype (dest-type rel))
+      (member ctype (source-types rel) :test #'eq)))
+
+(defun %lint-english-collisions ()
+  "Two things in the catalog that say the same English word.
+
+   This is the check for the question you cannot answer by searching: whether
+   the concept you are about to add is already here under another name. Labels
+   do not answer it -- nobody looking for containment searches for CNTNS -- but
+   the English does, because a genuine duplicate shows up as two ways to
+   generate the same sentence. Concept types are keyed by their realized
+   English and relations by the gloss their :DESC opens with, in ONE table:
+   the collision that matters most is across the two, a CONTAINS concept
+   against the CNTNS relation that already means it.
+
+   :INFO, and silenceable. Synonymy is often deliberate -- EMAIL and
+   EMAIL-MESSAGE are the medium and the message, and English calls both
+   \"email\" -- so a type that has been ruled on says so with :SYNONYM-OK and
+   drops out, the way :UNGENDERED settles the gender check. A finding that is
+   always wrong teaches you to stop reading the ones that are not."
+  (let ((by-word (make-hash-table :test 'equalp))
+        (findings nil))
+    (maphash (lambda (key ctype)
+               (declare (ignore key))
+               (unless (or (bottom-concept-type-p ctype)
+                           (lexicon-prop ctype :synonym-ok))
+                 (push (list :concept ctype)
+                       (gethash (%concept-english ctype) by-word))))
+             *concept-type-catalog*)
+    (maphash (lambda (key rel)
+               (declare (ignore key))
+               (let ((word (%relation-gloss rel)))
+                 (when (plusp (length word))
+                   (push (list :relation rel) (gethash word by-word)))))
+             *relation-type-catalog*)
+    (maphash
+     (lambda (word entries)
+       (let* ((concepts (loop for (kind object) in entries
+                              when (eq kind :concept) collect object))
+              ;; A relation explained by a concept in the same group is the
+              ;; naming convention, not a rival for the word.
+              (kept (remove-if (lambda (entry)
+                                 (and (eq (first entry) :relation)
+                                      (some (lambda (ctype)
+                                              (%relation-names-type-p (second entry) ctype))
+                                            concepts)))
+                               entries)))
+         (when (rest kept)
+           (push (list :info
+                       :english-collision
+                       (format nil "~{~A~^ and ~} all come out as \"~A\". If ~
+                                    they mean the same thing, one of them is ~
+                                    redundant; if they do not, register ~
+                                    :SYNONYM-OK on the settled one to keep ~
+                                    this quiet."
+                               (sort (mapcar (lambda (entry)
+                                               (format nil "~(~A~) ~A"
+                                                       (first entry)
+                                                       (label (second entry))))
+                                             kept)
+                                     #'string<)
+                               word)
+                       word)
+                 findings))))
+     by-word)
+    (sort findings #'string< :key #'fourth)))
+
 (defun lexicon-lint ()
   "Run all lexicon/generation lint checks. Returns a list of findings
    of the form (severity check-name message context)."
@@ -495,7 +586,8 @@
           (%lint-person-subtypes-without-gender)
           (%lint-malformed-string-table-rows)
           (%lint-duplicate-string-table-keys)
-          (%lint-redundant-irregular-rows)))
+          (%lint-redundant-irregular-rows)
+          (%lint-english-collisions)))
 
 (defparameter *lint-severities* '(:error :warn :info)
   "Lint severities, most severe first. Position in this list is the rank.")

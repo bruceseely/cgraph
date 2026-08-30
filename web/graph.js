@@ -1598,6 +1598,17 @@ function relationRowEl(r) {
   // A role no realizer reads drops the relation exactly as no role does, so the
   // badge marks both the same way. Anything else would show a relation as
   // spoken when it is silent — which is the failure this badge exists to catch.
+  // Shown, not just filtered on: a row that matches "contain" while reading
+  // CNTNS would otherwise look like a mismatch. Skipped when it only repeats
+  // the label.
+  const gloss = relationGloss(r);
+  if (gloss && gloss.toLowerCase() !== r.label.toLowerCase()) {
+    const glossEl = document.createElement('span');
+    glossEl.className = 'rel-item-gloss';
+    glossEl.textContent = gloss;
+    head.append(glossEl);
+  }
+
   const roleEntry = r.role ? syntaxRoles.find(s => s.role === r.role) : null;
   // Unknown until the roles have loaded: assume fine rather than raise a false
   // alarm. PAINTRELATIONTYPES runs again once they arrive.
@@ -1634,9 +1645,23 @@ function relationRowEl(r) {
   return el;
 }
 
+// The gloss a relation's description opens with. relation-types.lisp writes
+// them "gloss - explanation", and the gloss is the word someone would search
+// for: nobody looking for containment types CNTNS, but its whole description
+// is the word "contains". Matching the label alone made the catalog's
+// abbreviations unfindable by meaning, which is the one thing this list is
+// for. The editor's filter matches the long name for the same reason — `agnt'
+// and `agent' are both things you would type.
+function relationGloss(r) {
+  const desc = String(r.desc || '');
+  const dash = desc.indexOf(' - ');
+  return (dash === -1 ? desc : desc.slice(0, dash)).trim();
+}
+
 function paintRelationTypes() {
   const q = filterQuery();
-  const shown = lastRelTypes.filter(r => matchesFilter(r.label, q));
+  const shown = lastRelTypes.filter(
+    r => matchesFilter(r.label, q) || matchesFilter(relationGloss(r), q));
   if (!shown.length) {
     relationListEl.replaceChildren(listEmptyEl(q, 'no relation types'));
     return;
