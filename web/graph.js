@@ -350,6 +350,7 @@ async function redraw() {
     if (!resp.ok) { showError((await resp.text()) || `Server error: ${resp.status}`); return; }
     const dot = await resp.text();
     const svg = viz.renderSVGElement(dot);
+    stripGraphvizTitles(svg);
 
     svg.querySelectorAll('g.node').forEach(node => {
       if (!node.id) return;
@@ -539,6 +540,15 @@ function parseCgString(str) {
 // Converts {src, rel, dst} arcs to a Graphviz DOT string using CG visual form:
 // concept nodes as boxes, relation nodes as ellipses.
 
+// Graphviz's SVG backend writes each node's and edge's DOT NAME into a <title>
+// element, and a browser renders <title> as a tooltip -- so hovering the
+// lattice offered "type1004", and a canonical graph offered "c1". Those names
+// are generated plumbing that means nothing to a reader, and the thing they
+// label already carries its own visible text. Dropped after every render.
+function stripGraphvizTitles(svg) {
+  for (const t of svg.querySelectorAll('title')) t.remove();
+}
+
 function arcsToDot(typeName, arcs) {
   const conceptToId = new Map();
   let nodeN = 0;
@@ -692,6 +702,7 @@ async function loadCgEntry(key, label) {
           const dot = arcsToDot(from ? from.toUpperCase() : key, arcs);
           const viz = await getViz();
           const svg = viz.renderSVGElement(dot);
+          stripGraphvizTitles(svg);
           svg.removeAttribute('width');
           svg.removeAttribute('height');
           entryData.svg = svg;
