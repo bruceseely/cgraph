@@ -1031,6 +1031,7 @@ fetch('/api/types?detail=1')
 
 const newTypeForm = document.getElementById('new-type-form');
 const ntLabel     = document.getElementById('nt-label');
+const ntAdvice    = document.getElementById('nt-advice');
 const ntSupers    = document.getElementById('nt-supers');
 const ntSupEmpty  = document.getElementById('nt-supers-empty');
 const ntAddSuper  = document.getElementById('nt-add-super');
@@ -1053,6 +1054,54 @@ let   pickSuperMode  = false;  // after "+" in the supertypes cell, waiting for 
 function newTypeFormOpen() { return !newTypeForm.hidden; }
 function setNtHint(msg) { ntStatus.textContent = msg || ''; }
 
+// ── Advice while the name is still free ──────────────────────────────────────
+//
+// The same knowledge the lint and the scans carry, moved to the moment it is
+// cheapest to act on. Nothing here blocks Create: every check has legitimate
+// exceptions -- GEOGRAPHICAL-STATE earns its hyphen -- so they are things to
+// look at, not rules to satisfy.
+//
+// Only while CREATING. Editing a type would trip "already exists" on every
+// keystroke, which is the fastest way to teach someone to stop reading a
+// warning.
+
+let adviceTimer = null;
+
+function renderAdvice(warnings) {
+  ntAdvice.replaceChildren();
+  ntAdvice.hidden = !warnings.length;
+  for (const w of warnings) {
+    const el = document.createElement('div');
+    el.textContent = `⚠ ${w.message}`;
+    ntAdvice.append(el);
+  }
+}
+
+function checkNewType() {
+  if (editingLabel !== null) { renderAdvice([]); return; }
+  const label = ntLabel.value.trim();
+  if (!label) { renderAdvice([]); return; }
+  const url = `/api/check-type?label=${encodeURIComponent(label)}`
+            + `&supertypes=${encodeURIComponent([...superSet].join(','))}`;
+  fetch(url)
+    .then(resp => (resp.ok ? resp.json() : { warnings: [] }))
+    .then(data => {
+      // The answer is only about the name still in the box: a slow reply for a
+      // name since typed over would otherwise overwrite the current advice.
+      if (ntLabel.value.trim() === label) renderAdvice(data.warnings || []);
+    })
+    .catch(() => renderAdvice([]));
+}
+
+// Typing is debounced; a supertype lands in one click and is asked at once,
+// because a parent is what decides whether the label reads as a verb.
+function scheduleAdvice(delay = 400) {
+  if (adviceTimer) clearTimeout(adviceTimer);
+  adviceTimer = setTimeout(checkNewType, delay);
+}
+
+ntLabel.addEventListener('input', () => scheduleAdvice());
+
 function renderSuperChips() {
   ntSupers.querySelectorAll('.nt-chip').forEach(c => c.remove());
   ntSupEmpty.style.display = superSet.size ? 'none' : '';
@@ -1067,6 +1116,7 @@ function renderSuperChips() {
     chip.addEventListener('click', () => toggleSupertype(name));
     ntSupers.insertBefore(chip, ntAddSuper);   // keep the "+" button last
   }
+  scheduleAdvice(0);
 }
 
 // Reflect supertype membership on the sidebar item for NAME.
@@ -1161,6 +1211,7 @@ function hideForm() {
   ntLabel.readOnly = false;
   disarmDelete();
   setNtHint('');
+  renderAdvice([]);
   clearError();
 }
 

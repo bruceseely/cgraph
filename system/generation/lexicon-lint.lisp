@@ -507,6 +507,26 @@
   (or (eq ctype (dest-type rel))
       (member ctype (source-types rel) :test #'eq)))
 
+(defun %english-word-owners ()
+  "WORD -> list of (:CONCEPT type) / (:RELATION type) for everything in the
+   catalogs that says WORD. Shared by the lint and by the creation-time check,
+   so what the form warns about and what the report finds cannot drift."
+  (let ((by-word (make-hash-table :test 'equalp)))
+    (maphash (lambda (key ctype)
+               (declare (ignore key))
+               (unless (or (bottom-concept-type-p ctype)
+                           (lexicon-prop ctype :synonym-ok))
+                 (push (list :concept ctype)
+                       (gethash (%concept-english ctype) by-word))))
+             *concept-type-catalog*)
+    (maphash (lambda (key rel)
+               (declare (ignore key))
+               (let ((word (%relation-gloss rel)))
+                 (when (plusp (length word))
+                   (push (list :relation rel) (gethash word by-word)))))
+             *relation-type-catalog*)
+    by-word))
+
 (defun %lint-english-collisions ()
   "Two things in the catalog that say the same English word.
 
@@ -524,21 +544,8 @@
    \"email\" -- so a type that has been ruled on says so with :SYNONYM-OK and
    drops out, the way :UNGENDERED settles the gender check. A finding that is
    always wrong teaches you to stop reading the ones that are not."
-  (let ((by-word (make-hash-table :test 'equalp))
+  (let ((by-word (%english-word-owners))
         (findings nil))
-    (maphash (lambda (key ctype)
-               (declare (ignore key))
-               (unless (or (bottom-concept-type-p ctype)
-                           (lexicon-prop ctype :synonym-ok))
-                 (push (list :concept ctype)
-                       (gethash (%concept-english ctype) by-word))))
-             *concept-type-catalog*)
-    (maphash (lambda (key rel)
-               (declare (ignore key))
-               (let ((word (%relation-gloss rel)))
-                 (when (plusp (length word))
-                   (push (list :relation rel) (gethash word by-word)))))
-             *relation-type-catalog*)
     (maphash
      (lambda (word entries)
        (let* ((concepts (loop for (kind object) in entries
@@ -570,6 +577,76 @@
                  findings))))
      by-word)
     (sort findings #'string< :key #'fourth)))
+
+(defparameter *nominalizing-suffixes* '("ion" "ment" "ance" "ence" "sis")
+  "Endings that make a noun out of a verb. A type under ACT or EVENT realizes
+   AS a verb, so a label ending this way is inflected as one -- RELOCATION gave
+   \"John relocations a dog\". Not exhaustive and not meant to be: it is a
+   prompt to look, offered while the name is still free.")
+
+(defun %would-be-verb-p (supertype-labels)
+  "True when a type under these parents would realize as a verb."
+  (some (lambda (label)
+          (or (safe-subtype-p label 'act)
+              (safe-subtype-p label 'event)))
+        supertype-labels))
+
+(defun type-creation-warnings (label &optional supertype-labels)
+  "Advice about a type ABOUT TO BE CREATED, as a list of (KIND MESSAGE).
+
+   The same knowledge the lint and the scans carry, delivered while the
+   decision is still free. Nothing here blocks anything: every one of these
+   has legitimate exceptions -- GEOGRAPHICAL-STATE earns its hyphen, and
+   English has nouns that are acts -- so they are offered as things to look
+   at, not rules to satisfy."
+  (let* ((name (string-downcase (string label)))
+         (sym (ignore-errors (intern (string-upcase name) :conceptual-graphs)))
+         (warnings nil))
+    (when (and sym (ignore-errors (get-concept-type sym)))
+      (push (list :exists
+                  (format nil "~:@(~A~) already exists." name))
+            warnings))
+    (let ((owners (remove-if (lambda (entry)
+                               (and (eq (first entry) :concept)
+                                    (string-equal (symbol-name (label (second entry))) name)))
+                             (gethash name (%english-word-owners)))))
+      (when owners
+        (push (list :english-collision
+                    (format nil "~{~A~^ and ~} already come~[s~;~:;~] out as ~
+                                 \"~A\". If that is the same idea, say it ~
+                                 there instead."
+                            (sort (mapcar (lambda (entry)
+                                            (format nil "~(~A~) ~A"
+                                                    (first entry) (label (second entry))))
+                                          owners)
+                                  #'string<)
+                            (if (rest owners) 1 0)
+                            name))
+              warnings)))
+    (when (and (%would-be-verb-p supertype-labels)
+               (some (lambda (suffix)
+                       (let ((n (length suffix)))
+                         (and (> (length name) n)
+                              (string= suffix (subseq name (- (length name) n))))))
+                     *nominalizing-suffixes*))
+      (push (list :nominalized-act
+                  (format nil "Under these parents ~:@(~A~) is a verb, and the ~
+                               label reads like a noun -- it will come out as ~
+                               \"~A~:[s~;es~]\". Every other act here is named ~
+                               for its verb: MOVE, CARRY, TRANSPORT."
+                          name name (find (char name (1- (length name))) "sxzo")))
+            warnings))
+    (when (and (find #\- name)
+               ;; A lemma already answers this, which matters when the check is
+               ;; run against a label that exists.
+               (not (lexicon-prop (string-upcase name) :lemma)))
+      (push (list :hyphenated-label
+                  (format nil "\"~A\" will be said with its hyphen. If the ~
+                               English is two words, or is one word the label ~
+                               spells out, register a :LEMMA for it."
+                          name))
+            warnings))
+    (nreverse warnings)))
 
 (defun lexicon-lint ()
   "Run all lexicon/generation lint checks. Returns a list of findings

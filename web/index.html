@@ -269,6 +269,17 @@
     #nt-sep    { color: #999; }
     #nt-status { flex-basis: 100%; font-size: 11px; color: #aaa; }  /* comment on its own line below the fields+buttons row */
     #nt-status.error { color: #c0392b; }
+    /* Amber, like #nr-status.warn: this is advice about a type that has not
+       been written yet, and nothing here blocks the Create button. */
+    #nt-advice {
+      flex-basis: 100%;
+      font-size: 11px;
+      color: #a76b2e;
+      line-height: 1.45;
+      padding-top: 0.1rem;
+    }
+    #nt-advice[hidden] { display: none; }
+    #nt-advice div { padding-left: 0.9rem; text-indent: -0.9rem; }
     #new-type-form input.field-error,
     #new-type-form textarea.field-error {
       border-color: #c0392b;
@@ -840,6 +851,10 @@
          wording lives in the hint line below instead, where it costs no width. -->
     <button id="nt-delete" hidden title="Delete this type (refused if anything still uses it)">Delete</button>
     <span id="nt-status"></span>
+    <!-- Advice about the name, while the name is still free. Below the status
+         line rather than beside it: these are things to think about, not
+         things that went wrong, and they must not look like a failed save. -->
+    <div id="nt-advice" hidden></div>
   </div>
 
   <!-- The relation form is a sibling of the concept form, not a mode of it: it

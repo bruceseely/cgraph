@@ -244,6 +244,27 @@
                 (mapcar (lambda (row) (concept-type-cg-json (cdr row) (car row))) rows))
         (json-string-array (mapcar #'car rows)))))
 
+;;; GET /api/check-type?label=...&supertypes=a,b — advice about a type that
+;;; does not exist yet. Called as the New Type form is filled in, because the
+;;; moment to hear "something already says this word" is while the name is
+;;; still free, not after a lint run three days later. Advisory only: the form
+;;; shows these and creates the type anyway if you say so.
+(hunchentoot:define-easy-handler (handle-api-check-type :uri "/api/check-type")
+    (label supertypes)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (let* ((supers (when (and supertypes (plusp (length supertypes)))
+                   (mapcar (lambda (name)
+                             (intern (string-upcase (string-trim " " name)) :conceptual-graphs))
+                           (split-type-string supertypes))))
+         (warnings (if (and label (plusp (length label)))
+                       (type-creation-warnings label supers)
+                       nil)))
+    (format nil "{\"warnings\":[~{~a~^,~}]}"
+            (mapcar (lambda (warning)
+                      (format nil "{\"kind\":\"~(~a~)\",\"message\":\"~a\"}"
+                              (first warning) (json-escape (second warning))))
+                    warnings))))
+
 ;;; ── Concept-type editor: create + persist ─────────────────────────────────────
 ;;; Slice 1 is append-only: create a new type (or persist a runtime-only :create
 ;;; type) and add its form to the ontology source file. Editing a type already IN
