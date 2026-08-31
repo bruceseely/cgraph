@@ -136,20 +136,30 @@
             when (find lemma (rest entry) :test #'string=)
               return lemma))))
 
-(defun instrument-preposition (rel other)
-  "The preposition an instrument arc wants, when its filler asks for one.
-   :inst defaults to \"with\", which is right for a device and wrong for a
-   medium -- you reach someone BY telephone but WITH a telephone. A type that
-   is carried out BY rather than used WITH registers :inst-prep; anything else
-   returns NIL and the relation's own preposition stands."
-  (and other
-       (concept-p other)
-       (string-equal (label (relation-type rel)) "inst")
-       (lexicon-prop (concept-type other) :inst-prep)))
+(defparameter *arc-preposition-keys*
+  '(("inst" . :inst-prep)
+    ("time" . :time-prep))
+  "Relations whose preposition the FILLER may override, and the lexicon key it
+   says so with. A relation's own preposition is one word for every filler, and
+   for these two that is not enough of English: :inst says \"with\", right for a
+   device and wrong for a medium -- you reach someone BY telephone but WITH a
+   telephone -- and :time says \"at\", right for a clock time and wrong for a
+   day, which takes \"on\". Extend the table rather than adding another
+   special case.")
+
+(defun filler-preposition (rel other)
+  "The preposition REL's filler asks for, or NIL to let the relation's own
+   stand. Only the arcs in *ARC-PREPOSITION-KEYS* can be overridden this way:
+   everywhere else a relation means one thing in English and says it one way."
+  (let ((key (and other
+                  (concept-p other)
+                  (cdr (assoc (label (relation-type rel)) *arc-preposition-keys*
+                              :test #'string-equal)))))
+    (and key (lexicon-prop (concept-type other) key))))
 
 (defun realize-pp (rel main-concept state)
   (let* ((other (other-end rel main-concept))
-         (prep  (or (instrument-preposition rel other)
+         (prep  (or (filler-preposition rel other)
                     (relation-preposition rel)
                     ""))
          (rel-label (label (relation-type rel))))

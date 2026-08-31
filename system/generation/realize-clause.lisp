@@ -303,8 +303,12 @@
           (cond ((eq role :adj)
                  (push (base-lemma other) complements))
                 ((eq role :pp)
+                 ;; Same filler override REALIZE-PP consults: a verbless clause
+                 ;; is still a clause, and "the party is at Friday" is wrong in
+                 ;; exactly the way "informs her with email" was.
                  (push (format nil "~@[~a ~]~a"
-                               (relation-preposition rel)
+                               (or (filler-preposition rel other)
+                                   (relation-preposition rel))
                                (realize-np other state :case :accusative))
                        complements))))))
     (nreverse complements)))
@@ -357,7 +361,8 @@
                  (not (traversed-p state rel)))
         (mark-traversed state rel)
         (let* ((other (other-end rel subject-concept))
-               (prep  (or (np-pp-preposition rel subject-concept)
+               (prep  (or (filler-preposition rel other)
+                          (np-pp-preposition rel subject-concept)
                           (relation-preposition rel))))
           (when (and other prep)
             (push (format nil "~a ~a" prep

@@ -257,6 +257,15 @@
     ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](thme)→[DOG]"
      . "Bruce informs Sue about a dog.")
 
+    ;; A day of the week: "on Friday", not :time's own "at", and no article --
+    ;; a day is a proper noun. The deictic days keep going through
+    ;; TEMPORAL-ADVERB-FORM, which drops the preposition altogether, so the two
+    ;; readings are pinned together here.
+    ("[GIRL]<-(agnt)<-[EAT]- (obj)→[PIE] (time)→[FRIDAY]."
+     . "A girl eats a pie on Friday.")
+    ("[GIRL]<-(agnt)<-[EAT]- (obj)→[PIE] (time)→[time-period: yesterday]."
+     . "A girl ate a pie yesterday.")
+
     ;; OBJ and THME together. Both bucket as :dobj and only one can hold the
     ;; slot, so THME steps aside and modifies the information instead of
     ;; competing with it -- "news of a dog". The bug this pins down dropped

@@ -56,6 +56,7 @@
 (:label fast :supertypes (speed))
 (:label female :supertypes (attribute))
 (:label fly :supertypes (transport))
+(:label friday :supertypes (time-period))
 (:label food :supertypes (substance))
 (:label food-item :supertypes (object))
 (:label ford-vehicle :supertypes (automobile))

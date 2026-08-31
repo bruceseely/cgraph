@@ -22,7 +22,7 @@
      Noun class: :pos :mass-p :proper-p :gender (:masc/:fem) :ungendered
                  :human-p :animate-p
      Verb frame: :raising :rcpt-direct :obj-prep :adv-form
-     Arc prep:   :inst-prep :thme-prep
+     Arc prep:   :inst-prep :time-prep :thme-prep
      Lint only:  :synonym-ok")
 
 (defparameter *lexicon-override-keys*
@@ -51,6 +51,7 @@
     (:rcpt-direct :reader "REALIZE-CLAUSE")
     (:obj-prep    :reader "REALIZE-CLAUSE")
     (:inst-prep   :reader "REALIZE-PP")
+    (:time-prep   :reader "REALIZE-PP")
     (:thme-prep   :reader "THEME-MODIFIER (realize-clause.lisp)")
     (:adv-form    :reader "REALIZE-ADV (realize-pp.lisp)")
     ;; Declared but inert. The morphology functions take a bare lemma string
@@ -415,6 +416,16 @@
 ;;; unlike DINNER-EVENT, which never surfaces because its parts carry the
 ;;; clause, a party is usually the subject of its own sentence.
 (register-lexicon-entry 'party :pos :noun)
+
+;;; --- Days of the week ------------------------------------------------------
+;;; Proper nouns, so no article and a capital: "on Friday", not "at a friday".
+;;; And "on" rather than :time's own "at", which is right for a clock time and
+;;; wrong for a day. The deictic days -- TODAY, TOMORROW, YESTERDAY -- are NOT
+;;; here: TEMPORAL-ADVERB-FORM drops their preposition entirely and says "a girl
+;;; ate a pie yesterday", which is what English does with them.
+
+(dolist (day '(monday tuesday wednesday thursday friday saturday sunday))
+  (register-lexicon-entry day :proper-p t :time-prep "on"))
 (register-lexicon-entry 'geological-landform  :lemma "landform")
 ;; English says "state" for both the land and the polity; the split that
 ;; matters here is one the ontology makes and the word does not.
