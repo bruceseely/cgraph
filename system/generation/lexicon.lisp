@@ -356,6 +356,21 @@
    and a row that merely restates what the rules already derive is dead weight.
    Those are what the lint checks.")
 
+(defun verb-lemma-of-form (word)
+  "The lemma an inflected verb form belongs to, or NIL.
+
+   IRREGULAR-VERB-FORM read backwards. The table is written lemma-first
+   because generation asks \"what is EAT's past?\", but a consumer coming the
+   other way -- a parser handing over the surface word `ate' to a catalog that
+   only knows EAT -- needs the same rows read in reverse, and the data should
+   not be written twice to answer the same question from two sides."
+  (let ((w (string-downcase (string word))))
+    (loop for (lemma past participle present-3sg) in *irregular-verbs*
+          when (or (string-equal w past)
+                   (string-equal w participle)
+                   (string-equal w present-3sg))
+            return lemma)))
+
 (defun irregular-verb-form (lemma form)
   "FORM is one of :past :past-participle :present-3sg. Returns NIL if not irregular."
   (let ((row (assoc lemma *irregular-verbs* :test #'string-equal)))
