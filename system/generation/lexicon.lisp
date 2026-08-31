@@ -408,6 +408,7 @@
 (register-lexicon-entry 'body-part            :lemma "body part")
 (register-lexicon-entry 'food-item            :lemma "food item")
 (register-lexicon-entry 'city-government      :lemma "city government")
+(register-lexicon-entry 'office-building      :lemma "office building")
 (register-lexicon-entry 'geological-landform  :lemma "landform")
 ;; English says "state" for both the land and the polity; the split that
 ;; matters here is one the ontology makes and the word does not.
