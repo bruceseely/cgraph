@@ -602,6 +602,37 @@ the way /api/type-def presents them — top and bottom excluded, case-insensitiv
          (null (set-difference tokens current :test #'string-equal))
          (null (set-difference current tokens :test #'string-equal)))))
 
+(defun canonical-graph-reads-as (label)
+  "The English LABEL's canonical graph comes out as, or NIL.
+
+   Said back on every save, because a canonical graph is a sentence's worth of
+   structure and nothing else tells you what it claims. \"A building has a
+   room\" confirms the arc runs the way you meant; \"Is partied in a library\"
+   is a defect you would otherwise ship."
+  (let ((ctype (ignore-errors (get-concept-type label))))
+    (when ctype
+      (let ((cg (effective-canonical-graph-string ctype)))
+        (when (and cg (plusp (length cg)))
+          (handler-case
+              (let ((*package* (find-package :conceptual-graphs)))
+                (graph-to-text (parse-cgraph cg)))
+            (error () nil)))))))
+
+(defun saved-type-json (label)
+  "The reply to a successful create or edit: what the type now READS as, and
+   what the lattice thinks of it. Neither is an error -- the save happened --
+   but both are things the person who just typed it is the only one positioned
+   to fix, and only while they are still looking at it."
+  (let* ((sym (ignore-errors (intern (string-upcase (string label)) :conceptual-graphs)))
+         (ctype (and sym (ignore-errors (get-concept-type sym))))
+         (reads (and sym (canonical-graph-reads-as sym)))
+         (problems (and ctype (canonical-graph-inheritance-problems ctype))))
+    (format nil "{\"ok\":true,\"label\":\"~a\",\"reads\":\"~a\",\"lattice\":[~{~a~^,~}]}"
+            (json-escape (string-downcase (string label)))
+            (json-escape (or reads ""))
+            (mapcar (lambda (problem) (format nil "\"~a\"" (json-escape problem)))
+                    problems))))
+
 (defun validate-canonical-graph (string)
   "Parse STRING as a conceptual graph against the live catalog; return NIL when it
 is well-formed, else a one-line error message. Covers the three failure modes PCG
@@ -615,7 +646,12 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
              nil)
     (relation-type-lookup-failed () "unknown relation type in the canonical graph")
     (error (e)
-      (string-trim " " (substitute #\Space #\Newline (princ-to-string e))))))
+      ;; Newlines KEPT. The connection errors lay out both remedies -- "either
+      ;; the relation should require a supertype ... or the concept should have
+      ;; a subtype ..." -- and flattening that into one line made the second
+      ;; possibility, that the ONTOLOGY is what is too narrow, unreadable. The
+      ;; page renders the breaks.
+      (string-trim " " (princ-to-string e)))))
 
 ;;; POST /api/create-type?label=...&supertypes=a,b&canonical=...&note=...
 ;;; Create the type live (so it shows at once — the catalog is process-global),
@@ -671,8 +707,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                                    :canonical-graph canonical)))
           ;; persist: append the form to the source file.
           (append-concept-type-def label super-tokens canonical note file)
-          (format nil "{\"ok\":true,\"label\":\"~a\"}"
-                  (json-escape (string-downcase label)))))
+          (saved-type-json label)))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
       (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
@@ -770,8 +805,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
               ;; persist: splice the form in place, or append if it wasn't in the file.
               (unless (splice-type-def label (concept-type-def-string label super-tokens canonical note) file)
                 (append-concept-type-def label super-tokens canonical note file))
-              (format nil "{\"ok\":true,\"label\":\"~a\"}"
-                      (json-escape (string-downcase label)))))))
+              (saved-type-json label)))))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
       (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))

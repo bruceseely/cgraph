@@ -468,6 +468,14 @@
     .opt-btn:hover:not(.active) { background: #eee; border-color: #aaa; }
     .opt-btn.active { background: #4a90d9; color: #fff; border-color: #4a90d9; }
 
+    /* PRE-LINE: the connection errors lay out both remedies on their own lines
+       -- "either the relation should require a supertype ... or the concept
+       should have a subtype ..." -- and collapsing them into a run-on hid the
+       half that says the ONTOLOGY may be what is too narrow. */
+    /* Scrolls rather than swamps: a rejected connection lists every type that
+       would have fitted, which can be a hundred names. The structure above the
+       list is the part worth reading, and it is at the top. */
+    #error-msg { white-space: pre-line; max-height: 9rem; overflow-y: auto; }
     #error-msg {
       padding: 0.4rem 0.75rem;
       font-size: 13px;

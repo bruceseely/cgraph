@@ -962,6 +962,31 @@
                    (values :inherited ancestors)
                    (values :none nil)))))))
 
+(defun canonical-graph-inheritance-problems (node)
+  "Relations NODE's canonical graph owes its ancestors, as a list of messages.
+
+   A subtype's canonical graph must contain every relation its ancestors'
+   graphs have -- it is a specialization of them, not a replacement. Split out
+   of CHECK-TYPE-LATTICE so ONE type can be asked at the moment it is saved,
+   which is the moment the answer can still be acted on: the whole-lattice
+   report is only read by someone who thought to run it, and a type saved with
+   an incomplete graph otherwise leaves the ontology inconsistent silently."
+  (let ((node-cg (effective-canonical-graph-string node))
+        (problems nil))
+    (when node-cg
+      (let ((node-relations (extract-cg-relations node-cg)))
+        (dolist (ancestor (all-ancestor-types node))
+          (let ((ancestor-cg (effective-canonical-graph-string ancestor)))
+            (when ancestor-cg
+              (let ((missing (set-difference (extract-cg-relations ancestor-cg)
+                                             node-relations
+                                             :test #'string=)))
+                (when missing
+                  (push (format nil "Canonical graph of ~a is missing relation~p inherited from ~a: ~{(~a)~^, ~}"
+                                (label node) (length missing) (label ancestor) missing)
+                        problems))))))))
+    (nreverse problems)))
+
 (defun extract-cg-type-names (cg-string)
   "Return a list of uppercase type-name strings found inside [...] brackets in CG-STRING.
    Strips any referent after a colon (e.g. [PERSON: John] → \"PERSON\") and
@@ -1094,19 +1119,8 @@
                (declare (ignore key))
                (unless (or (eq node *concept-type-top*)
                            (eq node *concept-type-bottom*))
-                 (let ((node-cg (effective-canonical-graph-string node)))
-                   (when node-cg
-                     (let ((node-relations (extract-cg-relations node-cg)))
-                       (dolist (ancestor (all-ancestor-types node))
-                         (let ((ancestor-cg (effective-canonical-graph-string ancestor)))
-                           (when ancestor-cg
-                             (let ((missing (set-difference (extract-cg-relations ancestor-cg)
-                                                            node-relations
-                                                            :test #'string=)))
-                               (when missing
-                                 (push (format nil "Canonical graph of ~a is missing relation~p inherited from ~a: ~{(~a)~^, ~}"
-                                               (label node) (length missing) (label ancestor) missing)
-                                       problems)))))))))))
+                 (setf problems
+                       (append (canonical-graph-inheritance-problems node) problems))))
              *concept-type-catalog*)
 
     ;; Check that all concept types and relations referenced in canonical graph strings are defined

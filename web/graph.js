@@ -1023,6 +1023,23 @@ const EDITOR_MISSING_HINT =
   'The editor is not loaded in this Lisp image — run (asdf:load-system :cgraph-editor), '
   + 'then reload this page.';
 
+// A canonical graph is a sentence's worth of structure, and until it is said
+// out loud nothing tells you what it claims. "A building has a room" confirms
+// the arc runs the way you meant it; a lattice complaint says the graph is
+// missing something its parents already require.
+function reportSavedType(data) {
+  // A pending name-check must not land after this and talk over it.
+  if (adviceTimer) { clearTimeout(adviceTimer); adviceTimer = null; }
+  const rows = [];
+  if (data.reads) rows.push(`reads: “${data.reads}”`);
+  for (const problem of data.lattice || []) rows.push(`⚠ ${problem}`);
+  if (!rows.length) return;
+  // The banner, not the form's advice line: a save CLOSES the form, so
+  // anything written inside it is hidden the moment it is written. This is
+  // also the one report that outlives the thing it is about.
+  showInfo(rows.join('\n'));
+}
+
 function setEditorAvailable(available) {
   for (const id of ['editor-btn', 'nt-draw']) {
     const btn = document.getElementById(id);
@@ -1099,6 +1116,10 @@ function renderAdvice(warnings) {
 }
 
 function checkNewType() {
+  // A pending check must not outlive the form: a create closes it, and the
+  // advice that lands afterwards would say "already exists" about the type
+  // just made -- on top of the reading and lattice findings the save returned.
+  if (newTypeForm.hidden) return;
   if (editingLabel !== null) { renderAdvice([]); return; }
   const label = ntLabel.value.trim();
   if (!label) { renderAdvice([]); return; }
@@ -1436,6 +1457,11 @@ async function submitType() {
     // A new type is the moment its English is undecided and free to settle.
     // Only on create: an edit is a type that has been read before.
     if (!editing) startWizard(data.label || label);
+    // LAST: what the type now reads as, and anything the lattice objects to.
+    // The save succeeded either way -- these are not errors, they are the two
+    // things only the person who just typed it can act on. Reported after the
+    // refresh, not before, because REDRAW clears the banner on its way past.
+    reportSavedType(data);
   } catch (err) {
     setNtHint('');
     showError(err.message);
