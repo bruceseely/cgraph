@@ -154,5 +154,3 @@
 (:label wish  :supertypes (desire) :canonical-graph "[WISH]- (expr)→[ANIMATE] (thme)→[ENTITY]")
 (:label woman :supertypes (adult) :canonical-graph "[WOMAN]- (sex)→[FEMALE] (life-stage)→[ADULTHOOD]")
 (:label young :supertypes (age))
-(:label building :supertypes (place))
-(:label room :supertypes (place))
