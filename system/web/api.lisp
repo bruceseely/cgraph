@@ -206,13 +206,29 @@
 ;;; The page has no other channel to the option system, so anything the user
 ;;; sets through M-M-x customize-group cgraph (or initializations.lisp) reaches
 ;;; the browser here. Keys are the JSON spelling of the defvar name.
+(defun editor-available-p ()
+  "Whether the editor's handlers are registered on this acceptor.
+
+   The browser page carries two buttons that call /api/editor/* -- \"Draw…\"
+   and \"Editor\" -- but those routes come from the cgraph-editor system, which
+   depends on this one rather than the other way round, so a caller can load
+   cgraph-web alone and serve a page with two dead buttons. CG-FROM-PARSE's
+   BROWSE-TYPES did exactly that, and the failure surfaced as \"could not open
+   the editor: 404\", which names neither the cause nor the cure.
+
+   Asked at runtime rather than declared as a dependency: the direction of the
+   dependency is right as it stands, and inverting it to answer one question
+   would make the editor unloadable on its own."
+  (and (asdf:component-loaded-p "cgraph-editor") t))
+
 (hunchentoot:define-easy-handler (handle-api-options :uri "/api/options") ()
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (no-store)
-  (format nil "{\"canonical_graph_format\":\"~(~a~)\"}"
+  (format nil "{\"canonical_graph_format\":\"~(~a~)\",\"editor\":~:[false~;true~]}"
           (case *canonical-graph-format*
             (:graph "graph")
-            (t      "linear"))))
+            (t      "linear"))
+          (editor-available-p)))
 
 ;;; GET /api/types — list all registered concept types as a JSON array.
 ;;;

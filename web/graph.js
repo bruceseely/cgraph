@@ -1008,10 +1008,30 @@ async function loadOptions() {
         opts.canonical_graph_format === 'linear') {
       setDisplayMode(opts.canonical_graph_format);
     }
+    // The editor's routes come from a system of its own, and an image can
+    // serve this page without them. Say so on the buttons rather than letting
+    // them answer 404 -- a control that cannot do anything should not invite
+    // the click, and the message has to name the cure.
+    setEditorAvailable(opts.editor !== false);
   } catch (err) {
     console.warn('[cgraph] using built-in option defaults:', err.message);
   }
   syncDisplayModeButtons();
+}
+
+const EDITOR_MISSING_HINT =
+  'The editor is not loaded in this Lisp image — run (asdf:load-system :cgraph-editor), '
+  + 'then reload this page.';
+
+function setEditorAvailable(available) {
+  for (const id of ['editor-btn', 'nt-draw']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    // Remember the working title once, so a second call can put it back.
+    if (btn.dataset.title === undefined) btn.dataset.title = btn.title;
+    btn.disabled = !available;
+    btn.title = available ? btn.dataset.title : EDITOR_MISSING_HINT;
+  }
 }
 
 loadOptions();
@@ -2157,7 +2177,13 @@ document.getElementById('nt-draw').addEventListener('click', async () => {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       setNtHint('');
-      showError(data.error || `could not open the editor: ${resp.status}`);
+      // A 404 here is not a broken graph, it is a missing system -- and the
+      // status code alone names neither the cause nor the cure. Kept as well
+      // as the disabled button: a page loaded before the editor was unloaded,
+      // or left open across a restart, still has a live-looking button.
+      showError(resp.status === 404 ? EDITOR_MISSING_HINT
+                                    : (data.error || `could not open the editor: ${resp.status}`));
+      setEditorAvailable(resp.status !== 404);
       return;
     }
     stashTypeForm();
@@ -2195,7 +2221,9 @@ document.getElementById('editor-btn').addEventListener('click', async () => {
     const resp = await fetch('/api/editor/open-string?text=', { method: 'POST' });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
-      showError(data.error || `could not open the editor: ${resp.status}`);
+      showError(resp.status === 404 ? EDITOR_MISSING_HINT
+                                    : (data.error || `could not open the editor: ${resp.status}`));
+      setEditorAvailable(resp.status !== 404);
       return;
     }
     location.href = `/editor?session=${data.session}`;
