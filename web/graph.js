@@ -2348,6 +2348,9 @@ function cwRenderQuestion(q) {
     input.type = 'text';
     input.autocomplete = 'off';
     input.spellcheck = false;
+    // The word the box is about, shown greyed inside it. An empty box under a
+    // sentence gives no clue which of its four words is under discussion.
+    if (q.placeholder) input.placeholder = q.placeholder;
     const submit = () => cwAnswer(q.id, input.value.trim());
     input.addEventListener('keydown', ev => {
       if (ev.key === 'Enter') { ev.preventDefault(); submit(); }

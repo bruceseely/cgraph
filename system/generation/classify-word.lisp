@@ -207,8 +207,13 @@
 ;;; what lets the browser send its state back one question at a time without
 ;;; the server remembering anything.
 
-(defstruct (cq (:constructor make-cq (id kind applicable prompt options to-plist)))
-  id kind applicable prompt options to-plist)
+(defstruct (cq (:constructor make-cq (id kind applicable prompt options to-plist
+                                      &optional placeholder)))
+  id kind applicable prompt options to-plist
+  ;; :TEXT only -- the value the box would keep if left alone, shown in it as a
+  ;; placeholder. An empty box asking "type the word you would use" gives no
+  ;; clue WHICH word is under discussion; the sentence in the prompt has four.
+  placeholder)
 
 (defun cw-answer (answers id)
   (cdr (assoc id answers)))
@@ -251,14 +256,23 @@
    :lemma :text
    (lambda (label answers) (declare (ignore answers))
      (and (cw-say (cw-subject-frame label)) t))
-   (lambda (label answers) (declare (ignore answers))
-     (format nil "Right now it comes out like this: \"~A\"  If that is not the ~
-                  word you would use, type the word you would use."
-             (cw-say (cw-subject-frame label))))
+   ;; Names the WORD, not just the sentence, and says what this step can and
+   ;; cannot change. Shown only a sentence, a reader reaches for the sentence's
+   ;; fault -- "Sue has a fruit" is wrong in its ARTICLE, and the box that
+   ;; takes a word cannot fix that. The article is the next question; saying so
+   ;; is what stops someone typing "some fruit" here.
+   (lambda (label answers)
+     (format nil "This type's word is \"~A\", so it comes out: \"~A\"~
+                  ~&Is \"~:*~*~A\" the word you would use? If not, type the ~
+                  one you would. (The article and the plural come next.)"
+             (cw-question-target label answers)
+             (cw-say (cw-subject-frame label))
+             (cw-question-target label answers)))
    (lambda (label answers) (declare (ignore label answers)) nil)
    (lambda (label answers answer)
      (declare (ignore label answers))
-     (when (and answer (plusp (length answer))) (list :lemma answer))))
+     (when (and answer (plusp (length answer))) (list :lemma answer)))
+   (lambda (label answers) (cw-question-target label answers)))
 
   (make-cq
    :mass :choice

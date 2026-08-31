@@ -295,7 +295,11 @@
     #cw-close { margin-left: auto; border: none; background: none; color: #bbb;
                 cursor: pointer; font-size: 12px; line-height: 1; }
     #cw-close:hover { color: #c0392b; }
-    #cw-prompt { margin: 0.45rem 0 0.4rem; color: #333; line-height: 1.5; }
+    /* PRE-LINE: a question that shows a sentence AND asks about one word in it
+       needs the two on separate lines, or the ask trails off the end of the
+       first. */
+    #cw-prompt { margin: 0.45rem 0 0.4rem; color: #333; line-height: 1.5;
+                 white-space: pre-line; }
     #cw-controls { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
     /* An option IS the sentence being judged, so it is set in the reading face
        and given room, not squeezed into a chip. */

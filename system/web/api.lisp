@@ -301,10 +301,14 @@
     (nreverse answers)))
 
 (defun classify-question-json (label answers question)
-  (format nil "{\"question\":{\"id\":\"~(~a~)\",\"kind\":\"~(~a~)\",\"prompt\":\"~a\",\"options\":[~{~a~^,~}]}}"
+  (format nil "{\"question\":{\"id\":\"~(~a~)\",\"kind\":\"~(~a~)\",\"prompt\":\"~a\",~
+               \"placeholder\":\"~a\",\"options\":[~{~a~^,~}]}}"
           (cq-id question)
           (cq-kind question)
           (json-escape (funcall (cq-prompt question) label answers))
+          (json-escape (or (and (cq-placeholder question)
+                                (funcall (cq-placeholder question) label answers))
+                           ""))
           (mapcar (lambda (option)
                     (format nil "{\"value\":\"~a\",\"text\":\"~a\"}"
                             (json-escape (car option)) (json-escape (cdr option))))
