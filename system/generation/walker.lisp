@@ -73,11 +73,20 @@
   (find-if (lambda (r) (eq (relation-role r) :subject)) relations))
 
 (defun act-or-event-concept-p (concept)
+  "True when CONCEPT can anchor a clause as its verb.
+
+   The lattice decides it, except where the lexicon has said otherwise: a
+   type can sit under EVENT and still be a noun. PARTY is one -- a party is
+   an event, and \"the party is in the library\" has it as the subject, not the
+   verb. Without this it was chosen as the predicate and realized as one:
+   \"Is partied in a library.\" CONCEPT-POS already ranks an explicit :POS
+   above the hierarchy; this is the one place that used to skip it."
   (let ((ctype (concept-type concept)))
-    (or (string-equal (label ctype) 'act)
-        (string-equal (label ctype) 'event)
-        (handler-case (subtype-p ctype 'act)   (error () nil))
-        (handler-case (subtype-p ctype 'event) (error () nil)))))
+    (and (not (eq (lexicon-prop ctype :pos) :noun))
+         (or (string-equal (label ctype) 'act)
+             (string-equal (label ctype) 'event)
+             (handler-case (subtype-p ctype 'act)   (error () nil))
+             (handler-case (subtype-p ctype 'event) (error () nil))))))
 
 (defun find-main-predicate (nodes)
   "Locate the concept that anchors the sentence's main clause.

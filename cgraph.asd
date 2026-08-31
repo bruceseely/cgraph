@@ -83,8 +83,12 @@
 	                      :depends-on ("setup" "core")
 	                      :serial t
 	                      :components ((:file "syntax-roles")
-                                           (:file "walker")
+                                           ;; lexicon before walker: WALKER's
+                                           ;; ACT-OR-EVENT-CONCEPT-P consults a
+                                           ;; :POS override, so the table has to
+                                           ;; exist by the time it is compiled.
                                            (:file "lexicon")
+                                           (:file "walker")
                                            (:file "morphology")
                                            (:file "anaphora")
                                            (:file "realize-np")

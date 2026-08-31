@@ -409,6 +409,12 @@
 (register-lexicon-entry 'food-item            :lemma "food item")
 (register-lexicon-entry 'city-government      :lemma "city government")
 (register-lexicon-entry 'office-building      :lemma "office building")
+
+;;; A noun that names an event. Everything under EVENT realizes as a verb by
+;;; default -- without this PARTY comes out "Is partied in a library" -- and
+;;; unlike DINNER-EVENT, which never surfaces because its parts carry the
+;;; clause, a party is usually the subject of its own sentence.
+(register-lexicon-entry 'party :pos :noun)
 (register-lexicon-entry 'geological-landform  :lemma "landform")
 ;; English says "state" for both the land and the polity; the split that
 ;; matters here is one the ontology makes and the word does not.
