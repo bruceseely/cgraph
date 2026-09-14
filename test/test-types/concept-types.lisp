@@ -93,6 +93,7 @@
 (:label news :supertypes (information))
 (:label noisy :supertypes (attribute))
 (:label number :supertypes (quality))
+(:label ball :supertypes (object))
 (:label object :supertypes (inanimate))
 (:label transfer :supertypes (give) :canonical-graph "[TRANSFER]- (agnt)→[ANIMATE] (obj)→[PHYSICAL] (rcpt)→[ANIMATE]")
 (:label old :supertypes (age))
