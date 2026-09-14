@@ -13,6 +13,7 @@
 (:label hgt   :source-types physical          :dest-type distance        :desc "height - links [PHYSICAL] to [DISTANCE], where distance is the height of the physical object")
 (:label init  :source-types act               :dest-type animate)
 (:label inst  :source-types event             :dest-type entity          :desc "instrument - links [ENTITY] to [EVENT], where entity is causally involved in the act")
+(:label kind  :source-types entity            :dest-type entity          :desc "kind - links an [ENTITY] to the [ENTITY] naming its sort, as in a cherry pie. For NOUN-NOUN compounds, where the modifier is a thing rather than a property; ATTR cannot serve, its dest-type being ATTRIBUTE.")
 (:label life-stage  :source-types person      :dest-type life-stage      :desc "life stage")
 (:label loc   :source-types ⊤                 :dest-type place           :desc "location - links anything to its place")
 (:label manr  :source-types act               :dest-type manner          :desc "manner - links an [ACT] to an [ATTRIBUTE] of the act")

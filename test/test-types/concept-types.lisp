@@ -103,6 +103,7 @@
 (:label physical :supertypes (entity))
 (:label physical-attribute :supertypes (attribute))
 (:label pick-up :supertypes (act))
+(:label cherry :supertypes (food))
 (:label pie :supertypes (food))
 (:label place :supertypes (inanimate) :canonical-graph "[PLACE]←(loc)←[⊤].")
 (:label here :supertypes (place))   ; deictic place ("... sees the dog here")
