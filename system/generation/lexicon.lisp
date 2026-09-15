@@ -303,11 +303,67 @@
 (defun mass-noun-p (concept)
   (lexicon-prop (concept-type concept) :mass-p))
 
+;;; --- Indexical pronouns -----------------------------------------------------
+;;; A pronoun with no antecedent to resolve to is an INDEXICAL: it names its
+;;; referent by pointing, and the graph records that as an individual whose name
+;;; IS the pronoun -- [PERSON: You] for an imperative's implicit subject,
+;;; [PERSON: She] for a `her' nothing bound. Realized as an ordinary name, those
+;;; come out "The woman sees She." and "You sees the dog.": English inflects a
+;;; pronoun for CASE, which a name never has, and agrees a verb with its PERSON,
+;;; which a name always settles as third.
+;;;
+;;; So the generator reads such a name back as the pronoun it is. Every form is
+;;; a key, since a graph may well say [PERSON: Him] where the extractor writes
+;;; the root.
+
+(defparameter *personal-pronoun-forms*
+  '(("i"    1 :singular "I"    "me"   "my")
+    ("we"   1 :plural   "we"   "us"   "our")
+    ("you"  2 :singular "you"  "you"  "your")
+    ("he"   3 :singular "he"   "him"  "his")
+    ("she"  3 :singular "she"  "her"  "her")
+    ("it"   3 :singular "it"   "it"   "its")
+    ("they" 3 :plural   "they" "them" "their"))
+  "(KEY PERSON NUMBER NOMINATIVE ACCUSATIVE POSSESSIVE) for each personal
+   pronoun. The case columns are the surface forms; PERSON and NUMBER are what
+   a verb agrees with. \"I\" is capitalized because English capitalizes it
+   everywhere, not because anything here is sentence-initial.")
+
+(defun personal-pronoun-row (name)
+  "The *PERSONAL-PRONOUN-FORMS* row NAME is any form of, or NIL. Case-blind,
+   and every column is a key: `her', `she' and `hers'-less as it is, all find
+   the same row."
+  (and (stringp name)
+       (find-if (lambda (row)
+                  (or (string-equal name (first row))
+                      (member name (cdddr row) :test #'string-equal)))
+               *personal-pronoun-forms*)))
+
+(defun indexical-pronoun-row (concept)
+  "CONCEPT's pronoun row when it is an indexical pronoun individual -- a
+   referent whose NAME is a pronoun -- else NIL."
+  (let* ((ref  (and (typep concept 'concept) (referent concept)))
+         (name (and ref (referent-name concept))))
+    (personal-pronoun-row name)))
+
+(defun indexical-pronoun-form (concept &optional (case :nominative))
+  "The surface form CONCEPT takes in CASE when it is an indexical pronoun
+   ([PERSON: She] + :accusative -> \"her\"), else NIL."
+  (let ((row (indexical-pronoun-row concept)))
+    (and row (ecase case
+               (:nominative (fourth row))
+               (:accusative (fifth  row))
+               (:possessive (sixth  row))))))
+
 ;;; --- Number, person, definiteness from referent -----------------------------
 
 (defun concept-number (concept)
-  "Return :plural if the concept's referent denotes a set, else :singular."
-  (cond ((set-spec concept) :plural)
+  "Return :plural if the concept's referent denotes a set, else :singular.
+   An indexical pronoun answers for itself: [PERSON: They] is one referent and
+   plural all the same, and the verb has to agree with it."
+  (cond ((let ((row (indexical-pronoun-row concept)))
+           (and row (third row))))
+        ((set-spec concept) :plural)
         ;; Set-typed referent (e.g. parsed from '[DOG: {*}]') means plural.
         ((let ((ref (referent concept)))
            (and ref (set-p ref)))
@@ -315,9 +371,14 @@
         (t :singular)))
 
 (defun concept-person (concept)
-  ;; Phase 2: no first/second-person referents in the schema; default 3rd.
-  (declare (ignore concept))
-  3)
+  "Grammatical person for verb agreement: 1 or 2 for an indexical pronoun that
+   is one ([PERSON: I], [PERSON: You]), else 3.
+
+   Everything else in a graph IS third person -- a concept names something
+   spoken about. A pronoun is the exception, because it names a role in the
+   speech situation instead, and \"I sees the dog\" is what came of ignoring
+   that."
+  (or (second (indexical-pronoun-row concept)) 3))
 
 (defun concept-definiteness (concept)
   "Return :definite / :indefinite / :proper / :universal / :existential.

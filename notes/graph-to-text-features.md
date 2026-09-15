@@ -27,6 +27,30 @@ deferred work, see `notes/graph-to-text-todo.md`.
 A bare concept is indefinite. A `#` referent (with or without an id)
 makes it definite. A name referent surfaces as a proper noun.
 
+### 1.1a Indexical pronouns
+
+A pronoun with no antecedent to resolve to names its referent by pointing, and
+a graph records that as an individual whose **name is the pronoun** —
+`[PERSON: You]` for an imperative's implicit subject, `[PERSON: She]` for a
+`her` nothing bound. Read as an ordinary name these came out *The woman sees
+She.* and *I sees the dog.*: a pronoun inflects for **case**, which a name never
+does, and carries a **person**, which a name always settles as third.
+
+| Input                                            | Output                 |
+|--------------------------------------------------|------------------------|
+| `[SEE]-(agnt)→[WOMAN: #](obj)→[PERSON: She].`    | The woman sees her.    |
+| `[SEE]-(agnt)→[MAN: #](obj)→[DOG: #]←(poss)←[PERSON: She].` | The man sees her dog. |
+| `[SEE]-(agnt)→[PERSON: I](obj)→[DOG: #].`        | I see the dog.         |
+| `[SEE]-(agnt)→[PERSON: They](obj)→[DOG: #].`     | They see the dog.      |
+
+`*personal-pronoun-forms*` (`lexicon.lisp`) holds the case forms plus the person
+and number each pronoun carries; every form is a key, so `[PERSON: Him]` finds
+the same row the extractor's `[PERSON: He]` does. `realize-np` answers from it
+before any article or modifier logic — a pronoun is already a noun phrase, and
+is what a revisit would have produced anyway — and `concept-person` /
+`concept-number` read it so the verb agrees. First and second person exist
+**only** here: everything else in a graph is something spoken *about*.
+
 ### 1.2 Plurals and sets
 
 | Input                          | Output                      |

@@ -69,6 +69,11 @@
                       ;; A domain's own generation overrides (the
                       ;; lexicon-overrides.lisp beside its type files).
                       domain-lexicon-test
+                      ;; Graph -> English. Built by the asd and green, but
+                      ;; never listed here, so the one suite that checks what
+                      ;; the generator actually SAYS was ungated -- the same
+                      ;; gap the lint suites had below.
+                      generation-test
                       ;; The lint suites. All four are built by cgraph.asd and
                       ;; none of them were run: the list named
                       ;; POS-ROOTS-LINT-TEST, which does not exist, and nothing

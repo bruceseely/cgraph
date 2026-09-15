@@ -35,7 +35,17 @@
   "Emit a noun phrase for CONCEPT. On the first visit, build the full NP
    (adjectives, possessive, determiner, possibly trailing relative clauses).
    On revisits (Sowa Rule 5), emit the pronoun in the given grammatical CASE."
-  (cond ((uttered-or-coref-uttered-p state concept)
+  (cond
+        ;; An INDEXICAL pronoun ([PERSON: She]) is already a noun phrase, and
+        ;; the only one whose form depends on CASE. It needs no article, no
+        ;; modifiers and no first-mention/revisit distinction -- a pronoun is
+        ;; what a revisit would have produced anyway -- so it answers here,
+        ;; before any of that. Without this it went down the proper-name path
+        ;; and the object of a sentence came out "The woman sees She."
+        ((indexical-pronoun-form concept case)
+         (mark-uttered state concept)
+         (indexical-pronoun-form concept case))
+        ((uttered-or-coref-uttered-p state concept)
          (let ((np (or (and (pronoun-safe-p concept state :case case)
                             (pronoun-for concept :case case :state state))
                        (short-definite-np concept))))
@@ -179,7 +189,8 @@
                    ;; possessive mentions it just as surely as a subject does,
                    ;; and leaving it unmarked let a LATER sentence introduce it
                    ;; over again.
-                   (push (or (and (uttered-or-coref-uttered-p state owner)
+                   (push (or (indexical-pronoun-form owner :possessive)
+                             (and (uttered-or-coref-uttered-p state owner)
                                   (pronoun-safe-p owner state :case :possessive)
                                   (pronoun-for owner :case :possessive :state state))
                              (format nil "~a's"
@@ -195,13 +206,17 @@
     (append (nreverse poss-mods) (nreverse adj-mods))))
 
 (defun possessive-pronoun-p (word)
-  "True when WORD is one of the possessive pronouns the anaphora pass emits.
+  "True when WORD is one of the possessive pronouns the generator emits.
 
-   Read off *PRONOUN-TABLE* rather than listed again here, so a pronoun added
-   there cannot go missing from this test."
+   Read off *PRONOUN-TABLE* and *PERSONAL-PRONOUN-FORMS* rather than listed
+   again here, so a pronoun added to either cannot go missing from this test.
+   Both tables are needed: the first is what the anaphora pass emits for a
+   revisit, the second what an indexical pronoun owner emits (`my', `your' --
+   forms no revisit produces, since nothing in a graph is a second person)."
   (and (stringp word)
-       (member word (loop for ((nil nil case) surface) in *pronoun-table*
-                          when (eq case :possessive) collect surface)
+       (member word (append (loop for ((nil nil case) surface) in *pronoun-table*
+                                  when (eq case :possessive) collect surface)
+                            (mapcar #'sixth *personal-pronoun-forms*))
                :test #'string-equal)))
 
 (defun np-article-with-mods (concept mods-pre head)

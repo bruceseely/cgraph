@@ -276,6 +276,26 @@
     ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](obj)→[NEWS]"
      . "Bruce informs Sue about news.")
 
+    ;; INDEXICAL PRONOUNS -- an individual whose NAME is a pronoun, which is
+    ;; what a pronoun with no antecedent leaves in the graph. Realized as an
+    ;; ordinary name these came out "The woman sees She." and "I sees the
+    ;; dog.": a pronoun inflects for CASE, which a name never does, and
+    ;; carries a PERSON, which a name always settles as third.
+    ("[PERSON: She]"                            . "She.")
+    ("[SEE]-(agnt)→[WOMAN: #](obj)→[PERSON: She]." . "The woman sees her.")
+    ("[SEE]-(agnt)→[MAN: #](obj)→[PERSON: He]."    . "The man sees him.")
+    ;; ... and as a possessor: "her dog", not "She's dog".
+    ("[SEE]-(agnt)→[MAN: #](obj)→[DOG: #]←(poss)←[PERSON: She]."
+     . "The man sees her dog.")
+    ;; Person and number reach verb agreement. First and second person exist
+    ;; ONLY here -- everything else in a graph is something spoken about.
+    ("[SEE]-(agnt)→[PERSON: I](obj)→[DOG: #]."    . "I see the dog.")
+    ("[SEE]-(agnt)→[PERSON: You](obj)→[DOG: #]."  . "You see the dog.")
+    ("[SEE]-(agnt)→[PERSON: They](obj)→[DOG: #]." . "They see the dog.")
+    ("[SEE]-(agnt)→[PERSON: She](obj)→[DOG: #]."  . "She sees the dog.")
+    ;; A first-person possessor takes no article: "my dog", not "a my dog".
+    ("[SEE]-(agnt)→[MAN: #](obj)→[DOG]←(poss)←[PERSON: I]."
+     . "The man sees my dog.")
 
     ))
 

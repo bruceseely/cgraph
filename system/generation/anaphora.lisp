@@ -195,9 +195,12 @@
                          (find-if (lambda (c) (uttered-p state c))
                                   (coreference concept)))
                     concept)))
-    (lookup-pronoun (gender-of source)
-                    (concept-number source)
-                    case)))
+    ;; An indexical pronoun says which word it is; gender and number have
+    ;; nothing to add, and for `I'/`you' they cannot reach the answer at all.
+    (or (indexical-pronoun-form source case)
+        (lookup-pronoun (gender-of source)
+                        (concept-number source)
+                        case))))
 
 (defun would-surface-as-pronoun-p (concept state &key (case :accusative))
   "True when realize-np would render CONCEPT as a pronoun in this STATE
