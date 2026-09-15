@@ -118,6 +118,11 @@ All of these go through `register-lexicon-entry 'TYPE-LABEL :key value ...`
 except the irregular-verb and irregular-plural tables, which are direct list
 entries keyed on the **lemma string** (not the type label).
 
+If the type belongs to a **domain** rather than to cgraph, write the entry in
+that domain's `lexicon-overrides.lisp`, beside its concept-types.lisp, rather
+than in cgraph's source — `(:label baltimore :proper-p t)`, one form per entry.
+See `notes/lexicon-overrides.md` § "A domain's own overrides".
+
 ### Hierarchy-level supertypes referenced by code
 
 These labels are queried by `safe-subtype-p` during generation. Renaming or

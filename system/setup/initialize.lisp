@@ -49,6 +49,20 @@
              (format nil "~arelation-types.lisp" *cgraph-types-directory*)))
 
 
+(defun domain-types-directory ()
+  "The directory this session's type files REALLY live in -- the domain.
+
+   *CGRAPH-TYPES-DIRECTORY* is ~/.cgraph/types, where concept-types.lisp is
+   either a file of its own (the copied default catalog) or a symlink into a
+   domain repository (LINK-CGRAPH-TYPES-TO-EXTERNAL-DIRECTORY). Resolving the
+   link tells the two apart without a second setting to keep in sync: follow
+   concept-types.lisp to its truename and take the directory it landed in.
+   Falls back to *CGRAPH-TYPES-DIRECTORY* itself when there is no such file."
+  (let* ((dir  (uiop:ensure-directory-pathname *cgraph-types-directory*))
+         (link (ignore-errors (truename (merge-pathnames "concept-types.lisp" dir)))))
+    (if link (uiop:pathname-directory-pathname link) dir)))
+
+
 (defun initialize-types (&key (external-types-directory *external-types-directory* type-supplied) supress-warnings)
   (when type-supplied
     (setf *external-types-directory*  external-types-directory))
@@ -65,7 +79,15 @@
   (when (and (probe-file (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
              (probe-file (format nil "~arelation-types.lisp" *cgraph-types-directory*)))
     (clear-cgraph-type-catalogs)
-    (load-cgraph-types supress-warnings)))
+    (load-cgraph-types supress-warnings)
+
+    ;; ... and the English that goes with them. A domain may ship
+    ;; lexicon-overrides.lisp beside its type files to say how its types are
+    ;; worded; absence is legal and silent (see *DOMAIN-LEXICON-LOADER*).
+    ;; After the catalog, so the lint that reads these entries has types to
+    ;; check them against.
+    (when *domain-lexicon-loader*
+      (funcall *domain-lexicon-loader* (domain-types-directory)))))
 
 
 (defun initialize-parameters ()

@@ -116,6 +116,20 @@
    NIL means nothing has taught the reader about mass nouns yet, in which
    case every type is treated as countable.")
 
+(defvar *domain-lexicon-loader* nil
+  "Function of one argument, the directory this session's type files really
+   live in, called by INITIALIZE-TYPES once the catalog is loaded.
+
+   A domain is one directory: concept types, relation types, and -- through
+   this hook -- the English overrides that say how its types are WORDED (that
+   BALTIMORE is a proper noun, that RICE is mass, what CITY-GOVERNMENT is
+   called). Those overrides belong to the generation lexicon, which loads
+   after setup, so setup declares the hole and generation fills it, exactly as
+   *MASS-TYPE-P* does for the reader.
+
+   NIL means nothing has taught setup about the generation lexicon, in which
+   case a domain's overrides (if it ships any) simply are not read.")
+
 (defvar *relation-syntax-hook* nil
   "Function of (LABEL ROLE PREPOSITION), called by PARSE-RELATION-TYPE-DEF for
    a relation definition carrying a :ROLE key.

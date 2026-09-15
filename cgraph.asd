@@ -139,6 +139,7 @@
                              (:file "query-test")
 
                              (:file "generation-test")
+                             (:file "domain-lexicon-test")
                              (:file "generation-roots-lint-test")
                              (:file "relation-tables-lint-test")
                              (:file "relation-hierarchy-test")

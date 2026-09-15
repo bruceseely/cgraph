@@ -98,6 +98,98 @@
 (defun lexicon-prop (type-or-label key &optional default)
   (getf (lexicon-entry type-or-label) key default))
 
+;;; --- A domain's own overrides -----------------------------------------------
+;;; Everything registered further down this file is cgraph's own vocabulary --
+;;; the weekdays, the mass nouns, the compound labels. A DOMAIN has vocabulary
+;;; too, and no business being written into this file: the catalog that defines
+;;; BALTIMORE as a subtype of CITY is the thing that knows BALTIMORE is a proper
+;;; noun, said without an article. So a domain may ship LEXICON-OVERRIDES.LISP
+;;; beside its concept-types.lisp, one form per entry, in the same shape the type
+;;; files use:
+;;;
+;;;   (:label baltimore :proper-p t)
+;;;   (:label rice      :mass-p t)
+;;;   (:label belief    :lemma "believe")
+;;;
+;;; Each form is a REGISTER-LEXICON-ENTRY call with :LABEL naming the type, so
+;;; every key that function takes works here -- see *LEXICON-OVERRIDE-KEYS* for
+;;; the list and REPORT-LEXICON-LINT for the checks (a misspelled key, or one
+;;; nothing reads, is a lint ERROR, and a label no concept type has is :INFO).
+;;; ABSENCE IS LEGAL: a domain that needs no overrides ships no file, and that is
+;;; the normal case rather than a gap.
+
+(defparameter *domain-lexicon-file-name* "lexicon-overrides.lisp"
+  "Filename a domain uses for its generation overrides, alongside its
+   concept-types.lisp and relation-types.lisp.")
+
+(defvar *domain-lexicon-file* nil
+  "The domain override file loaded this session, or NIL when the mounted domain
+   ships none.")
+
+(defvar *domain-lexicon-undo* nil
+  "Alist of (KEY . PREVIOUS) for every entry the current domain file registered.
+   PREVIOUS is the plist that was registered before it, or :NONE when nothing
+   was. Mounting a second domain rewinds through this first, so one domain's
+   English cannot leak into the next -- and a domain that overrode one of
+   cgraph's own registrations (:LEMMA on CITY-GOVERNMENT, say) gives it back
+   rather than deleting it.")
+
+(defun clear-domain-lexicon-overrides ()
+  "Undo every override the last domain file registered, restoring what stood
+   before it. Returns nothing useful."
+  (dolist (pair *domain-lexicon-undo*)
+    (if (eq (cdr pair) :none)
+        (remhash (car pair) *lexicon-overrides*)
+        (setf (gethash (car pair) *lexicon-overrides*) (cdr pair))))
+  (setf *domain-lexicon-undo* nil
+        *domain-lexicon-file* nil)
+  (values))
+
+(defun register-domain-lexicon-entry (def)
+  "Register one (:LABEL name :key value ...) form from a domain override file,
+   remembering what it displaced so CLEAR-DOMAIN-LEXICON-OVERRIDES can put it
+   back. Returns the label, or NIL for a form that is not a plist with a :LABEL
+   -- which is warned about and skipped, so one bad entry costs only itself."
+  (let ((label (and (listp def) (evenp (length def)) (getf def :label))))
+    (cond
+      ((null label)
+       (warn "cgraph: ignoring malformed lexicon override ~s in ~a ~
+              (want (:label NAME :key value ...))"
+             def (or *domain-lexicon-file* *domain-lexicon-file-name*))
+       nil)
+      (t
+       (let ((key   (string-upcase (string label)))
+             (plist (copy-list def)))
+         (remf plist :label)
+         (multiple-value-bind (previous present) (gethash key *lexicon-overrides*)
+           (push (cons key (if present previous :none)) *domain-lexicon-undo*))
+         (apply #'register-lexicon-entry label plist)
+         label)))))
+
+(defun load-domain-lexicon-overrides (&optional (directory (domain-types-directory)))
+  "Load DIRECTORY's generation overrides, replacing any previous domain's.
+   Returns the file loaded, or NIL when the domain ships none.
+
+   Called by INITIALIZE-TYPES through *DOMAIN-LEXICON-LOADER* once the type
+   catalog is in place, and safe to call again by hand after editing the file."
+  (let* ((dir  (uiop:ensure-directory-pathname directory))
+         (path (probe-file (merge-pathnames *domain-lexicon-file-name* dir))))
+    (clear-domain-lexicon-overrides)
+    (when path
+      ;; Plain READ, like the type loaders, and in :CG for the same reason --
+      ;; a label read here is a symbol in whatever package is current.
+      (let ((*package* (find-package :conceptual-graphs)))
+        (with-open-file (stream path :direction :input)
+          (loop for def = (read stream nil 'eof)
+                until (eq def 'eof)
+                do (register-domain-lexicon-entry def))))
+      (setf *domain-lexicon-file* path))))
+
+;;; Setup declares the hole (*DOMAIN-LEXICON-LOADER*) and generation fills it,
+;;; the way *MASS-TYPE-P* is filled below -- generation depends on setup, never
+;;; the other way about.
+(setf *domain-lexicon-loader* #'load-domain-lexicon-overrides)
+
 ;;; --- Part-of-speech classification ------------------------------------------
 
 (defun safe-subtype-p (label-symbol root-symbol)

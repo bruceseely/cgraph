@@ -39,7 +39,7 @@ these as `[STALE-LEXICON-OVERRIDE]`; see `system/generation/lexicon-lint.lisp`).
 |-----|---------|---------|
 | `:pos` | force part of speech (override the lattice-derived guess) | `(<label> :pos :noun)` |
 | `:mass-p` | mass noun → no indefinite article. **Default is count** (gets "a/an", pluralizes) | `(salt :mass-p t)` → "salt", not "a salt" |
-| `:proper-p` | proper noun → no article, capitalized | |
+| `:proper-p` | proper noun → no article, capitalized | `(baltimore :proper-p t)` → "to Baltimore", not "to a baltimore" |
 | `:gender` | `:masc` / `:fem`, for pronoun selection | `(man :gender :masc)` → "he" |
 | `:human-p` | human → who/he/she rather than which/it | `(woman :human-p t)` |
 | `:animate-p` | animate, for pronoun / agreement | |
@@ -66,7 +66,47 @@ So `:mass-p`, `:proper-p`, etc. only ever *turn off* a default behavior.
 - `system/generation/lexicon.lisp` — mass-noun starter set, adverb-forms,
   phrasal/irregular verbs.
 - `system/generation/anaphora.lisp` — gender / human-p (man, woman, boy, girl).
+- **a domain's own `lexicon-overrides.lisp`** — see below.
 
 The mass-noun starter set pre-registers common mass nouns (`food`, `salt`,
 `money`, …) whether or not the ontology defines them, so they "light up"
 correctly the moment the matching concept type is added.
+
+## A domain's own overrides
+
+Everything above is cgraph's *own* vocabulary. A domain has vocabulary too, and
+it does not belong in cgraph's source: the catalog that defines `BALTIMORE` as a
+subtype of `CITY` is the thing that knows Baltimore is a proper noun. So a domain
+may ship a third file beside its type files:
+
+```
+~/.cgraph/types/  →  your-types-repo/
+  concept-types.lisp        what exists
+  relation-types.lisp       what relates
+  lexicon-overrides.lisp    how it is worded
+```
+
+One form per entry, in the same shape the type files use — each is a
+`register-lexicon-entry` call with `:label` naming the type, so every key in the
+tables above works:
+
+```lisp
+(:label baltimore :proper-p t)
+(:label rice      :mass-p t)
+(:label belief    :lemma "believe")
+```
+
+`initialize-types` loads it once the catalog is in place, through the
+`*domain-lexicon-loader*` hook that `system/generation/lexicon.lisp` fills (setup
+declares the hole, generation fills it — the same arrangement as `*mass-type-p*`,
+so the dependency keeps pointing generation → setup). The file is found by
+following `concept-types.lisp` to its truename, so it works whether the catalog
+is a symlinked domain repository or the copied default one; **absence is legal**
+and silent, which is the normal case.
+
+Mounting another domain rewinds the previous one's entries first — including
+restoring any shipped registration a domain had displaced — so one domain's
+English never leaks into the next. A malformed form is warned about and skipped,
+and the lint checks the rest: a misspelled key is `[UNKNOWN-LEXICON-KEY]`, a
+label no type has is `[STALE-LEXICON-OVERRIDE]`. Reload after editing with
+`(load-domain-lexicon-overrides)`; see `test/domain-lexicon-test.lisp`.
