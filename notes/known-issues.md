@@ -12,6 +12,61 @@ found on 2026-08-27 while building the canonical-graph guidance and is
 **outstanding** -- it is a limit of where the check stands, not a defect in
 what it does.
 
+## ~~`graph-present-p` ignored arcs, so `add-cgraph` silently dropped facts~~ — fixed
+
+`system/core/context.lisp`. Found 2026-09-28 while deciding whether joining on
+ingest should be a policy (`cg-from-parse/notes/next-steps.md`), and older than
+that question by a long way.
+
+`add-cgraph` is the non-joining ingest -- append a graph to the context, skipping
+one already there -- and `make-cgraph` calls it, so it is the path every graph
+takes. Its duplicate guard compared the sorted multiset of `graph-node-key`s, and
+a node key carries a node's **type and referent and nothing about its arcs**:
+
+    (defun graph-node-key (node)
+      (cond ((eq (type-of node) 'concept)
+             (format nil "concept-~a-~a" (node-type node) (format-referent node)))
+            ((eq (type-of node) 'relation)
+             (format nil "relation-~a" (node-type node)))))
+
+So two graphs over the same concepts were "present" in each other however they
+were wired:
+
+    [GIVE]-(agnt)→[PERSON: Sue](rcpt)→[PERSON: Bob](obj)→[BOOK].
+    [GIVE]-(agnt)→[PERSON: Bob](rcpt)→[PERSON: Sue](obj)→[BOOK].
+
+Sue gives Bob a book, and Bob gives Sue a book. `add-cgraph` **skips** a graph it
+believes present, so the second was not merged or reordered -- it was dropped,
+and the context held a claim nobody made about the one that survived.
+
+**`graphs-equal` had this exact bug and was fixed for this exact reason.** The
+superseded version is still at `graph.lisp:122`; the replacement's docstring names
+the failure ("two graphs built from the same concepts were equal however they were
+wired together") and says its callers are "chiefly CONTEXT's bookkeeping."
+`remove-cgraph` was already using the fixed predicate. This was the half of the
+repair that never landed, and it was the half with teeth.
+
+Now `(and (find graph (graphs context) :test #'graphs-equal) t)`.
+
+Three things found alongside it, all fixed in the same change:
+
+- The old code **sorted `(nodes graph)` in place** -- destructively reordering the
+  node list of the graph under test and of every graph in the context, from inside
+  a predicate. Nothing depends on that order, so nothing broke visibly.
+- The `concept` and `string` methods called **`make-graph`, which does not exist**
+  and never did (the constructor is `make-cgraph`). Both were dead: any call
+  raised an undefined-function error. Nothing noticed because `add-cgraph`, the
+  only caller, always has a `graph` in hand.
+- `make-cgraph` is not a drop-in there, because it **adds** what it builds to a
+  context -- with the default it would add the graph to the context being searched
+  and then find it. Both methods now build in a throwaway context.
+
+Not fixed, and still true: `graph-present-p` walks every graph in the context on
+every add, so ingest is quadratic. Invisible at two dozen graphs; not at ten
+thousand, and the add-without-join path is the one a large knowledge base uses.
+
+Covered by `test/graph-equality-test.lisp` (five new checks).
+
 ## ~~`individuals-equal` ignores the id, so `simplify` can delete an assertion~~ — fixed
 
 `system/core/individual.lisp:115`. Found on 2026-08-25 while building the

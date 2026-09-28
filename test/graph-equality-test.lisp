@@ -58,6 +58,44 @@
         (check "and told apart"
                (not (nodes-equal r1 r3))))
 
+      ;; --- GRAPH-PRESENT-P / ADD-CGRAPH ------------------------------------
+      ;; GRAPHS-EQUAL was fixed here; GRAPH-PRESENT-P was the half of the repair
+      ;; that did not land, and it is the one with teeth: ADD-CGRAPH SKIPS a
+      ;; graph it believes present, so a false positive does not merge or reorder
+      ;; a fact, it DROPS it. It compared a bag of GRAPH-NODE-KEYs, which carry a
+      ;; node's type and referent and nothing about its arcs.
+      (let ((kb (make-context)))
+        (make-cgraph "[GIVE]-(agnt)→[PERSON: Sue](rcpt)→[PERSON: Bob](obj)→[BOOK]." kb)
+        (make-cgraph "[GIVE]-(agnt)→[PERSON: Bob](rcpt)→[PERSON: Sue](obj)→[BOOK]." kb)
+        (check "Sue gives Bob a book and Bob gives Sue a book are both kept"
+               (eql 2 (length (graphs kb)))))
+
+      ;; ... while still collapsing a genuine duplicate, which is what the guard
+      ;; is for. A fix that kept everything would be no fix.
+      (let ((kb (make-context)))
+        (make-cgraph "[EAT]→(agnt)→[DOG]." kb)
+        (make-cgraph "[EAT]→(agnt)→[DOG]." kb)
+        (check "the same graph added twice is stored once"
+               (eql 1 (length (graphs kb)))))
+
+      ;; The STRING method, which builds the graph and recurses.
+      (let ((kb (make-context)))
+        (make-cgraph "[EAT]→(agnt)→[DOG]." kb)
+        (check "GRAPH-PRESENT-P sees a graph that differs only by relation as absent"
+               (not (graph-present-p "[EAT]→(obj)→[DOG]." kb)))
+        (check "and one that matches as present"
+               (graph-present-p "[EAT]→(agnt)→[DOG]." kb)))
+
+      ;; It used to SORT (nodes graph) in place -- from inside a predicate --
+      ;; reordering the node list of the graph tested and of every graph in the
+      ;; context. Nothing depends on that order, so nothing broke visibly.
+      (let* ((kb (make-context))
+             (g  (make-cgraph "[EAT]-(agnt)→[DOG](obj)→[CAKE]." kb))
+             (before (copy-list (nodes g))))
+        (graph-present-p g kb)
+        (check "GRAPH-PRESENT-P does not reorder the nodes it inspects"
+               (equal before (nodes g))))
+
       (when verbose
         (format t "~&GRAPH-EQUALITY-TEST ~:[failed~;passed~]~%" ok))
       ok)))

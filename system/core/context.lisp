@@ -172,25 +172,58 @@
                      ((eq (type-of node) 'relation)
                       (format nil "relation-~a" (node-type node))))))
 
+;;; GRAPHS-EQUAL, not a bag of node keys. This compared the sorted multiset of
+;;; GRAPH-NODE-KEYs, and a node key carries a node's type and referent and
+;;; NOTHING ABOUT ITS ARCS -- so two graphs over the same concepts were "present"
+;;; in each other however they were wired:
+;;;
+;;;   [GIVE]- (agnt)→[PERSON: Sue] (rcpt)→[PERSON: Bob] (obj)→[BOOK]
+;;;   [GIVE]- (agnt)→[PERSON: Bob] (rcpt)→[PERSON: Sue] (obj)→[BOOK]
+;;;
+;;; Sue gives Bob a book, and Bob gives Sue a book. ADD-CGRAPH is the only
+;;; caller that acts on the answer, and it SKIPS a graph it believes present --
+;;; so the second fact was not merged or reordered, it was silently dropped, and
+;;; the context held a claim nobody made about the one that survived.
+;;;
+;;; GRAPHS-EQUAL had exactly this bug and was fixed for exactly this reason (the
+;;; superseded version is still at graph.lisp:122, and the replacement's
+;;; docstring names the failure and says its callers are "chiefly CONTEXT's
+;;; bookkeeping"). REMOVE-CGRAPH was already using the fixed predicate; this was
+;;; the half of the repair that never landed. It compares concepts AND the
+;;; relations induced between them, with each relation's arcs IN ORDER, which is
+;;; what carries direction.
+;;;
+;;; It is not an isomorphism test -- two graphs whose concepts and relations
+;;; agree one for one can still differ in which of two identical-looking
+;;; concepts a relation attaches to. That needs a search, and PROJECT is the
+;;; function that searches; mutual projection is the CG notion of equivalence.
+;;; This answers the narrower structural question ADD-CGRAPH actually asks.
+;;;
+;;; The old code also SORTED (nodes graph) in place -- destructively reordering
+;;; the node list of the graph being tested AND of every graph in the context,
+;;; from inside a predicate. Nothing depends on that order, so nothing broke
+;;; visibly; it is gone with the rest.
+
 (defmethod graph-present-p ((graph graph) &optional (context *context*))
-  (let* ((graph-nodes (sort (nodes graph) #'alpha-lessp :key #'graph-node-key))
-         (graph-node-keys (mapcar #'graph-node-key graph-nodes))
-         (sorted-context-graphs
-           (mapcar (lambda (graph)
-                     (sort (nodes graph) #'alpha-lessp :key #'graph-node-key))
-                   (graphs context)))
-         (found (find graph-node-keys sorted-context-graphs
-                      :key (lambda (list) (mapcar #'graph-node-key list))
-                      :test #'equalp)))
-    (not (null found))))
+  (and (find graph (graphs context) :test #'graphs-equal) t))
+
+;;; These two convenience methods called MAKE-GRAPH, which does not exist and
+;;; never did -- the constructor is MAKE-CGRAPH. Both were therefore dead: any
+;;; call raised an undefined-function error. Nothing noticed because ADD-CGRAPH,
+;;; the only caller that reaches GRAPH-PRESENT-P, always has a GRAPH in hand.
+;;;
+;;; MAKE-CGRAPH is not a drop-in, either: it ADDS what it builds to a context.
+;;; Called with the default it would add the graph to the very context being
+;;; searched and then find it -- a predicate that makes its own answer true. So
+;;; each builds in a THROWAWAY context and asks about the real one.
 
 (defmethod graph-present-p ((concept concept) &optional (context *context*))
-  (let ((graph (make-graph concept)))
+  (let ((graph (make-cgraph concept (make-context))))
     (when graph
       (graph-present-p graph context))))
 
 (defmethod graph-present-p ((graph-string string) &optional (context *context*))
-  (let ((graph (make-graph graph-string)))
+  (let ((graph (make-cgraph graph-string (make-context))))
     (when graph
       (graph-present-p graph context))))
 
