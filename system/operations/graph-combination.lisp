@@ -180,11 +180,34 @@
 
 
 (defun include-cgraph (graph &optional (context *context*))
+  "Add GRAPH to CONTEXT and COMBINE it with every graph it shares a joinable
+concept with, transitively. The joining half of the pair whose other half is
+ADD-CGRAPH (core/context.lisp), where the choice between them is written up.
+
+In short: ADD-CGRAPH keeps the record, one graph per assertion, and cannot
+invent anything; this draws the inference that graphs sharing a concept are
+about the same thing. Both answer the same queries -- PROJECT searches every
+graph in the context either way -- so the join buys a consolidated store, not
+reachability.
+
+TWO THINGS TO KNOW. The combination is DESTRUCTIVE: the input graphs are
+rewired in place, so a store built here and the graphs that went into it are the
+same objects and the unjoined originals are gone. And joining GENERIC concepts
+merges more than you may mean -- two referent-less [EAT]s correspond
+automatically, so a corpus of graphs whose events carry no individual referent
+collapses into one graph with one eating and eight eaters. The formation rules
+license it; the graphs never said the eatings were different. Individuate events
+first (cg-from-parse's system/identity.lisp), or use ADD-CGRAPH and join later
+with CONSOLIDATE-CGRAPHS."
   (setf (graphs context)
         (combine-cgraphs (list* graph (graphs context)))))
 
 
 (defun consolidate-cgraphs (&optional (kb *context*))
+  "Combine everything already in KB, in place. The third option, and usually the
+one you want: build the store with ADD-CGRAPH so it holds the record, then join
+when you actually want the consolidated reading. Same destructive combination as
+INCLUDE-CGRAPH -- it just happens when you ask rather than on every ingest."
   (setf (graphs kb) (combine-cgraphs (graphs kb)))
   kb)
 

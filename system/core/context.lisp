@@ -240,8 +240,63 @@
 
 
 
+;;; ===========================================================================
+;;; Two ways to put a graph in a context, and the difference is a POLICY
+;;; ===========================================================================
+;;;
+;;;   ADD-CGRAPH      (here)  append the graph. Nothing is joined. The context
+;;;                           ends up holding exactly what was asserted, one
+;;;                           graph per assertion.
+;;;   INCLUDE-CGRAPH  (operations/graph-combination.lisp) append the graph AND
+;;;                           combine it with every graph it shares a joinable
+;;;                           concept with, transitively.
+;;;
+;;; ADD-CGRAPH is the primitive and the default: MAKE-CGRAPH calls it, so every
+;;; graph built from a node, a node list or a string is already in its context
+;;; this way. INCLUDE-CGRAPH is opt-in -- you ask for the join.
+;;;
+;;; WHICH ONE YOU WANT is a question about the store, not about graphs:
+;;;
+;;;   ADD-CGRAPH preserves the record. It cannot invent anything, because it
+;;;   never combines two assertions, and it is therefore what you want when the
+;;;   context is a log of what was said -- extraction from text, a corpus, a
+;;;   transcript. Retrieval does not suffer for it: PROJECT and QUERY search
+;;;   every graph in the context, so an unjoined store answers the same
+;;;   questions. (Measured: `cg-from-parse/notes/kb-experiment-findings.md' §4
+;;;   queries an unjoined store of two dozen extracted graphs and gets the right
+;;;   distinct bindings; against the JOINED store the same questions return the
+;;;   same bindings buried in many more paths.)
+;;;
+;;;   INCLUDE-CGRAPH draws inferences on the way in. Joining two graphs on a
+;;;   shared concept asserts they are about the same thing, which is exactly
+;;;   what Sowa's formation rules license and exactly what you want when the
+;;;   graphs really do describe one situation being built up. The cost is that
+;;;   the inference is made ONCE, AT INGEST, and cannot be taken back: the join
+;;;   is destructive (see REMOVE-CGRAPH and the note on combining), so the
+;;;   unjoined originals are gone.
+;;;
+;;; The failure mode to know about: joining generic concepts. Two referent-less
+;;; [EAT] concepts are automatically correspondent, so a store built with
+;;; INCLUDE-CGRAPH out of graphs whose events carry no individual referent
+;;; collapses into one graph asserting things nobody said -- one eating with
+;;; eight eaters. That is not a bug in the join; the graphs never said the
+;;; eatings were different. It is an argument for individuating events before
+;;; joining, which is what cg-from-parse's `system/identity.lisp' now does.
+;;;
+;;; So: ADD-CGRAPH to accumulate, INCLUDE-CGRAPH to accumulate AND conclude,
+;;; and CONSOLIDATE-CGRAPHS to conclude later over a store built the first way
+;;; -- which is the option that keeps both.
+
 ;;; intentionally defined for only graph objects
 (defmethod add-cgraph ((graph graph) &optional (context *context*))
+  "Append GRAPH to CONTEXT unless an equal graph is already there. No joining:
+see the policy note above, and INCLUDE-CGRAPH for the other half of the pair.
+
+`Already there' is GRAPH-PRESENT-P, i.e. GRAPHS-EQUAL -- the same concepts
+joined the same way. It used to be a bag of node keys, which ignored the arcs
+and so dropped one of `Sue gives Bob a book' / `Bob gives Sue a book'; skipping
+is how this method acts on the answer, so a false positive here loses an
+assertion outright. See notes/known-issues.md."
   (assert (graph-p graph))
   (unless (graph-present-p graph context)
     (cond ((null (graphs context))
