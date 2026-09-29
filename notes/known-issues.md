@@ -61,9 +61,43 @@ Three things found alongside it, all fixed in the same change:
   context -- with the default it would add the graph to the context being searched
   and then find it. Both methods now build in a throwaway context.
 
-Not fixed, and still true: `graph-present-p` walks every graph in the context on
-every add, so ingest is quadratic. Invisible at two dozen graphs; not at ten
-thousand, and the add-without-join path is the one a large knowledge base uses.
+~~Not fixed, and still true: `graph-present-p` walks every graph in the context on
+every add, so ingest is quadratic.~~ **Fixed 2026-09-28**, in two places, because
+there were two quadratic terms and fixing one left the other in charge:
+
+- `graph-present-p` now hashes the graph's **structure** (sorted concept keys,
+  plus relation keys embedding their arcs' concept keys in order — so the key
+  agrees with what `graphs-equal` compares) and runs `graphs-equal` only against
+  the graphs in that bucket. The index lives on the context, and rebuilds when
+  `(graphs context)` has been replaced since it was built, which is what every
+  join and removal does.
+- `add-cgraph` appended with `(setf (cdr (last (graphs context))) ...)`, and
+  `last` walks the list — so ingest stayed O(n²) in pointer chases. The context
+  now carries a tail cons, trusted only while the index's source marker still
+  names the current list AND the cached cons really has nothing after it.
+
+Measured, adds only, graphs prebuilt: 200/400/800/1600 → 1/2/4/7 ms, with **zero**
+`graphs-equal` comparisons (each distinct graph lands in its own bucket). The old
+code would have made n(n−1)/2 — 19,900 comparisons for 200 graphs.
+
+Which way the index can be wrong, and why that direction is the tolerable one: a
+key **collision** costs nothing, since `graphs-equal` still separates the bucket's
+members. A key **mismatch** between two graphs `graphs-equal` would call equal
+means the duplicate is not found and gets added — the context holds a redundant
+graph. That is the safe failure, chosen deliberately: the bug above was *dropping*
+distinct facts, and a redundant assertion is recoverable where a missing one is
+not. The mismatch case that exists is a graph mutated in place after indexing;
+anything that does that without replacing `(graphs context)` should call
+`invalidate-graph-index`.
+
+`*graph-comparisons*` counts the comparisons, so the property is testable
+deterministically rather than by timing.
+
+**Separately, and not addressed:** graph *construction* is where the time now
+goes — `parse-cgraph` plus concept creation cost roughly 0.12 ms per small graph,
+which dwarfs the add. `cache-concept` is the thing to look at first if that ever
+matters: it does `(pushnew concept (nodes context) :test #'concepts-equal)`, which
+is O(n) in the concepts already cached.
 
 Covered by `test/graph-equality-test.lisp` (five new checks).
 

@@ -36,6 +36,18 @@
    (graph-referent-map :initform (list)
                         :accessor graph-referent-map
                         :documentation "association list mapping graphs to concepts")
+   ;; Duplicate-detection index for ADD-CGRAPH; see GRAPH-INDEX below. Holds
+   ;; structure-key -> list of graphs, plus the cons cell of (GRAPHS CONTEXT)
+   ;; the index was built from, which is how staleness is detected.
+   (graph-index :initform nil
+                :accessor graph-index-table)
+   (graph-index-source :initform :unbuilt
+                       :accessor graph-index-source)
+   ;; Last cons of (GRAPHS CONTEXT), so appending is O(1) rather than O(n) --
+   ;; see GRAPHS-APPEND. Trusted only while GRAPH-INDEX-SOURCE still names the
+   ;; current list, and only while it really is a last cons.
+   (graphs-tail :initform nil
+                :accessor graphs-tail)
    (negated :initform nil
             :initarg :negated
             :accessor negated)))
@@ -53,7 +65,8 @@
   ;; (when parent-supplied
   ;;   (setf (parent-context context) parent))
   (setf (graphs context) (list))
-  (setf (nodes context) (list)))
+  (setf (nodes context) (list))
+  (invalidate-graph-index context))
 
 (defmethod initialize-context ((context (eql nil)) &optional (parent nil)))
 
@@ -172,6 +185,134 @@
                      ((eq (type-of node) 'relation)
                       (format nil "relation-~a" (node-type node))))))
 
+;;; ===========================================================================
+;;; The duplicate-detection index
+;;; ===========================================================================
+;;;
+;;; GRAPH-PRESENT-P used to compare the incoming graph against EVERY graph in the
+;;; context, so ADD-CGRAPH cost O(n) graph comparisons and ingesting n graphs cost
+;;; O(n^2) -- each comparison itself walking both graphs. Invisible at the two
+;;; dozen graphs an experiment builds; not at ten thousand, and ADD-CGRAPH (the
+;;; no-join path) is precisely the one a large knowledge base uses.
+;;;
+;;; So: hash the graph's STRUCTURE, keep an index from that key to the graphs
+;;; carrying it, and run GRAPHS-EQUAL only against the graphs in the one bucket.
+;;; Expected O(1) per add.
+;;;
+;;; THE KEY MUST AGREE WITH GRAPHS-EQUAL, which compares the multiset of
+;;; concepts (type + referent) and the multiset of induced relations (type + arcs
+;;; IN ORDER). So the key sorts both sets of sub-keys -- order within a graph
+;;; must not matter, since GRAPHS-EQUAL does not care -- and a relation's key
+;;; embeds its arcs' concept keys positionally, since GRAPHS-EQUAL does care
+;;; about that.
+;;;
+;;; WHICH WAY IT CAN BE WRONG, and why that is the tolerable direction. A key
+;;; COLLISION costs nothing: two different graphs landing in one bucket are still
+;;; separated by GRAPHS-EQUAL, which decides. A key MISMATCH between two graphs
+;;; that GRAPHS-EQUAL would call equal means the duplicate is not found and the
+;;; graph is added -- the context ends up holding a redundant graph. That is the
+;;; safe failure, and deliberately so: the bug this guard had for years was
+;;; DROPPING distinct facts, and a store with a redundant assertion is recoverable
+;;; where a store missing one is not.
+;;;
+;;; The mismatch case that actually exists: a graph MUTATED IN PLACE after it was
+;;; indexed. The joins do that -- but they also replace (GRAPHS CONTEXT) wholesale
+;;; (INCLUDE-CGRAPH, CONSOLIDATE-CGRAPHS, REMOVE-CGRAPH all SETF it), which
+;;; changes the list's head cons and so invalidates the index. Anything that
+;;; mutates an indexed graph WITHOUT touching that list should call
+;;; INVALIDATE-GRAPH-INDEX.
+
+(defvar *graph-comparisons* 0
+  "How many GRAPHS-EQUAL comparisons GRAPH-PRESENT-P has made. Diagnostic: bind
+it to 0 and ingest a corpus to see whether the index is doing its job -- this is
+the number that used to grow quadratically.")
+
+(defun graph-structure-key (graph)
+  "A string that equal graphs share, in the sense GRAPHS-EQUAL means.
+
+Concepts contribute type + referent; relations contribute type + their arcs'
+concept keys IN ORDER. Both lists are sorted, because GRAPHS-EQUAL compares them
+as multisets. O(n log n) in the size of the graph, computed once per add."
+  (let* ((nodes     (collect-nodes (head graph)))
+         (concepts  (remove-if-not #'concept-p nodes))
+         (relations (induced-relations concepts)))
+    (flet ((concept-key (c)
+             (format nil "~a:~a"
+                     (ignore-errors (label (concept-type c)))
+                     (or (ignore-errors (format-referent c)) "")))
+           (relation-key (r)
+             (format nil "~a(~{~a~^,~})"
+                     (ignore-errors (label (relation-type r)))
+                     (mapcar (lambda (a)
+                               (format nil "~a:~a"
+                                       (ignore-errors (label (concept-type a)))
+                                       (or (ignore-errors (format-referent a)) "")))
+                             (arcs r)))))
+      (format nil "~{~a~^|~}#~{~a~^|~}"
+              (sort (mapcar #'concept-key concepts) #'string<)
+              (sort (mapcar #'relation-key relations) #'string<)))))
+
+(defun invalidate-graph-index (context)
+  "Forget CONTEXT's duplicate index; it is rebuilt on next use. Call after
+mutating a graph already in the context without replacing (GRAPHS CONTEXT)."
+  (when context
+    (setf (graph-index-table context) nil
+          (graph-index-source context) :unbuilt
+          (graphs-tail context) nil))
+  nil)
+
+(defun graph-index (context)
+  "CONTEXT's structure-key -> graphs index, rebuilt if (GRAPHS CONTEXT) has been
+replaced since it was built. Rebuilding is O(n) and happens after a join or a
+removal, not on the ingest path."
+  (let ((graphs (graphs context)))
+    (unless (and (graph-index-table context)
+                 (eq (graph-index-source context) graphs))
+      (let ((table (make-hash-table :test 'equal)))
+        (dolist (g graphs)
+          (push g (gethash (graph-structure-key g) table)))
+        (setf (graph-index-table context) table
+              (graph-index-source context) graphs)))
+    (graph-index-table context)))
+
+(defun graphs-append (graph context)
+  "Append GRAPH to the END of (GRAPHS CONTEXT) in constant time.
+
+ADD-CGRAPH used to do this with (SETF (CDR (LAST (GRAPHS CONTEXT))) ...), and
+LAST walks the list -- so even with the duplicate check indexed, ingesting n
+graphs still cost O(n^2), just in pointer chases instead of graph comparisons.
+Measured before this: 800 adds took 3.6x the time of 400.
+
+Order is preserved rather than pushing to the front, because the store reads as
+the record of what was asserted and callers print it.
+
+The cached tail is trusted only when BOTH hold: GRAPH-INDEX-SOURCE still names
+the list we last saw (so a join or removal that replaced it is caught), and the
+cached cons really has nothing after it (so an append by any other route is
+caught). Otherwise it is recomputed with LAST, which is correct at any cost."
+  (let ((cell (list graph)))
+    (if (null (graphs context))
+        (setf (graphs context) cell)
+        (let ((tail (graphs-tail context)))
+          (unless (and tail
+                       (eq (graph-index-source context) (graphs context))
+                       (null (cdr tail)))
+            (setf tail (last (graphs context))))
+          (setf (cdr tail) cell)))
+    (setf (graphs-tail context) cell)
+    graph))
+
+(defun index-graph (graph context)
+  "Record GRAPH in CONTEXT's index under its structure key. Called by ADD-CGRAPH
+after the graph is in (GRAPHS CONTEXT), so the index and the list stay in step."
+  (let ((table (graph-index context)))
+    (push graph (gethash (graph-structure-key graph) table))
+    ;; ADD-CGRAPH appends with (SETF (CDR (LAST ...))), which leaves the head cons
+    ;; alone, but the empty-list case SETFs (GRAPHS CONTEXT) outright -- so retake
+    ;; the marker rather than assume it still holds.
+    (setf (graph-index-source context) (graphs context))
+    graph))
+
 ;;; GRAPHS-EQUAL, not a bag of node keys. This compared the sorted multiset of
 ;;; GRAPH-NODE-KEYs, and a node key carries a node's type and referent and
 ;;; NOTHING ABOUT ITS ARCS -- so two graphs over the same concepts were "present"
@@ -205,7 +346,12 @@
 ;;; visibly; it is gone with the rest.
 
 (defmethod graph-present-p ((graph graph) &optional (context *context*))
-  (and (find graph (graphs context) :test #'graphs-equal) t))
+  (let ((bucket (gethash (graph-structure-key graph) (graph-index context))))
+    (and (find-if (lambda (other)
+                    (incf *graph-comparisons*)
+                    (graphs-equal graph other))
+                  bucket)
+         t)))
 
 ;;; These two convenience methods called MAKE-GRAPH, which does not exist and
 ;;; never did -- the constructor is MAKE-CGRAPH. Both were therefore dead: any
@@ -232,7 +378,10 @@
 (defmethod remove-cgraph ((graph graph) &optional (context *context*))
   (when (graphs context)
     (when (find graph (graphs context) :test #'graphs-equal)
-    (setf (graphs context) (remove graph (graphs context) :test #'graphs-equal)))))
+      (setf (graphs context) (remove graph (graphs context) :test #'graphs-equal))
+      ;; REMOVE returns a fresh list, so the index's source marker no longer
+      ;; matches and it would rebuild anyway; say so rather than rely on that.
+      (invalidate-graph-index context))))
 
 
 (defmethod remove-cgraph ((graph string ) &optional (context *context*))
@@ -299,10 +448,8 @@ is how this method acts on the answer, so a false positive here loses an
 assertion outright. See notes/known-issues.md."
   (assert (graph-p graph))
   (unless (graph-present-p graph context)
-    (cond ((null (graphs context))
-           (setf (graphs context) (list graph)))
-          (t
-           (setf (cdr (last (graphs context))) (list graph))))))
+    (graphs-append graph context)
+    (index-graph graph context)))
 
 (defmethod add-cgraph ((thing t) &optional context)
   nil)

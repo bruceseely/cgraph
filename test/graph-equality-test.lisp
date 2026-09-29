@@ -96,6 +96,58 @@
         (check "GRAPH-PRESENT-P does not reorder the nodes it inspects"
                (equal before (nodes g))))
 
+      ;; --- the duplicate index ---------------------------------------------
+      ;; GRAPH-PRESENT-P used to compare against every graph in the context, so
+      ;; ADD-CGRAPH was O(n) comparisons and ingest was O(n^2). It now hashes the
+      ;; graph's structure and compares only within the bucket. The check that
+      ;; the fix is real is the COMPARISON COUNT, which is deterministic --
+      ;; timing is not.
+      (let ((*graph-comparisons* 0)
+            (kb (make-context))
+            (n 200))
+        (dotimes (i n)
+          (make-cgraph (format nil "[EAT: #~d]→(agnt)→[DOG]." (+ 90000 i)) kb))
+        (check "200 distinct graphs all stored"
+               (eql n (length (graphs kb))))
+        ;; the old code would have made n(n-1)/2 = 19900 of these
+        (check "and cost far fewer than n^2 graph comparisons"
+               (< *graph-comparisons* n)))
+
+      ;; The index must not break the guard it exists to speed up.
+      (let ((kb (make-context)))
+        (dotimes (i 50) (make-cgraph "[EAT]→(agnt)→[DOG]." kb))
+        (check "50 adds of one graph still store it once"
+               (eql 1 (length (graphs kb)))))
+
+      ;; Appending in O(1) must still append: the store reads as the record of
+      ;; what was asserted, so order is part of what it says.
+      (let ((kb (make-context)))
+        (make-cgraph "[EAT]→(agnt)→[DOG]." kb)
+        (make-cgraph "[EAT]→(obj)→[CAKE]." kb)
+        (check "graphs keep the order they were added in"
+               (and (eql 2 (length (graphs kb)))
+                    (search "DOG" (format-cgraph (first (graphs kb))))
+                    (search "CAKE" (format-cgraph (second (graphs kb)))))))
+
+      ;; INCLUDE-CGRAPH replaces (GRAPHS CONTEXT) wholesale, which is how the
+      ;; index notices it is stale. If it did not rebuild, this would answer
+      ;; about graphs that are no longer there.
+      (let ((kb (make-context)))
+        (make-cgraph "[EAT]→(agnt)→[DOG]." kb)
+        (include-cgraph (make-cgraph "[EAT]→(obj)→[CAKE]." (make-context)) kb)
+        (check "the index rebuilds after a join replaced the graph list"
+               (graph-present-p (first (graphs kb)) kb)))
+
+      ;; And after a removal, the removed graph must stop being present.
+      (let* ((kb (make-context))
+             (g  (make-cgraph "[EAT]→(agnt)→[DOG]." kb)))
+        (check "a graph is present before removal" (graph-present-p g kb))
+        (remove-cgraph g kb)
+        (check "and absent after it"               (not (graph-present-p g kb)))
+        ;; re-adding must work, i.e. the index really was invalidated
+        (add-cgraph g kb)
+        (check "and can be added again"            (eql 1 (length (graphs kb)))))
+
       (when verbose
         (format t "~&GRAPH-EQUALITY-TEST ~:[failed~;passed~]~%" ok))
       ok)))
