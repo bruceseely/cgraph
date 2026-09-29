@@ -12,7 +12,7 @@ found on 2026-08-27 while building the canonical-graph guidance and is
 **outstanding** -- it is a limit of where the check stands, not a defect in
 what it does.
 
-## `make-concept` with a property list returns NIL unless the individual already exists — **outstanding**
+## ~~`make-concept` with a property list returns NIL unless the individual already exists~~ — fixed
 
 `system/core/concept.lisp:373`. Found 2026-09-28 while writing tests for the
 concept-cache index; nothing to do with that work and older than it.
@@ -41,11 +41,21 @@ covers more of the rest.
     (make-concept 'dog '(:name "Rover") :context ctx)  ; => NIL
     (make-concept 'cat '(:name "Spot")  :context ctx)  ; => NIL
 
-Not fixed here: the fix is presumably to return the concept built from the new
-referent, but which of `make-concept ctype referent` / `ctype individual` it should
-delegate to, and what the null-referent fallback is really for, is a decision about
-this constructor rather than a typo to correct. `test/cache-test.lisp` goes the long
-way round (`make-individual` + `make-referent`) and says why.
+**Fixed the same day.** The branch now returns `(make-concept ctype referent
+:context context)` when the referent was built, keeping the bare-concept fallback
+for the case where `make-referent` declines — which is what the old shape's inner
+`cond` was reaching for, just as the only outcome instead of the exceptional one.
+
+The two creating branches were also the same branch: `make-individual` already
+defaults a NIL `:id` to `(next-individual-number)`, so passing `supplied-id`
+straight through covers both, and passing it through is what keeps an explicit
+`:id t` — the unspecified marker, `#` — meaning what it means everywhere else.
+A dead `individual-id` binding went with them; `(id nil)` is defined to be NIL, so
+it had been quietly evaluating on a NIL individual for as long as it existed.
+
+Covered by `make-concept-plist-test` in `test/concept-test.lisp` (seven checks,
+including the explicit-`:id` and `:id t` cases). `test/cache-test.lisp` now builds
+its concepts through the property-list form again, since it works.
 
 ## ~~`graph-present-p` ignored arcs, so `add-cgraph` silently dropped facts~~ — fixed
 

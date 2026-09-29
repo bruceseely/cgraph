@@ -370,27 +370,47 @@
       (make-concept ctype referent :context context))))
 
 
+;;; Describe the individual and get a concept of it: (make-concept 'dog
+;;; '(:name "Spot")). Either the individual already exists and is reused, or it
+;;; is made here.
+;;;
+;;; This RETURNED NIL whenever it had to make one. Both creating branches built
+;;; an individual, wrapped it in a referent, and then returned a concept only
+;;; when the referent came back NULL -- the normal case fell off the end of an
+;;; inner COND with no clause for it:
+;;;
+;;;     (let* ((individual (make-individual ctype props :id supplied-id))
+;;;            (referent (when individual (make-referent individual))))
+;;;       (cond ((null referent)                       ; <- only the failure
+;;;              (make-concept ctype nil :context context))))
+;;;
+;;; So it worked only when GET-INDIVIDUAL found an individual that already
+;;; existed, which is why it went unnoticed: in a live image the individual
+;;; usually has been made already, and *ALLOW-DYNAMIC-INDIVIDUAL-CREATION*
+;;; covers much of the rest. `Spot' would work and `Rover' would be NIL.
+;;;
+;;; The two creating branches were also the same branch. MAKE-INDIVIDUAL already
+;;; defaults a NIL :ID to (NEXT-INDIVIDUAL-NUMBER), so passing SUPPLIED-ID
+;;; straight through covers both -- and passing it through is what keeps an
+;;; explicit `:id t' (the unspecified marker, #) meaning what it means elsewhere.
+;;;
+;;; The null-referent fallback is kept: MAKE-REFERENT can decline, and a concept
+;;; of the type with no referent is the honest result when it does. It is not
+;;; reachable by simply having made an individual, which is what the old shape
+;;; implied.
+
 (defmethod make-concept ((ctype concept-type) (property-list list) &key (context *context*)  &allow-other-keys)
   (let* ((props (sans-prop property-list :id :variable))
          (supplied-id (when property-list (getf property-list :id)))
          (individual (or (get-individual ctype :properties props :id supplied-id)
-                         (get-individual ctype :properties props)))
-         (individual-id (id individual)))
-
-
-    (cond (individual
-           ;;(format t "~&supplied-id2: ~s~%"  supplied-id)
-           (make-concept ctype individual :context context))
-          (supplied-id
-           (let* ((individual (make-individual ctype props :id supplied-id))
-                  (referent (when individual (make-referent individual))))
-             (cond ((null referent)
-                    (make-concept ctype nil :context context)))))
-          ((null supplied-id)
-           (let* ((individual (make-individual ctype props :id (next-individual-number)))
-                  (referent (when individual (make-referent individual))))
-             (cond ((null referent)
-                    (make-concept ctype nil :context context))))))))
+                         (get-individual ctype :properties props))))
+    (if individual
+        (make-concept ctype individual :context context)
+        (let* ((individual (make-individual ctype props :id supplied-id))
+               (referent   (when individual (make-referent individual))))
+          (if referent
+              (make-concept ctype referent :context context)
+              (make-concept ctype nil :context context))))))
 
 
 

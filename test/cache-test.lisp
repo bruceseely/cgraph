@@ -71,18 +71,9 @@
 ;;; bucket. What must NOT change is PUSHNEW's semantics -- one representative per
 ;;; equal concept -- so that is what most of this checks.
 ;;;
-;;; NB: these build concepts through MAKE-INDIVIDUAL + MAKE-REFERENT rather than
-;;; handing MAKE-CONCEPT a property list, because that method RETURNS NIL unless
-;;; the individual already exists -- its two creating branches only return
-;;; something when the referent came back NULL. See notes/known-issues.md. Going
-;;; the long way keeps this test about the cache.
-
 (defun %cache-test-concept (type name context)
   "A concept of TYPE named NAME, cached in CONTEXT."
-  (let* ((ctype (get-concept-type type))
-         (indiv (make-individual ctype (list :name name)))
-         (ref   (make-referent indiv)))
-    (make-concept ctype ref :context context)))
+  (make-concept type (list :name name) :context context))
 
 (defun concept-cache-index-test (&optional verbose)
   (with-test-types

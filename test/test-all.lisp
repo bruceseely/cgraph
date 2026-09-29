@@ -49,6 +49,7 @@
                       referent-test
                       graph-referent-test
                       concept-test
+                      make-concept-plist-test
                       format-test
                       cache-test
                       concept-cache-index-test
