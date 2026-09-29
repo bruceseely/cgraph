@@ -51,6 +51,7 @@
                       concept-test
                       format-test
                       cache-test
+                      concept-cache-index-test
                       linkup-test
                       parse-test
                       formation-rules-test

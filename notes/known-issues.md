@@ -12,6 +12,41 @@ found on 2026-08-27 while building the canonical-graph guidance and is
 **outstanding** -- it is a limit of where the check stands, not a defect in
 what it does.
 
+## `make-concept` with a property list returns NIL unless the individual already exists — **outstanding**
+
+`system/core/concept.lisp:373`. Found 2026-09-28 while writing tests for the
+concept-cache index; nothing to do with that work and older than it.
+
+    (defmethod make-concept ((ctype concept-type) (property-list list) ...)
+      ... (cond (individual  (make-concept ctype individual :context context))
+                (supplied-id
+                 (let* ((individual (make-individual ctype props :id supplied-id))
+                        (referent (when individual (make-referent individual))))
+                   (cond ((null referent)
+                          (make-concept ctype nil :context context)))))
+                ((null supplied-id)
+                 ... same shape ...)))
+
+Both creating branches build an individual and a referent and then return a
+concept **only when the referent came back NULL**. In the normal case — the
+referent was created — the inner `cond` has no matching clause, so the branch
+returns `NIL` and so does `make-concept`.
+
+It therefore works only when `get-individual` finds an individual that already
+exists, which is why it has gone unnoticed: in a live image and in most tests the
+individual has usually been made already, and `*allow-dynamic-individual-creation*`
+covers more of the rest.
+
+    (make-concept 'dog '(:name "Spot")  :context ctx)  ; => #<CONCEPT DOG>  (Spot existed)
+    (make-concept 'dog '(:name "Rover") :context ctx)  ; => NIL
+    (make-concept 'cat '(:name "Spot")  :context ctx)  ; => NIL
+
+Not fixed here: the fix is presumably to return the concept built from the new
+referent, but which of `make-concept ctype referent` / `ctype individual` it should
+delegate to, and what the null-referent fallback is really for, is a decision about
+this constructor rather than a typo to correct. `test/cache-test.lisp` goes the long
+way round (`make-individual` + `make-referent`) and says why.
+
 ## ~~`graph-present-p` ignored arcs, so `add-cgraph` silently dropped facts~~ — fixed
 
 `system/core/context.lisp`. Found 2026-09-28 while deciding whether joining on
@@ -93,11 +128,31 @@ anything that does that without replacing `(graphs context)` should call
 `*graph-comparisons*` counts the comparisons, so the property is testable
 deterministically rather than by timing.
 
-**Separately, and not addressed:** graph *construction* is where the time now
-goes — `parse-cgraph` plus concept creation cost roughly 0.12 ms per small graph,
-which dwarfs the add. `cache-concept` is the thing to look at first if that ever
-matters: it does `(pushnew concept (nodes context) :test #'concepts-equal)`, which
-is O(n) in the concepts already cached.
+**The same shape, one level down — also fixed 2026-09-28.** Once the add path was
+linear, graph *construction* was where the time went, and `cache-concept` was why:
+it ran `(pushnew concept (nodes context) :test #'concepts-equal)`, and it runs from
+`concept`'s `initialize-instance :after`, so it is on the path of **every concept
+ever made** — O(n) per concept, O(n²) over a corpus. Now bucketed by
+`concept-cache-key` with `concepts-equal` run only inside the bucket, and
+`pushnew`'s semantics (one representative per equal concept) unchanged. Measured,
+building n graphs: 400/800/1600/3200 → **51/102/344/1170 ms before, 35/21/62/120
+after**, with an identical cache (401/801/1601/3201 concepts). Doubling costs ~3.4×
+before and ~2× after.
+
+The key is deliberately allowed to be **coarse** — a concept whose referent is a
+whole graph gets a constant key rather than a formatted nested graph, which would
+be expensive and can recurse — and that is safe only because the bucket is then
+resolved by `concepts-equal`. A key treated *as* identity would merge concepts
+that are not equal, which is the one mistake that must not be made here.
+`*concept-comparisons*` counts the comparisons; `concept-cache-index-test` in
+`test/cache-test.lisp` asserts the bound rather than a timing.
+
+Still O(n), and not addressed: the *read* side. `retrieve-concepts-having-properties`
+and `retrieve-concepts-having-individual` scan `(nodes context)`, so
+`retrieve-concept` is linear in the cache. That is a lookup cost, not an ingest
+cost, and nothing on a hot path reaches it yet.
+
+
 
 Covered by `test/graph-equality-test.lisp` (five new checks).
 

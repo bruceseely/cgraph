@@ -48,6 +48,13 @@
    ;; current list, and only while it really is a last cons.
    (graphs-tail :initform nil
                 :accessor graphs-tail)
+   ;; Dedupe index for CACHE-CONCEPT; see CONCEPT-INDEX below. concept-key ->
+   ;; list of cached concepts, plus the head cons of (NODES CONTEXT) it was
+   ;; built from.
+   (concept-index :initform nil
+                  :accessor concept-index-table)
+   (concept-index-source :initform :unbuilt
+                         :accessor concept-index-source)
    (negated :initform nil
             :initarg :negated
             :accessor negated)))
@@ -66,7 +73,8 @@
   ;;   (setf (parent-context context) parent))
   (setf (graphs context) (list))
   (setf (nodes context) (list))
-  (invalidate-graph-index context))
+  (invalidate-graph-index context)
+  (invalidate-concept-index context))
 
 (defmethod initialize-context ((context (eql nil)) &optional (parent nil)))
 
@@ -91,11 +99,95 @@
    (msg :initarg :msg :reader msg)))
 
 
+;;; ===========================================================================
+;;; The concept cache, and its index
+;;; ===========================================================================
+;;;
+;;; CACHE-CONCEPT runs from CONCEPT's INITIALIZE-INSTANCE :AFTER, so it is on the
+;;; path of EVERY concept ever made. It used to do
+;;;
+;;;   (pushnew concept (nodes context) :test #'concepts-equal)
+;;;
+;;; which scans the whole cache on each call -- O(n) per concept, so building a
+;;; corpus cost O(n^2) in the number of concepts, and that was where the time in
+;;; graph construction went once ADD-CGRAPH was made linear.
+;;;
+;;; Same shape of fix as the graph index above: bucket by a cheap key, and run
+;;; CONCEPTS-EQUAL only inside the bucket. The semantics are PUSHNEW's, unchanged
+;;; -- the cache keeps one representative per equal concept, and a concept equal
+;;; to one already cached is not added.
+;;;
+;;; BUCKETS, not key-as-identity. The key is allowed to be coarse: a concept
+;;; whose referent is a whole GRAPH gets a constant key rather than a formatted
+;;; nested graph, because formatting one is expensive and can recurse. Coarse is
+;;; safe precisely because CONCEPTS-EQUAL still decides within the bucket; a key
+;;; treated AS identity would merge concepts that are not equal, which is the one
+;;; mistake that must not be made here.
+;;;
+;;; STALENESS. PUSHNEW changes the head of (NODES CONTEXT) on every add, so the
+;;; recorded head is updated on each add rather than used to detect adds. It
+;;; detects the other three writers -- INITIALIZE-CONTEXT, DECACHE-CONCEPT and
+;;; CLEAR-CONCEPT-CACHE -- each of which replaces the list and calls
+;;; INVALIDATE-CONCEPT-INDEX anyway. The head check is the backstop for anything
+;;; that replaces (NODES CONTEXT) without saying so.
+
+(defvar *concept-comparisons* 0
+  "How many CONCEPTS-EQUAL comparisons CACHE-CONCEPT has made. Diagnostic, the
+counterpart of *GRAPH-COMPARISONS*: this is the number that used to grow
+quadratically with the size of a corpus.")
+
+(defun concept-cache-key (concept)
+  "A cheap bucket key for CONCEPT, coarse enough to be safe and selective enough
+to be useful. Agrees with CONCEPTS-EQUAL (type + referent) in the sense that
+equal concepts always share a key -- which is the direction that matters, since
+sharing a key only means CONCEPTS-EQUAL gets asked."
+  (let ((type (or (ignore-errors (label (concept-type concept))) "?")))
+    (cond ((null (referent concept))
+           (format nil "~a:" type))
+          ;; a graph referent is not worth formatting; let CONCEPTS-EQUAL sort
+          ;; these out among themselves
+          ((ignore-errors (graph-referent concept))
+           (format nil "~a:#g" type))
+          (t
+           (format nil "~a:~a" type
+                   (or (ignore-errors (format-referent concept)) ""))))))
+
+(defun invalidate-concept-index (context)
+  "Forget CONTEXT's concept index; it is rebuilt on next use."
+  (when context
+    (setf (concept-index-table context) nil
+          (concept-index-source context) :unbuilt))
+  nil)
+
+(defun concept-index (context)
+  "CONTEXT's concept-key -> concepts index, rebuilt if (NODES CONTEXT) has been
+replaced behind its back."
+  (let ((nodes (nodes context)))
+    (unless (and (concept-index-table context)
+                 (eq (concept-index-source context) nodes))
+      (let ((table (make-hash-table :test 'equal)))
+        (dolist (c nodes)
+          (push c (gethash (concept-cache-key c) table)))
+        (setf (concept-index-table context) table
+              (concept-index-source context) nodes)))
+    (concept-index-table context)))
+
 ;;; cache all concepts for co-reference linking
 (defmethod cache-concept ((concept concept)  &key (context *context*))
   (when context
     (setf (context concept) context)
-    (pushnew concept (nodes context) :test #'concepts-equal)
+    ;; PUSHNEW's semantics, with the scan replaced by a bucket lookup.
+    (let* ((table (concept-index context))
+           (key   (concept-cache-key concept))
+           (bucket (gethash key table)))
+      (unless (find-if (lambda (other)
+                         (incf *concept-comparisons*)
+                         (concepts-equal concept other))
+                       bucket)
+        (push concept (nodes context))
+        (push concept (gethash key table))
+        ;; PUSH changed the head; retake the marker so the index stays valid.
+        (setf (concept-index-source context) (nodes context))))
     ;; If concept has a graph referent, add to map
     (let ((graph (graph-referent concept)))
       (when graph
@@ -116,7 +208,8 @@
         (map-remove-graph-concept graph concept context)
         (unregister-concept graph concept)))
     ;; Remove from nodes list
-    (setf (nodes context) (remove concept (nodes context) :test #'concepts-equal))))
+    (setf (nodes context) (remove concept (nodes context) :test #'concepts-equal))
+    (invalidate-concept-index context)))
 
 
 (defmethod retrieve-concepts-having-properties (properties &optional (context *context*))
@@ -577,6 +670,7 @@ assertion outright. See notes/known-issues.md."
 (defmethod clear-concept-cache (&optional (context *context*))
   (assert (typep context 'context))
   (setf (nodes context) (list))
+  (invalidate-concept-index context)
   ;; Also clear the graph referent map
   (clear-graph-referent-map context))
 
