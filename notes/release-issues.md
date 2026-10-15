@@ -31,6 +31,12 @@ Items are in priority order.
   `web/api.lisp` uses it too. Move this into an optional `cgraph/emacs` system
   so the core loads under `sbcl --script`, Sly, or no editor at all.
   (`concept-type-graph.lisp` already guards its use with `#+swank`.)
+- **`setup-cgraph` deletes files under its `code-base` argument**, recursively:
+  every `*.fasl`, `*.lisp~` and `*.lisp#` (`cleanup-files`, `initialize.lisp`).
+  Passed the cgraph source directory, as the README says, that is harmless;
+  passed `"~/"` it would delete every fasl in the user's home tree. A setup
+  function shouldn't delete anything. Drop the cleanup, or move it to a
+  developer-only function.
 - **Setup writes to `~/.cgraph` and rewrites symlinks there**, and a test run
   has already destroyed type files this way. A new user's first `setup-cgraph`
   shouldn't touch their home directory. By default, load the shipped
@@ -78,6 +84,12 @@ just the engine:
 - **Tests run only in a live image** via `(cg:test-all t)`. Hook them into
   `asdf:test-system`, using FiveAM, Parachute, or a thin adapter over the
   existing suite.
+- **`test-all` passes only in the runner's environment.** After an ordinary
+  `setup-cgraph` + `reset-cgraph`, 7 suites fail with `*package*` = `:cg`
+  (referent, concept, parse, projection, graph-every, graph-equality,
+  decomposition) and 9 from `CL-USER`. This predates the 2026-10-14 changes.
+  `test/run-tests.sh` reproduces the runner's setup (a throwaway types
+  directory, `*package*` = `:cg`) and passes; the README points there.
 - **CI runs only the whole stack** (parsifal + cg-from-parse), and still
   passes `secrets.STACK_CHECKOUT_TOKEN` even though the workflow's own comment
   says no token is needed. Add a standalone job that runs only cgraph's tests on
@@ -95,6 +107,18 @@ just the engine:
 - **Separate user docs from design journals.** `notes/` mixes them. Move the
   user-facing pieces (tutorial, setup, individuals) into `docs/` and leave the
   journals in `notes/`.
+- ~~**README and `API.md` examples didn't run.**~~ Fixed 2026-10-14: every
+  example now runs as written from a fresh setup. The README's graphs had
+  their `agnt` arrows backwards; both files used `BONE`, `WALK` and `PET`,
+  which `default-types/` doesn't define; `API.md` documented `add-graph` and
+  `fcg` (which don't exist), and `query`'s keyword as `:all-solutions`
+  (it's `:first-only`).
+- **`default-types/` has loose ends**: the relation types refer to `TIME` and
+  `NUMBER`, which the concept types don't define, so a fresh setup prints
+  undefined-type warnings; and `poss` and `rcpt` are each defined twice.
+- **`parse-cgraph` discards the real cause of a parse failure**: it reports
+  "Unable to parse token after: " plus whatever parsed before the failure,
+  which is empty when the first concept fails.
 - **Fix the `.asd` description typo** ("comceptual", `cgraph.asd:24`) and bump
   `:version` past `0.0.1` when you tag a release.
 

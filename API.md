@@ -1,7 +1,21 @@
 # CGraph API Reference
 
-This document covers the user-facing API for CGraph. All symbols are in the
-`:conceptual-graphs` package (nicknames `:cg`, `:cgraph`).
+This document covers the user-facing API for CGraph. Everything here is
+exported from the `:conceptual-graphs` package (nicknames `:cg`, `:cgraph`),
+except the few entries marked *internal*. Call them as `cg:name`, or
+`(:use :cg)` in your own package; the examples are written that way.
+
+Type names resolve the same way from any package: `'cat`, `:cat` and `"cat"`
+all name the `CAT` type, and graph strings parse the same from `CL-USER` as
+from `:cg`.
+
+A session starts with:
+
+```lisp
+(ql:quickload "cgraph")
+(cg:setup-cgraph (asdf:system-source-directory "cgraph"))
+(cg:reset-cgraph)
+```
 
 
 
@@ -14,9 +28,21 @@ This document covers the user-facing API for CGraph. All symbols are in the
 ## Setup and Initialization
 
 ### `setup-cgraph (code-base &key external-types-directory)`
-Entry point for initial CGraph setup. Creates directories, loads type
-definitions, configures SLIME integration, and runs the test suite.
-Called once at startup.
+Entry point for initial CGraph setup. Called once at startup. It:
+
+- creates `~/.cgraph/` with `types/`, `data/` and `logs/` under it;
+- copies the shipped `default-types/` into `~/.cgraph/types/`, or, given
+  `external-types-directory`, symlinks the type files there to that
+  directory's;
+- loads the type definitions, and sets up SLIME integration when SWANK is
+  present;
+- deletes `*.fasl`, `*.lisp~` and `*.lisp#` files under `code-base`,
+  recursively.
+
+Because of that last step, `code-base` must be the cgraph source directory:
+pass `(asdf:system-source-directory "cgraph")`.
+
+Follow it with `reset-cgraph` to create the context that graphs are added to.
 
 ### `initialize-cgraph ()`
 Reinitializes the system: clears variables, coreferences, individuals,
@@ -27,7 +53,8 @@ Full reset: clears context, counters, and display flags, then calls
 `initialize-cgraph`.
 
 ### `report-directories ()`
-Prints current CGraph configuration paths (types, data, initializations).
+Prints current CGraph configuration paths (types, data, logs,
+initializations). Note that it calls `reset-cgraph` first.
 
 ### `ensure-concept-types-exist (definitions)`
 Creates concept types from a list of definition plists. Each definition
@@ -36,6 +63,22 @@ and programmatic type setup.
 
 ### `ensure-relation-types-exist (definitions)`
 Same as above, for relation types.
+
+---
+
+## Classes and Conditions
+
+The classes are exported so you can test for them and specialize methods on
+them: `concept`, `relation`, `graph`, `concept-type`, `relation-type`,
+`individual`, `referent` and `context`.
+
+Looking up a type that doesn't exist signals `concept-type-lookup-failed` or
+`relation-type-lookup-failed`.
+
+```lisp
+(handler-case (get-concept-type 'unicorn)
+  (concept-type-lookup-failed () :no-such-type))   ; → :NO-SUCH-TYPE
+```
 
 ---
 
@@ -62,9 +105,11 @@ Modify an existing concept type's supertypes or properties.
 #### `remove-concept-type (node)`
 Remove a concept type from the hierarchy, disconnecting all inheritance links.
 
-#### `make-relation-type (label &key source-types dest-type description)`
+#### `make-relation-type (label &key source-types dest-type description supertypes)`
 Create and register a new relation type. `source-types` is a list of
-concept types; `dest-type` is a single concept type.
+concept types; `dest-type` is a single concept type. `supertypes` is a list
+of relation types; a subtype that gives no `source-types` or `dest-type`
+takes its parent's.
 
 ```lisp
 (make-relation-type 'CTRL
@@ -97,6 +142,14 @@ Returns T if the symbol names a defined concept type.
 Returns T if the type name is present in the catalog.
 
 #### `relation-type-exists (type-name)` → boolean
+
+#### `label (type)` → symbol
+The name of a concept or relation type.
+
+#### `source-types (relation-type)` → list
+#### `dest-type (relation-type)` → concept-type
+A relation type's signature: the types it links from, and the type it
+links to.
 Returns T if the relation type name is present in the catalog.
 
 ### Querying the Hierarchy
@@ -185,10 +238,10 @@ Walk downward from node through subtypes.
 Walk upward from node through supertypes.
 
 #### `crawl-concept-types-down (function &optional node)`
-Breadth-first walk downward from node.
+Breadth-first walk downward from node. *Internal — not exported; call it as `cg::crawl-concept-types-down`.*
 
 #### `crawl-concept-types-up (function &optional node)`
-Breadth-first walk upward from node.
+Breadth-first walk upward from node. *Internal — not exported; call it as `cg::crawl-concept-types-up`.*
 
 ### Type I/O
 
@@ -455,13 +508,14 @@ Generic conformity check. Dispatches on argument types:
 
 ### Formatting (Graph → Text)
 
-#### `format-cgraph (node-or-graph &key initial-indent indent-delta)` → string
+#### `format-cgraph (node-or-graph &key initial-indent indent-delta start-concept)` → string
 Format a conceptual graph as a string in linear notation. This is the
-primary formatting function.
+primary formatting function. Given a graph object, `start-concept` picks the
+concept the string starts from; it defaults to the graph's head.
 
 ```lisp
-(format-cgraph (parse-cgraph "[DOG: Spot]←(agnt)←[EAT]→(obj)→[BONE]."))
-; → "[DOG: Spot]←(agnt)←[EAT]→(obj)→[BONE]"
+(format-cgraph (parse-cgraph "[DOG: Spot]←(agnt)←[EAT]→(obj)→[FOOD]."))
+; → "[DOG:Spot]←(agnt)←[EAT]→(obj)→[FOOD]."
 ```
 
 #### `format-concept (concept)` → string
@@ -474,10 +528,8 @@ Format a single relation: `(type)`.
 Print a formatted graph to a stream.
 
 #### `pcg (thing)` → string or nil
-Shorthand for `format-cgraph`. Works on graph-nodes and graph objects.
-
-#### `fcg (graph-node)` → string
-Alias for `format-cgraph`.
+REPL shorthand: given a string, parses it; given a graph-node or graph
+object, formats it. *Internal — not exported; call it as `cg::pcg`.*
 
 #### `graph-every-concept (node-or-graph)` → list of strings
 Format each concept in the graph independently, showing its local
@@ -492,22 +544,26 @@ Parse a conceptual graph from linear notation.
 - Concepts: `[TYPE]`, `[TYPE: referent]`, `[TYPE: name @measure {set}]`
 - Relations: `(relation-type)`
 - Arrows: `→` or `->` (forward), `←` or `<-` (backward), `-` (continuation)
-- Variables: `*x`, `*y`, etc.
-- Co-references: `?label`
+- Variables: `*x` declares a variable on a concept; `?x` refers back to it
+- Named individuals: `[DOG: Spot]` creates the individual Spot if it doesn't
+  exist yet (see `*allow-dynamic-individual-creation*`)
 - Graph referents: `[PROPOSITION: [nested graph]]`
 - Negation: `~[TYPE]`
 - Terminator: `.` (period ends the graph)
 
 ```lisp
 ;; Simple graph
-(parse-cgraph "[DOG: Spot]←(agnt)←[EAT]→(obj)→[BONE].")
+(parse-cgraph "[DOG: Spot]←(agnt)←[EAT]→(obj)→[FOOD].")
 
-;; Multi-branch graph
+;; Several relations on one concept: "-" opens the list of arcs
 (parse-cgraph "[GIVE]-(agnt)→[PERSON: Sue](obj)→[DOG: Spot](rcpt)→[PERSON: Tom].")
 
-;; With variables for co-reference
-(parse-cgraph "[PERSON: *x]→(poss)→[DOG]←(obj)←[WALK]→(agnt)→[PERSON: *x].")
+;; Co-reference: *x declares the variable, ?x refers back to it
+(parse-cgraph "[PERSON: *x]→(poss)→[DOG]←(obj)←[CARRY]→(agnt)→[PERSON: ?x].")
 ```
+
+`parse-cgraph` returns the graph's nodes without adding them to a context; use
+`make-cgraph` for a graph that queries can find.
 
 ### String Utilities
 
@@ -581,7 +637,10 @@ Both arguments accept graph-nodes, graph objects, or strings.
 ;; Does a pattern match?
 (project "[ANIMAL]←(agnt)←[EAT]"
          "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
-; → (([ANIMAL] . [CAT: Tom]) ([EAT] . [EAT]))
+; → ((#<CONCEPT EAT> . #<CONCEPT EAT>) (#<CONCEPT ANIMAL> . #<CONCEPT CAT>))
+
+(format-projection-mapping *)
+; → "{[EAT] -> [EAT], [ANIMAL] -> [CAT:Tom]}"
 
 ;; Predicate version
 (projection-p "[ANIMAL]←(agnt)←[EAT]"
@@ -634,7 +693,7 @@ correspondence finding.
 
 ## Queries
 
-#### `query (pattern context &key all-solutions)` → list of results
+#### `query (pattern context &key first-only)` → list of results
 Query a context (knowledge base) for graphs matching a pattern. Returns
 a list of results, each of the form:
 
@@ -643,15 +702,18 @@ a list of results, each of the form:
 ```
 
 The pattern can be a string, graph-node, or graph object. Variables in
-the pattern (`*x`, `*y`) are bound to matching concepts.
+the pattern (`*x`, `*y`) are bound to matching concepts. With
+`:first-only t`, the search stops at the first match.
 
 ```lisp
 ;; Add graphs to the context
-(parse-cgraph "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
-(parse-cgraph "[DOG: Spike]←(agnt)←[EAT]→(obj)→[BONE].")
+(make-cgraph "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
+(make-cgraph "[DOG: Spike]←(agnt)←[EAT]→(obj)→[FOOD].")
 
 ;; Query with a variable
 (query "[ANIMAL: *x]←(agnt)←[EAT]" *context*)
+; → ((:GRAPH #<CONCEPT CAT> :BINDINGS ((X . #<CONCEPT CAT>)))
+;    (:GRAPH #<CONCEPT DOG> :BINDINGS ((X . #<CONCEPT DOG>))))
 ```
 
 #### `format-query-results (results &optional stream)`
@@ -668,11 +730,11 @@ defining concept.
 ;; Define a type
 (define-concept-type :label 'PET-OWNER
                      :supertypes '(person)
-                     :definition "[PERSON: *lambda]→(poss)→[PET]")
+                     :definition "[PERSON: *lambda]→(poss)→[ANIMAL]")
 
 ;; Expand a concept's type definition
-(expand-type (parse-cgraph "[PET-OWNER: Sue]"))
-; → replaces [PET-OWNER: Sue] with [PERSON: Sue]→(poss)→[PET]
+(format-cgraph (expand-type (graph-head (make-cgraph "[PET-OWNER: Sue]."))))
+; → "[PERSON:Sue]→(poss)→[ANIMAL]."
 ```
 
 #### `expand-type (concept)` → concept
@@ -690,9 +752,19 @@ type-definition object.
 #### `make-context (&optional parent &key negated)` → context
 Create a new context, optionally as a child of a parent context.
 
-#### `add-graph (graph &optional context)` → graph
-Add a graph to a context. Accepts a graph object, graph-node, string,
-or list.
+#### `add-cgraph (graph &optional context)`
+Add a graph object to a context, unless an equal graph is already there.
+No joining: each graph stays a separate assertion. (`make-cgraph` already
+adds the graph it makes.)
+
+#### `include-cgraph (graph &optional context)`
+Add a graph to a context and join it with every graph it shares a joinable
+concept with. This is destructive: the input graphs are rewired in place.
+Generic concepts join freely, so two graphs about unnamed `[EAT]`s become one
+eating. Use `add-cgraph` to keep assertions separate.
+
+#### `graphs (context)` → list
+The graphs in a context.
 
 #### `add-concept (concept &optional context)`
 Add a concept to a context's cache.
@@ -723,11 +795,14 @@ All concepts in the context that have graph referents.
 All unique graphs used as referents in the context.
 
 #### `graph-referent-report (&optional context stream)`
-Print a report of all graph referents.
+Print a report of all graph referents. *Internal — not exported; call it as `cg::graph-referent-report`.*
 
 ---
 
 ## Co-references and Variables
+
+*Internal — none of the functions in this section are exported; call them
+as `cg::name`. In graph strings, use `*x` and `?x` instead (see Parsing).*
 
 ### Variables
 
@@ -765,6 +840,45 @@ Get the formatted co-reference label text (e.g., `"?c"`).
 
 ---
 
+## Text Generation
+
+#### `graph-to-text (graph)` → string
+An English sentence for a graph.
+
+```lisp
+(graph-to-text (make-cgraph "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD]."))
+; → "Tom eats food."
+```
+
+#### `graphs-to-text (graphs &key cross-coref)` → string
+Several graphs as several sentences. A later sentence can say "he" or "it"
+about something an earlier one named; pass `:cross-coref nil` to have each
+sentence name it again.
+
+#### `say (graph &optional stream)`
+Print `graph-to-text`'s sentence.
+
+---
+
+## Web UI
+
+These are defined by the `cgraph-web` and `cgraph-editor` systems, which
+are loaded separately.
+
+#### `start-web-server (&key port)`
+Start the type browser on `port`, 8080 by default.
+
+#### `stop-web-server ()`
+Stop it.
+
+#### `edit-cgraph (&optional thing &key parent open)` → (values result committed-p)
+Edit a graph in the browser, blocking until you update or cancel. `thing`
+can be a graph (edited in place), a string of linear notation (the edited
+string is returned), a concept (its graph), or omitted to start a new
+graph. `:open nil` prints the URL instead of opening a browser.
+
+---
+
 ## Visualization
 
 Requires [Graphviz](https://graphviz.org) and the `graphviz-dot-mode`
@@ -779,8 +893,11 @@ Generate a Graphviz diagram for the given type(s) and display it in Emacs.
 (graph-concept-types '(entity physical animate) :landscape t)
 ```
 
-#### `generate-concept-type-digraph (&key type-name-list stream parents children landscape hide-bottom)`
-Write Graphviz DOT source to a stream. Lower-level function for custom output.
+#### `generate-concept-type-digraph (&key type-name-list stream parents children landscape hide-bottom expand-sub expand-super reveal)`
+Write Graphviz DOT source to a stream. Lower-level function for custom
+output. `expand-sub` and `expand-super` are lists of types to expand
+downward or upward; `reveal` lists types not otherwise shown to expose and
+connect to the display.
 
 #### `display-graph (graph-name &optional filedir)`
 Display a DOT file in Emacs via `graphviz-dot-mode`. Requires SLIME.
@@ -800,3 +917,5 @@ Display a DOT file in Emacs via `graphviz-dot-mode`. Requires SLIME.
 | `*concise*` | When T (default), omit extra spaces in formatting |
 | `*debug-mode*` | When T, include debug info (marks, node refs) in output |
 | `*include-node-ref*` | When T, show node reference numbers in output |
+| `*allow-dynamic-individual-creation*` | When T (default), a name in a graph string that matches no individual creates it; bind to NIL to make unknown names an error |
+| `*anaphora-cross-coref*` | When T, generated text says "he"/"it" for a second mention of a co-referent concept instead of repeating its name. Default NIL; `graphs-to-text` turns it on |

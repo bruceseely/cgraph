@@ -35,9 +35,9 @@ Types can be extended. You can define new types with supertype relationships, ca
 
 Graphs are built from **concepts** (typed nodes with optional referents) and **relations** (typed binary links between concepts). You can create graphs by:
 
-- Parsing CG linear notation: `[CAT: Whiskers]→(agnt)→[EAT]→(obj)→[FOOD]`
+- Parsing CG linear notation: `[CAT: Whiskers]←(agnt)←[EAT]→(obj)→[FOOD]`
 - Constructing programmatically with `make-cgraph` to create a GRAPH object
-- Constructing graph nodes with `make-concept`, `make-relation`, and `linkup`
+- Constructing graph nodes with `make-concept` and `make-relation`
 
 Concepts support named individuals, generic referents, co-reference variables, and nested graph referents. Contexts provide hierarchical grouping for knowledge organization, including negated contexts.
 
@@ -60,47 +60,65 @@ View concept-type hierarchy and canonical graphs in a web browser
 ## Requirements
 
 - **SBCL** (Steel Bank Common Lisp)
-- **ASDF** (bundled with SBCL)
-- **Emacs + SLIME** (for interactive development)
+- **Quicklisp**, to fetch dependencies
 - **Graphviz** (optional, for type hierarchy visualization)
+- **Emacs + SLIME** (optional, for the Emacs integration below)
 
 ## Getting Started
 
-Load the system via ASDF:
+Clone the repository somewhere ASDF can find it, such as
+`~/quicklisp/local-projects/`, then load and set it up:
 
 ```lisp
-(asdf:load-system "cgraph")
+(ql:quickload "cgraph")
+(cg:setup-cgraph (asdf:system-source-directory "cgraph"))
+(cg:reset-cgraph)
 ```
 
-Initialize and run the test suite:
-
-```lisp
-(cg:initialize-cgraph)
-(cg:test-all t)
-```
-
-That runs the engine's own suite. cgraph is also a dependency of the
-[`cg-from-parse`](https://github.com/bruceseely/cg-from-parse) conceptual-graph
-extractor, whose `test/run-all-suites.sh` is a **whole-stack gate**: it runs this
-`cg:test-all` suite — pointed at a throwaway temp type catalog, so your
-`~/.cgraph` is never touched — alongside the PARSIFAL parser and the extractor's
-own suites, each in its own process, for one combined pass/fail.
+`setup-cgraph` creates `~/.cgraph/` and copies the shipped type definitions
+into `~/.cgraph/types/`, where you can edit them. Pass it the cgraph source
+directory, as above: it also deletes compiled files and editor backups under
+that directory.
 
 Basic usage:
 
 ```lisp
-;; Parse a conceptual graph from linear notation
-(cg:make-cgraph "[DOG: Spike]→(agnt)→[EAT]→(obj)→[BONE].")
+;; Parse a conceptual graph from linear notation: Spike eats food.
+(cg:format-cgraph (cg:make-cgraph "[DOG: Spike]←(agnt)←[EAT]→(obj)→[FOOD]."))
+; → "[DOG:Spike]←(agnt)←[EAT]→(obj)→[FOOD]."
+
+;; Say it in English
+(cg:graph-to-text (cg:make-cgraph "[DOG: Spike]←(agnt)←[EAT]→(obj)→[FOOD]."))
+; → "Spike eats food."
 
 ;; Look up a type in the hierarchy
 (cg:get-concept-type 'cat)
+; → CAT
 
 ;; Check type relationships
-(cg:subtype-p (cg:get-concept-type 'cat) (cg:get-concept-type 'animal))  ; → T
+(cg:subtype-p (cg:get-concept-type 'cat) (cg:get-concept-type 'animal))
+; → T
 
 ;; Project one graph onto another (pattern matching)
-(cg:project "[ANIMAL]→(agnt)→[EAT]" "[CAT: Tom]→(agnt)→[EAT]→(obj)→[FOOD]")
+(cg:format-projection-mapping
+ (cg:project "[ANIMAL]←(agnt)←[EAT]." "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD]."))
+; → "{[EAT] -> [EAT], [ANIMAL] -> [CAT:Tom]}"
 ```
+
+See [API.md](API.md) for the full reference.
+
+### Running the tests
+
+```sh
+test/run-tests.sh
+```
+
+That runs the engine's own suite in a fresh SBCL, against a throwaway type
+catalog, so your `~/.cgraph` is never touched. cgraph is also a dependency of
+the [`cg-from-parse`](https://github.com/bruceseely/cg-from-parse)
+conceptual-graph extractor, whose `test/run-all-suites.sh` is a **whole-stack
+gate**: it runs this suite alongside the PARSIFAL parser and the extractor's
+own suites, each in its own process, for one combined pass/fail.
 
 ## Emacs Integration
 
@@ -121,10 +139,13 @@ system/
                 referents, conformity, parsing, formatting
   operations/   Formation rules, projection, maximal join,
                 graph combination, queries, type definitions
+  generation/   Graph-to-English text generation
   graphing/     Graphviz DOT generation
+  web/          Web type browser (the cgraph-web system)
+  editor/       Web graph editor (the cgraph-editor system)
 default-types/  Predefined concept and relation type definitions
 emacs/          Emacs major mode and SLIME integration
-test/           Test suite (run with test-all)
+test/           Test suite (run with test/run-tests.sh)
 ```
 
 ## References
