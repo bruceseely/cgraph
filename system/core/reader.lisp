@@ -612,7 +612,7 @@
     (let* ((string-type-p (find #\" type-string :test #'char-equal))
            (stripped      (remove #\" type-string))
            (type-label    (cond (string-type-p stripped)
-                                (t (intern (string-upcase stripped))))))
+                                (t (type-label-symbol stripped)))))
       (unless (get-concept-type type-label)
         (error 'concept-type-lookup-failed :text type-label))
       (values type-label next-char))))

@@ -116,6 +116,7 @@
                              (:file "referent-test")
                              (:file "graph-referent-test")
                              (:file "concept-test")
+                             (:file "package-independence-test")
                              (:file "format-test")
                              (:file "normalize-test")
                              (:file "parse-test")

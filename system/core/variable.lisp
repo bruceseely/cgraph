@@ -54,8 +54,12 @@
 
 
 
+;;; Into :CG, and NIL for no variable -- interning (STRING NIL) in the caller's
+;;; package only gave back CL:NIL where that package happened to use CL.
 (defmethod node-variable ((node graph-node))
-  (intern (string (gethash node (variables *variables*)))))
+  (let ((variable (gethash node (variables *variables*))))
+    (when variable
+      (intern (string variable) :cg))))
 
 (defmethod variable-node ((variable symbol))
   (gethash (intern (string variable) :keyword) (nodes *variables*)))

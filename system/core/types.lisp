@@ -258,12 +258,8 @@
 
 
 (defmethod make-concept-type ((type-label symbol) &rest keys &key supertypes-list canonical-graph-string graph-compatible definition-string)
-  (when (eq type-label 't)
-    ;;(print "------------------------------------------------ make-concept-type~%")
-    ;;(print-backtrace)
-    )
   supertypes-list canonical-graph-string definition-string
-  (apply #'make-concept-type-aux type-label keys))
+  (apply #'make-concept-type-aux (type-label-symbol type-label) keys))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -588,6 +584,18 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun type-label-symbol (designator)
+  "The symbol a type named by DESIGNATOR (a symbol or string) is catalogued
+   under: its upcased name, interned in :CG.
+
+   The type catalogs are EQ hash tables keyed by :CG symbols -- the type files
+   are read that way whatever *PACKAGE* is. A label that arrives interned
+   anywhere else (CL-USER::CAT from a caller's REPL, a keyword) is a different
+   key, so every lookup and constructor goes through here rather than trusting
+   the caller's package. Names CG inherits, like NUMBER or TIME, come back as
+   the inherited CL symbol, which is what the type files produce too."
+  (intern (string-upcase (string designator)) :cg))
+
 (defmethod word-symbol ((word string))
   (intern (string-upcase (format nil "word-~a" word)) :cg))
 
@@ -610,11 +618,8 @@
   (get-concept-type (intern (string-upcase type-name) :cg)))
 
 (defmethod get-concept-type ((type-name symbol))
-  ;;(print type-name)
-  ;;(describe type-name)
-  ;;(describe *concept-type-catalog*)
   (multiple-value-bind (value present-p)
-      (gethash type-name *concept-type-catalog*)
+      (gethash (type-label-symbol type-name) *concept-type-catalog*)
     (cond (present-p
            value)
           (t (error 'concept-type-lookup-failed :type (princ-to-string type-name))))))
@@ -638,7 +643,7 @@
 
 (defmethod concept-type-exists ((type-name symbol))
   (multiple-value-bind (value present-p)
-      (gethash type-name *concept-type-catalog*)
+      (gethash (type-label-symbol type-name) *concept-type-catalog*)
     value
     present-p))
 
@@ -700,12 +705,11 @@
 
 
 (defun define-concept-type (&key label supertypes canonical-graph graph-compatible definition)
-  ;;(setf label (intern (string-upcase label)))
+  (when (symbolp label) (setf label (type-label-symbol label)))
   (setf supertypes (mapcar (lambda (supertype)
-                             (cond ((typep supertype 'string)
-                                    (intern (string-upcase supertype)))
-                                   ((typep supertype 'symbol)
-                                    supertype)))
+                             (if (or (stringp supertype) (symbolp supertype))
+                                 (type-label-symbol supertype)
+                                 supertype))
                            supertypes))
 
   ;; nil on lookup failure
@@ -1188,7 +1192,7 @@
               :accessor dest-type)))
 
 (defmethod get-relation-type ((type-name symbol))
-  (let ((cached-relation-type (gethash type-name *relation-type-catalog*)))
+  (let ((cached-relation-type (gethash (type-label-symbol type-name) *relation-type-catalog*)))
     (cond (cached-relation-type)
           (t (error 'relation-type-lookup-failed :text (princ-to-string type-name))))))
 
@@ -1696,7 +1700,7 @@
 
 (defmethod relation-type-exists ((type-name symbol))
   (multiple-value-bind (value present-p)
-      (gethash type-name *relation-type-catalog*)
+      (gethash (type-label-symbol type-name) *relation-type-catalog*)
     value
     present-p))
 
@@ -1815,6 +1819,14 @@
   ;; build a catalog that every explicit (INTERN ... :CONCEPTUAL-GRAPHS) lookup
   ;; then missed. Same fix, and the same reason, as the concept-type side.
   (apply #'make-relation-type (intern (string-upcase label) :cg) keys))
+
+;;; A symbol from another package (CL-USER::AGNT) re-enters with its :CG twin,
+;;; so the catalog key is the same however the caller spelled it.
+(defmethod make-relation-type :around ((label symbol) &rest keys &key &allow-other-keys)
+  (let ((cg-label (type-label-symbol label)))
+    (if (eq cg-label label)
+        (call-next-method)
+        (apply #'make-relation-type cg-label keys))))
 
 (defmethod make-relation-type ((label symbol)  &rest keys &key (source-types nil) (dest-type nil) description supertypes)
   (assert (or (null source-types) (every #'concept-type-p source-types))

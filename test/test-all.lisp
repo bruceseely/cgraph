@@ -50,6 +50,7 @@
                       graph-referent-test
                       concept-test
                       make-concept-plist-test
+                      package-independence-test
                       format-test
                       cache-test
                       concept-cache-index-test
