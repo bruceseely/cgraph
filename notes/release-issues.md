@@ -15,12 +15,10 @@ Items are in priority order.
   with "symbol not external"; only `cg::` works. A curated export list of about
   40–80 symbols, matched to `API.md`, would turn ~1,000 internal definitions
   into an API.
-- **Loading it unlocks `COMMON-LISP` for the whole image** (`cgraph.asd:16`),
-  and redefinition warnings are muffled. A library can't do that to its host.
-  Use `(:shadow #:set #:type #:conjugate …)` in the `defpackage`, then remove the
-  unlock and the `disable-package-locks` declaims in `set.lisp`,
-  `individual.lisp` and `conformity.lisp`. This also removes the
-  silent-shadowing hazard of a `defun` quietly replacing a `cl:` function.
+- ~~**Loading it unlocks `COMMON-LISP` for the whole image.**~~ Done
+  2026-10-14: `SET` and `TYPE` are now shadowed in the `defpackage`, and the
+  unlock and the `disable-package-locks` declaims are gone. cgraph, cgraph-web,
+  cgraph-editor and the test suite all load into a stock SBCL with `CL` locked.
 - **The package uses `#:cl-user`** (`cgraph.asd:5`), which imports whatever
   happens to be in the user's `CL-USER`. Use only `#:cl` and `#:uiop`.
 - **SWANK is a hard dependency** (`:depends-on (:swank)`). `initialize.lisp`
@@ -36,9 +34,9 @@ Items are in priority order.
 
 ## 2. Portability
 
-- **SBCL-specific code is small**: 8 references. Four are the package-lock
-  handling above; the rest are `sb-mop` calls in `conformity.lisp`, which
-  `closer-mop` replaces. After those two fixes the code may run on CCL/ECL.
+- **SBCL-specific code is small**: now that the package-lock handling is gone,
+  only four `sb-mop` calls in `conformity.lisp` remain, and `closer-mop`
+  replaces them. After that the code may run on CCL/ECL.
   If not, state "SBCL only" plainly.
 - **No Quicklisp install path.** Getting into the Quicklisp dist, or at least
   Ultralisp, is how CL users find and try libraries.

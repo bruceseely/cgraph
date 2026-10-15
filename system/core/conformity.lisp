@@ -1,6 +1,5 @@
 ;;; -*- Mode: LISP; Syntax: Common-lisp; Base 10; Lowercase: Yes -*-
 
-(declaim (sb-ext:disable-package-locks set))
 (in-package #:conceptual-graphs)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -3,17 +3,12 @@
 
 (defpackage :conceptual-graphs
   (:use #:cl #:cl-user #:uiop)
+  ;; SET and TYPE are conceptual-graph vocabulary (the SET node class, the TYPE
+  ;; reader on type objects). Shadow them so cgraph gets its own symbols instead
+  ;; of redefining COMMON-LISP's, which would need CL's package lock removed.
+  (:shadow #:set #:type)
   (:nicknames :cg :cgraph))
 
-
-(declaim (sb-ext:disable-package-locks set))
-;; cgraph rebinds/redefines several CL-standard symbols (SET, TYPE, CONJUGATE,
-;; ...) as part of the conceptual-graph vocabulary. Unlock the COMMON-LISP
-;; package here, in the system definition, so (ql:quickload :cgraph) works in
-;; any SBCL image -- rather than relying on the user having
-;; (sb-ext:unlock-package :common-lisp) in their own init (a silent onboarding
-;; blocker for new users).
-#+sbcl (sb-ext:unlock-package :common-lisp)
 (in-package :asdf-user)
 
 ;;; (asdf:system-relative-pathname "cgraph" "concept-types.text")
