@@ -31,12 +31,10 @@ Items are in priority order.
   `web/api.lisp` uses it too. Move this into an optional `cgraph/emacs` system
   so the core loads under `sbcl --script`, Sly, or no editor at all.
   (`concept-type-graph.lisp` already guards its use with `#+swank`.)
-- **`setup-cgraph` deletes files under its `code-base` argument**, recursively:
-  every `*.fasl`, `*.lisp~` and `*.lisp#` (`cleanup-files`, `initialize.lisp`).
-  Passed the cgraph source directory, as the README says, that is harmless;
-  passed `"~/"` it would delete every fasl in the user's home tree. A setup
-  function shouldn't delete anything. Drop the cleanup, or move it to a
-  developer-only function.
+- ~~**`setup-cgraph` deleted files under its `code-base` argument.**~~ Fixed
+  2026-10-14: it recursively deleted every `*.fasl`, `*.lisp~` and `*.lisp#`
+  there, so `"~/"` would have wiped a home tree. The call is gone; `code-base`
+  is now ignored.
 - **Setup writes to `~/.cgraph` and rewrites symlinks there**, and a test run
   has already destroyed type files this way. A new user's first `setup-cgraph`
   shouldn't touch their home directory. By default, load the shipped

@@ -76,9 +76,7 @@ Clone the repository somewhere ASDF can find it, such as
 ```
 
 `setup-cgraph` creates `~/.cgraph/` and copies the shipped type definitions
-into `~/.cgraph/types/`, where you can edit them. Pass it the cgraph source
-directory, as above: it also deletes compiled files and editor backups under
-that directory.
+into `~/.cgraph/types/`, where you can edit them.
 
 Basic usage:
 

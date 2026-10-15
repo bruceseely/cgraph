@@ -171,6 +171,13 @@
 ;;;
 
 (defun setup-cgraph (code-base &key external-types-directory)
+  ;; CODE-BASE is no longer used. Setup used to finish with
+  ;; (CLEANUP-FILES CODE-BASE), deleting every *.fasl, *.lisp~ and *.lisp#
+  ;; under it recursively -- harmless given the cgraph source directory, but a
+  ;; setup function has no business deleting files, and "~/" would have wiped
+  ;; a home tree. The parameter stays so existing callers keep working;
+  ;; CLEANUP-FILES is still there to call by hand.
+  (declare (ignore code-base))
   (let* ((cgraph-base (format nil "~a.cgraph/" (namestring (user-homedir-pathname))))
          (types-directory (format nil "~atypes/" cgraph-base))
          (data-directory (format nil "~adata/" cgraph-base))
@@ -224,9 +231,7 @@
      '(progn
        (load "init-cgraph.el")
        (load (expand-file-name "~/repo/cgraph/cgraph-filesets.el"))
-       (cgraph-read-options-from-cl))))
-
-  (cleanup-files code-base))
+       (cgraph-read-options-from-cl)))))
 
 
 (in-package :cl-user)

@@ -35,12 +35,10 @@ Entry point for initial CGraph setup. Called once at startup. It:
   `external-types-directory`, symlinks the type files there to that
   directory's;
 - loads the type definitions, and sets up SLIME integration when SWANK is
-  present;
-- deletes `*.fasl`, `*.lisp~` and `*.lisp#` files under `code-base`,
-  recursively.
+  present.
 
-Because of that last step, `code-base` must be the cgraph source directory:
-pass `(asdf:system-source-directory "cgraph")`.
+`code-base` is ignored; it's kept so existing calls keep working. Pass
+`(asdf:system-source-directory "cgraph")`.
 
 Follow it with `reset-cgraph` to create the context that graphs are added to.
 
