@@ -7,7 +7,106 @@
   ;; reader on type objects). Shadow them so cgraph gets its own symbols instead
   ;; of redefining COMMON-LISP's, which would need CL's package lock removed.
   (:shadow #:set #:type)
-  (:nicknames :cg :cgraph))
+  (:nicknames :cg :cgraph)
+  ;; The public API: what API.md documents, plus the entry points it doesn't
+  ;; cover yet. Everything else is internal and reachable only as CG::NAME.
+  (:export
+   ;; --- classes and conditions
+   #:concept #:relation #:graph #:concept-type #:relation-type
+   #:individual #:referent #:context
+   #:concept-type-lookup-failed #:relation-type-lookup-failed
+
+   ;; --- setup and initialization
+   #:setup-cgraph #:initialize-cgraph #:reset-cgraph #:report-directories
+   #:ensure-concept-types-exist #:ensure-relation-types-exist
+
+   ;; --- types: create / modify
+   #:define-concept-type #:make-concept-type #:modify-concept-type
+   #:remove-concept-type #:make-relation-type
+
+   ;; --- types: look up
+   #:get-concept-type #:get-relation-type #:lookup-concept-type
+   #:concept-type-defined-p #:concept-type-exists #:relation-type-exists
+   #:label #:source-types #:dest-type
+
+   ;; --- types: hierarchy queries
+   #:subtype-p #:supertype-p #:proper-subtype-p #:proper-supertype-p #:subsumes-p
+   #:subtypes #:proper-subtypes #:supertypes #:proper-supertypes
+   #:direct-subtypes #:direct-supertypes
+   #:maximal-common-subtype #:minimal-common-supertype
+   #:common-subtypes #:common-supertypes #:rel-use
+
+   ;; --- types: listing, walking, I/O, validation
+   #:all-concept-types #:all-relation-types #:collect-concept-types
+   #:walk-concept-types #:walk-concept-types-down #:walk-concept-types-up
+   #:print-concept-types #:print-relation-types #:describe-concept-types
+   #:save-concept-types #:save-relation-types
+   #:load-concept-types #:load-relation-types
+   #:check-type-lattice
+
+   ;; --- concepts
+   #:make-concept #:get-concept
+   #:properties #:referent-name #:generic-p #:is-type #:concept-p
+   #:describe-concept #:concepts-equal #:referents-equal
+   #:inarcs #:outarcs
+
+   ;; --- relations
+   #:make-relation #:relation-p #:outarc #:valence #:signature
+   #:connecting-relation #:relations-equal
+
+   ;; --- graphs
+   #:make-cgraph #:parse-cgraph
+   #:head #:graph-head #:nodes #:graph-concepts #:graph-relations
+   #:concepts-of-type #:concept-count #:relation-count #:graph-p #:graphs-equal
+   #:graph-referent #:graph-referent-p #:referent-concepts #:referent-relations
+
+   ;; --- individuals and referents
+   #:make-individual #:get-individual #:find-individual-with-id
+   #:individual-p #:individuals-equal
+   #:make-referent #:referent-p #:content #:name-property #:measure-property
+   #:conforms
+
+   ;; --- formatting and string utilities
+   #:format-cgraph #:format-concept #:format-relation #:print-cgraph
+   #:graph-every-concept
+   #:normalize-cgraph-string #:flatten-cgraph
+   #:arrows-to-ascii #:arrows-to-unicode
+
+   ;; --- graph operations
+   #:copy-concept #:copy-relation #:copy-cgraph
+   #:restrict-by-type #:restrict-by-referent #:restrict
+   #:join-concepts #:concepts-joinable-p #:types-joinable-p #:simplify
+   #:project #:projection-p #:projection-mapping #:all-projections
+   #:format-projection-mapping
+   #:maximal-join #:maximal-join-mapping #:format-join-mapping
+   #:combine-conceptual-graphs
+
+   ;; --- queries and type definitions
+   #:query #:format-query-results
+   #:expand-type #:ensure-definition-parsed
+
+   ;; --- contexts
+   #:make-context #:add-cgraph #:include-cgraph
+   #:add-concept #:remove-concept #:graph-present-p #:graphs
+   #:retrieve-concepts-having-properties #:retrieve-concepts-having-individual
+   #:retrieve-concept
+   #:concepts-with-graph-referents #:all-graph-referents
+
+   ;; --- text generation
+   #:graph-to-text #:graphs-to-text #:say
+
+   ;; --- visualization
+   #:graph-concept-types #:generate-concept-type-digraph #:display-graph
+
+   ;; --- web UI (defined only once cgraph-web / cgraph-editor are loaded)
+   #:start-web-server #:stop-web-server #:edit-cgraph
+
+   ;; --- special variables
+   #:*context* #:*concept-type-top* #:*concept-type-bottom*
+   #:*cgraph* #:*cgraph-types-directory* #:*cgraph-data-directory*
+   #:*concise* #:*debug-mode* #:*include-node-ref*
+   #:*allow-dynamic-individual-creation*
+   #:*anaphora-cross-coref*))
 
 (in-package :asdf-user)
 

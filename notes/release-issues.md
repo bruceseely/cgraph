@@ -10,11 +10,16 @@ Items are in priority order.
 
 ## 1. Blockers: it misbehaves in someone else's image
 
-- **Nothing is exported.** `:conceptual-graphs` has no `:export` clause, so the
-  README's own examples (`cg:make-cgraph`, `cg:project`, `cg:subtype-p`) fail
-  with "symbol not external"; only `cg::` works. A curated export list of about
-  40–80 symbols, matched to `API.md`, would turn ~1,000 internal definitions
-  into an API.
+- ~~**Nothing is exported.**~~ Done 2026-10-14: 170 symbols, in `cgraph.asd`'s
+  `defpackage`: what `API.md` documents, plus the classes, the lookup
+  conditions, text generation and the web entry points. Twelve documented
+  names stay internal (the `crawl-*` walkers, `pcg`, `graph-referent-report`
+  and the variable/coreference functions). `API.md` still documents them, and
+  names `add-graph` and `fcg`, which don't exist.
+- ~~**Type names resolved in the caller's package.**~~ Done 2026-10-14: from
+  `CL-USER`, `'cat` was `CL-USER::CAT`, so every lookup and graph-string parse
+  failed unless `start-cgraph` had switched to `:cg` first. Lookups,
+  constructors and the reader now resolve names in `:cg`.
 - ~~**Loading it unlocks `COMMON-LISP` for the whole image.**~~ Done
   2026-10-14: `SET` and `TYPE` are now shadowed in the `defpackage`, and the
   unlock and the `disable-package-locks` declaims are gone. cgraph, cgraph-web,
