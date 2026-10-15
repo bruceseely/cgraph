@@ -95,8 +95,12 @@
 (defvar *copy-map* (list))
 
 
-(defvar *allow-dynamic-individual-creation* nil
-  "The host system may want to define individuals, itself, and not have new individuals dynamically created. ")
+(defvar *allow-dynamic-individual-creation* t
+  "When true, a name or id in a graph string that matches no existing
+   individual -- the Spot in '[DOG: Spot]' -- creates that individual. On by
+   default: with it off, every name a graph mentions must be made in advance,
+   and the parse fails otherwise. A host system that defines its individuals
+   itself, and wants an unknown name to be an error, binds it to NIL.")
 
 (defvar *always-show-node-ref* nil
   "This is useful during debugging, so nodes that have the same printed representation can be distinguished.")

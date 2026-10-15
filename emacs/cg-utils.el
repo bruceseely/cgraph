@@ -297,7 +297,7 @@ and a relation type share the same name."
   :group 'cgraph)
 
 (clopt-defcustom cgraph cgraph-allow-dynamic-individual-creation
-    conceptual-graphs::*allow-dynamic-individual-creation* nil
+    conceptual-graphs::*allow-dynamic-individual-creation* t
   "Mirrors conceptual-graphs::*allow-dynamic-individual-creation* in Common Lisp."
   :type 'boolean
   :group 'cgraph)
