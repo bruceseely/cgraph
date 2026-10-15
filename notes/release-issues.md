@@ -94,3 +94,14 @@ just the engine:
   journals in `notes/`.
 - **Fix the `.asd` description typo** ("comceptual", `cgraph.asd:24`) and bump
   `:version` past `0.0.1` when you tag a release.
+
+## Where to start
+
+The first two items in section 1, exports and shadowing instead of unlocking
+`CL`, are each about a day of work. After those, cgraph stops being hostile to
+a host image and everything else is incremental. Then do the SWANK split, then
+the `~/.cgraph` defaults, and only then cut a tagged release.
+
+None of this has been tested by loading cgraph into a clean image. The findings
+come from reading the `.asd`, the package definition and `initialize.lisp`, and
+from grepping the code.
