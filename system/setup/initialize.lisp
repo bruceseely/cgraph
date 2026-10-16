@@ -219,19 +219,8 @@
         (setf (symbol-function sym)
               (lambda (package)
                 (let ((*readtable* (copy-readtable nil)))
-                  (funcall orig package)))))))
+                  (funcall orig package))))))))
 
-  (when (and (find-package :swank)
-             ;; Only push to Emacs when there's an active SLIME connection.
-             ;; Without this guard, headless sbcl runs (e.g. test scripts)
-             ;; trip an ETYPECASE on a NIL connection inside swank.
-             (let ((conn (find-symbol "*EMACS-CONNECTION*" :swank)))
-               (and conn (boundp conn) (symbol-value conn))))
-    (swank::eval-in-emacs
-     '(progn
-       (load "init-cgraph.el")
-       (load (expand-file-name "~/repo/cgraph/cgraph-filesets.el"))
-       (cgraph-read-options-from-cl)))))
 
 
 (in-package :cl-user)
@@ -244,6 +233,21 @@
                                     :nicknames '(:cg :cgraph))))
 
   (cg::setup-cgraph code-path :external-types-directory external-types-directory)
+
+  ;; Load the Emacs side: cg-mode, the C-c t / C-c b keybindings, Customize
+  ;; sync. This used to be the end of SETUP-CGRAPH, which made it everyone's:
+  ;; init-cgraph.el is a file from this machine's emacs-init, so under anyone
+  ;; else's SLIME the load failed in Emacs and took setup down with it.
+  ;; START-CGRAPH is this machine's launcher, so it lives here. A failure is
+  ;; reported, not fatal: the Lisp side works without it.
+  (handler-case
+      (cg::eval-in-emacs-if-connected
+       '(progn
+         (load "init-cgraph.el")
+         (load (expand-file-name "~/repo/cgraph/cgraph-filesets.el"))
+         (cgraph-read-options-from-cl)))
+    (error (condition)
+      (format t "~&;; Emacs setup failed (Lisp side unaffected): ~a~%" condition)))
 
   (cg::report-directories)
   (terpri)

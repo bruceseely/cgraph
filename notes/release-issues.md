@@ -26,11 +26,18 @@ Items are in priority order.
   cgraph-editor and the test suite all load into a stock SBCL with `CL` locked.
 - **The package uses `#:cl-user`** (`cgraph.asd:5`), which imports whatever
   happens to be in the user's `CL-USER`. Use only `#:cl` and `#:uiop`.
-- **SWANK is a hard dependency** (`:depends-on (:swank)`). `initialize.lisp`
-  calls `swank::eval-in-emacs` at setup and patches SWANK internals, and
-  `web/api.lisp` uses it too. Move this into an optional `cgraph/emacs` system
-  so the core loads under `sbcl --script`, Sly, or no editor at all.
-  (`concept-type-graph.lisp` already guards its use with `#+swank`.)
+- ~~**SWANK is a hard dependency.**~~ Done 2026-10-16, with run-time checks
+  rather than a separate `cgraph/emacs` system: `cgraph.asd` no longer depends
+  on SWANK, no source file names a SWANK symbol, and the `#+swank` guards are
+  gone (they're decided at compile time, and ASDF reuses fasls). Everything
+  that talks to Emacs goes through `eval-in-emacs-if-connected`
+  (`system/setup/basic-utilities.lisp`), which does nothing without a SLIME
+  connection and works from any thread. cgraph, cgraph-web and cgraph-editor
+  load under `sbcl --script`. Loading `init-cgraph.el` (this machine's
+  emacs-init) moved from `setup-cgraph` to `start-cgraph`, so it no longer
+  breaks setup under someone else's SLIME. Found on the way: the web UI's
+  "copy to kill-ring" had never reached Emacs, because SWANK's
+  `eval-in-emacs` fails from a thread it didn't start; it works now.
 - ~~**`setup-cgraph` deleted files under its `code-base` argument.**~~ Fixed
   2026-10-14: it recursively deleted every `*.fasl`, `*.lisp~` and `*.lisp#`
   there, so `"~/"` would have wiped a home tree. The call is gone; `code-base`
@@ -75,7 +82,8 @@ just the engine:
 - `cgraph`: core plus operations
 - `cgraph/generation`
 - `cgraph-web` and `cgraph-editor`, which already exist
-- `cgraph/emacs`
+- `cgraph/emacs` (optional now: the Emacs code is gated at run time, so
+  this would be packaging only)
 
 ## 5. Tests and CI
 

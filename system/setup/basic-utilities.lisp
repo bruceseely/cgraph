@@ -81,3 +81,53 @@
   (delete-files directory "*.lisp~")
   (delete-files directory "*.lisp#")
   (delete-files directory "*.fasl" ))
+
+
+;;; --- Talking to Emacs, when there is one -----------------------------------
+;;;
+;;; cgraph doesn't depend on SWANK. Everything that talks to Emacs goes through
+;;; these two, which find SWANK at run time: no SWANK symbol is written in the
+;;; source, so the reader never needs the package, and nothing is decided by
+;;; #+swank -- that is fixed when a file is compiled, and ASDF reuses fasls, so
+;;; one compiled in a plain SBCL would switch these off in later SLIME images.
+
+(defun swank-symbol-value (name)
+  "The value of SWANK's variable NAME, or NIL when SWANK isn't loaded."
+  (let* ((swank (find-package :swank))
+         (symbol (and swank (find-symbol name swank))))
+    (and symbol (boundp symbol) (symbol-value symbol))))
+
+(defun emacs-connection ()
+  "The SLIME connection to talk to Emacs over, or NIL without one: this
+   thread's *EMACS-CONNECTION*, or else SWANK's default connection (the most
+   recent). The fallback is what lets a thread SWANK didn't start -- a web
+   request, say -- reach Emacs; SWANK's own SEND-TO-EMACS doesn't fall back,
+   so EVAL-IN-EMACS-IF-CONNECTED binds it."
+  (let ((swank (find-package :swank)))
+    (and swank
+         (or (swank-symbol-value "*EMACS-CONNECTION*")
+             (let ((default (find-symbol "DEFAULT-CONNECTION" swank)))
+               (and default (fboundp default) (funcall default)))))))
+
+(defun emacs-connected-p ()
+  "True when there is a SLIME connection to Emacs."
+  (and (emacs-connection) t))
+
+(defun eval-in-emacs-if-connected (form)
+  "Evaluate FORM in Emacs and return its value, or return NIL without a SLIME
+   connection. Works from any thread. An error on the Emacs side is signalled
+   here, as SWANK does."
+  (let ((connection (emacs-connection))
+        (eval-in-emacs (and (find-package :swank) (find-symbol "EVAL-IN-EMACS" :swank))))
+    (cond ((null connection) nil)
+          ;; A SWANK thread: its connection is already bound.
+          ((eq connection (swank-symbol-value "*EMACS-CONNECTION*"))
+           (funcall eval-in-emacs form))
+          ;; Any other thread: bind what SWANK's WITH-CONNECTION binds (a
+          ;; macro, so not usable here without SWANK at read time). SEND-TO-EMACS
+          ;; needs all three; *SEND-COUNTER* is unbound outside SWANK's threads.
+          (t
+           (progv (mapcar (lambda (name) (find-symbol name :swank))
+                          '("*EMACS-CONNECTION*" "*PENDING-SLIME-INTERRUPTS*" "*SEND-COUNTER*"))
+                  (list connection '() 0)
+             (funcall eval-in-emacs form))))))

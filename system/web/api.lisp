@@ -193,14 +193,12 @@
   (unless (eq (hunchentoot:request-method*) :post)
     (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
     (return-from handle-api-kill-ring "{\"error\":\"POST required\"}"))
-  #+swank
-  (handler-case
-      (progn (swank:eval-in-emacs `(kill-new ,text)) "{\"ok\":true}")
-    (error (e)
-      (format nil "{\"ok\":false,\"error\":\"~a\"}" (json-escape (princ-to-string e)))))
-  #-swank
-  "{\"ok\":false,\"error\":\"SWANK not available\"}"
-  )
+  (if (emacs-connected-p)
+      (handler-case
+          (progn (eval-in-emacs-if-connected `(kill-new ,text)) "{\"ok\":true}")
+        (error (e)
+          (format nil "{\"ok\":false,\"error\":\"~a\"}" (json-escape (princ-to-string e)))))
+      "{\"ok\":false,\"error\":\"no Emacs connection\"}"))
 
 ;;; GET /api/options — the CL-side settings the browser UI honors.
 ;;; The page has no other channel to the option system, so anything the user
