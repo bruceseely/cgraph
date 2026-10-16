@@ -4,7 +4,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  Mapping from CG relation types to English syntactic roles.
-;;  Phase 1: covers the relations in default-types/relation-types.text.
+;;  Phase 1: covers the relations in default-types/relation-types.lisp.
 ;;  Each entry: (relation-label role &optional preposition)
 ;;  Roles: :subject :dobj :iobj :pp :adj :adv :poss :nmod :pred-cmp
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -42,11 +42,15 @@ Items are in priority order.
   2026-10-14: it recursively deleted every `*.fasl`, `*.lisp~` and `*.lisp#`
   there, so `"~/"` would have wiped a home tree. The call is gone; `code-base`
   is now ignored.
-- **Setup writes to `~/.cgraph` and rewrites symlinks there**, and a test run
-  has already destroyed type files this way. A new user's first `setup-cgraph`
-  shouldn't touch their home directory. By default, load the shipped
-  `default-types/` read-only from the system directory, write only to a
-  directory the user configures, and never create symlinks.
+- ~~**Setup writes to `~/.cgraph` and rewrites symlinks there.**~~ Done
+  2026-10-16: setup writes nothing. A *type set* is a directory of type files,
+  read in place (`*cgraph-types-directory*` names it); no copies, deletes or
+  `ln -s`. With no `:types`, the shipped `default-types/` are used read-only
+  and the type editor refuses to save into them. `create-type-set` clones the
+  current set into `~/.cgraph/types/<name>/` (or a path) and switches to it;
+  `setup-cgraph :types` takes a name or a path. `data/` and `logs/` are made
+  on first write. Step 2, still to do: the type editor offers to create a set
+  instead of only refusing.
 
 ## 2. Portability
 

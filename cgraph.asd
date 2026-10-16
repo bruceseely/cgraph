@@ -18,6 +18,7 @@
 
    ;; --- setup and initialization
    #:setup-cgraph #:initialize-cgraph #:reset-cgraph #:report-directories
+   #:create-type-set
    #:ensure-concept-types-exist #:ensure-relation-types-exist
 
    ;; --- types: create / modify
@@ -110,7 +111,7 @@
 
 (in-package :asdf-user)
 
-;;; (asdf:system-relative-pathname "cgraph" "concept-types.text")
+;;; (asdf:system-relative-pathname "cgraph" "default-types/concept-types.lisp")
 ;;; (asdf:system-source-directory "cgraph")
 ;;; (clear-system :cgraph)
 
@@ -123,8 +124,10 @@
   ;; (EMACS-CONNECTED-P, system/setup/basic-utilities.lisp) and does nothing
   ;; without a SLIME connection.
   :components ((:module "default-types"
-	        :components ((:static-file "concept-types.text")
-	                     (:static-file "relation-types.text")))
+	        ;; The shipped type set, read in place and never written. Static, not
+	        ;; compiled: these are data that LOAD-CONCEPT-TYPES reads.
+	        :components ((:static-file "concept-types.lisp")
+	                     (:static-file "relation-types.lisp")))
 
                (:module "system"
 	        :depends-on ("default-types")

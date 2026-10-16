@@ -45,27 +45,41 @@ At that point, a REPL should open with a prompt indicating the `:cg` package.
 
 #### directories
 
-When CGraph starts up, it ensures that a directory named `~/.cgraph/` exists and saves the path in the `*cgraph*` special variable. The `.cgraph` directory is where individual customization occurs and temporary files are stored.  The variables `*cgraph-data*` and `*cgraph-types*` are bound to the `~/.cgraph/data/` and `~/.cgraph/types/` directories.
+`*cgraph*` names `~/.cgraph/`, where per-user files go. Setup doesn't create
+it, and doesn't write anything: `~/.cgraph/data/` (`*cgraph-data-directory*`,
+plots from `graph-concept-types` and the web UI's Save) and `~/.cgraph/logs/`
+(`*cgraph-log-directory*`, web-server logs) are created the first time
+something is written there. `~/.cgraph/initializations.lisp` is read at
+startup if it exists.
 
-##### external-types-directory
+##### type sets
 
-The concept-type and relation-type definitions used during operation are held in the directory `~/.cgraph/types/` The user can modify these type definitions and add new type definitions here.
+A *type set* is a directory holding `concept-types.lisp` and
+`relation-types.lisp`, and optionally `lexicon-overrides.lisp` (how its types
+are worded in English). cgraph reads the set's files where they are --
+nothing is copied, deleted or symlinked -- and `*cgraph-types-directory*`
+names the set in use. The web type editor saves into the same files.
 
-The `:external-types-directory`  argument, to *setup-cgraph*() function, allows the use of an external directory, such as a directory in a git repository, to hold concept-type and relation-type definitions. If provided, symbolic links are established from  ``~/.cgraph/types/`` to the files in the supplied directory. 
+`setup-cgraph` takes the set to use as `:types`:
 
-On startup, cgraph ensures the directories are populated. The function *setup-cgraph*() looks for files named exactly `concept-types.lisp` and `relation-types.lisp` in the  `*cgraph-types*` directory. If either file is missing then the types are initialized as described here:
+- with no `:types`, the shipped `default-types/` in the cgraph source tree.
+  These are **read-only**: the type editor refuses to save into them.
+- `:types "kitchen"`, a name: `~/.cgraph/types/kitchen/`.
+- `:types "~/repo/cgraph-types/"`, a path: any directory, such as one in its
+  own git repository. `:external-types-directory` is the older spelling of
+  the same argument.
 
-- the `~/.cgraph/types/` directory contains the two files `concept-types.lisp` and `relation-types.lisp`:  nothing is done
-- the `~/.cgraph/types/` directory is empty but `:external-types-directory` is provided: links are generated to the supplied directory
-- the `~/.cgraph/types/` directory is empty and :external-types-directory is NIL, the files concept-types.lisp and relation-types.lisp containing default concept and relation types are copied from a source code directory into the ``~/.cgraph/types/`` directory
+To change or add types, make a set of your own. `(cg:create-type-set "kitchen")`
+copies the set now loaded -- the defaults, until you choose another -- into
+`~/.cgraph/types/kitchen/` and switches to it, so the type editor saves there.
+It copies every file in the source set's directory except hidden ones (a set
+may carry a lexicon, notes, a README), and refuses to overwrite a set that
+exists. `:from` names a different set to copy; `:switch nil` copies without
+switching. Next session, pass `:types "kitchen"` to `setup-cgraph`.
 
-The `~/.cgraph/types/` directory holds the Lisp files with concept-type definitions and relation-type definitions that are actively used. 
-
-So, a practical way of maintaining custom type definitions is to store them in a git repo called cgraph-types and link the two filenames mentioned above to the files in the repo. As long as the code sees a file with one of those names, that file will be left alone. 
-
-The `(initialize-types)` function parses the type files in `*cgraph-types*` directory to create type objects and it evaluates the forms in the  `initializations.lisp` file. It should be run after changes are made to the type definitions.
-
-The `*cgraph-data*` directory holds temporary files, like the dot files and png files generated when the concept-types are displayed as a graph, using  `(graph-concept-types)`.
+The `(initialize-types)` function parses the current set's type files to
+create type objects. `(reset-cgraph)` runs it, and evaluates the forms in
+`initializations.lisp`; run it after changing the type files by hand.
 
 ##### writing the catalog back out
 

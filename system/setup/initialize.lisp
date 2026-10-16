@@ -6,88 +6,130 @@
 ;; ;;  ;;  initialize  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;; NOTE: *cgraph-types-directory* = directory that the code uses for types
+;;; --- Type sets ---------------------------------------------------------------
+;;;
+;;; A type set is a directory holding concept-types.lisp and relation-types.lisp,
+;;; and optionally lexicon-overrides.lisp. *CGRAPH-TYPES-DIRECTORY* names the one
+;;; the catalog is loaded from; the type editor saves into the same files. Sets
+;;; are read where they are -- nothing is copied, deleted or symlinked -- and the
+;;; shipped set, default-types/, is never written. To change types you make a
+;;; set of your own with CREATE-TYPE-SET.
+;;;
+;;; This used to work by indirection: ~/.cgraph/types/ held either a copy of the
+;;; defaults or symlinks into a chosen directory, rebuilt by setup with
+;;; `ln -s' -- so every setup deleted and rewrote files in the user's home
+;;; directory, and binding *CGRAPH-TYPES-DIRECTORY* to a set's own directory
+;;; linked that directory into itself and destroyed its files.
 
+(defun default-types-directory ()
+  "The shipped, read-only type set: default-types/ in the cgraph source tree."
+  (namestring (asdf:system-relative-pathname "cgraph" "default-types/")))
 
-(defun delete-type-files ()
-  (let ((concept-path (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
-        (relation-path (format nil "~arelation-types.lisp" *cgraph-types-directory*)))
-    (when (probe-file concept-path)
-      (delete-file concept-path))
-    (when (probe-file relation-path)
-      (delete-file relation-path))))
+(defun named-type-sets-directory ()
+  "Where named type sets live: ~/.cgraph/types/<name>/."
+  (namestring (merge-pathnames ".cgraph/types/" (user-homedir-pathname))))
 
+(defun type-set-directory (designator)
+  "The directory namestring, with a trailing slash, of the type set DESIGNATOR
+   names. A pathname, or a string containing a slash, is a directory (a leading
+   ~/ is your home directory); any other string is a NAME, meaning
+   ~/.cgraph/types/NAME/."
+  (let ((string (if (pathnamep designator) (namestring designator) designator)))
+    (check-type string string)
+    (cond ((and (not (pathnamep designator)) (not (find #\/ string)))
+           (format nil "~a~a/" (named-type-sets-directory) string))
+          (t
+           (when (and (>= (length string) 2) (string= "~/" string :end2 2))
+             (setf string (namestring (merge-pathnames (subseq string 2)
+                                                       (user-homedir-pathname)))))
+           (namestring (uiop:ensure-directory-pathname string))))))
 
-(defun link-cgraph-types-to-external-directory (external-directory-path)
-  ;; ensure a trailing "/" on directory-path
-  (setf external-directory-path (strcat (string-right-trim "/" external-directory-path) "/"))
+(defun type-set-files-exist-p (directory)
+  (and (probe-file (format nil "~aconcept-types.lisp" directory))
+       (probe-file (format nil "~arelation-types.lisp" directory))
+       t))
 
-  ;; ensure the source directory exists
-  (when (probe-file external-directory-path)
-    (let* ((external-concept-type-path  (format nil "~aconcept-types.lisp"  external-directory-path))
-          (external-relation-type-path (format nil "~arelation-types.lisp" external-directory-path))
-          (concept-link-command  (format nil "ln -s ~a  ~a"  external-concept-type-path  *cgraph-types-directory*))
-          (relation-link-command (format nil "ln -s ~a ~a" external-relation-type-path *cgraph-types-directory*)))
+(defun default-types-p (&optional (directory *cgraph-types-directory*))
+  "True when DIRECTORY is the shipped type set."
+  (and directory
+       (equal (ignore-errors (truename directory))
+              (ignore-errors (truename (default-types-directory))))))
 
-      (delete-type-files)
+(defun ensure-types-writable (&optional (directory *cgraph-types-directory*))
+  "Signal an error unless the type set in DIRECTORY may be written. Only the
+   shipped defaults are refused; any set the user chose is theirs to edit."
+  (when (or (null directory) (default-types-p directory))
+    (error "The default types are read-only. To edit types, make a type set of ~
+            your own: (cg:create-type-set \"name\") copies the current types to ~
+            ~a<name>/ and switches to it."
+           (named-type-sets-directory))))
 
-      ;; link the files
-      (uiop:run-program concept-link-command)
-      (uiop:run-program relation-link-command)
-
-      ;; verify access to type files
-      (not (null
-            (and (probe-file (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
-                 (probe-file (format nil "~arelation-types.lisp" *cgraph-types-directory*))))))))
-
-
-(defun copy-example-type-definitions ()
-  (delete-type-files)
-  (copy-file (format nil "~aconcept-types.text" *cgraph-examples-directory*)
-             (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
-  (copy-file (format nil "~arelation-types.text" *cgraph-examples-directory*)
-             (format nil "~arelation-types.lisp" *cgraph-types-directory*)))
+(defun create-type-set (designator &key from (switch t))
+  "Copy a type set into a new one named by DESIGNATOR (see TYPE-SET-DIRECTORY:
+   a name for ~/.cgraph/types/NAME/, or a directory path), and return its
+   directory. FROM names the set to copy, by default the one now loaded --
+   which is the shipped defaults until you choose another. Every file in its
+   directory is copied, not only the type files -- a set may carry a lexicon,
+   notes, a README -- except hidden ones. With SWITCH (the default) the new set becomes the current
+   one, so the type editor saves into it; the catalog in memory already holds
+   the same types and is not reloaded. Refuses to overwrite an existing set."
+  (let ((source (type-set-directory (or from *cgraph-types-directory*
+                                        (default-types-directory))))
+        (target (type-set-directory designator)))
+    (unless (type-set-files-exist-p source)
+      (error "No type set at ~a: it needs concept-types.lisp and relation-types.lisp."
+             source))
+    (when (or (type-set-files-exist-p target)
+              (uiop:directory-files target))
+      (error "~a already exists and isn't empty; choose another name." target))
+    (ensure-directories-exist target)
+    ;; Hidden files (.DS_Store, editor locks) are the directory's, not the set's.
+    (dolist (file (uiop:directory-files source))
+      (unless (char= #\. (char (file-namestring file) 0))
+        (uiop:copy-file file (merge-pathnames (file-namestring file) target))))
+    (when switch
+      (setf *external-types-directory* target
+            *cgraph-types-directory*   target
+            *loaded-types-source*      target))
+    target))
 
 
 (defun domain-types-directory ()
-  "The directory this session's type files REALLY live in -- the domain.
-
-   *CGRAPH-TYPES-DIRECTORY* is ~/.cgraph/types, where concept-types.lisp is
-   either a file of its own (the copied default catalog) or a symlink into a
-   domain repository (LINK-CGRAPH-TYPES-TO-EXTERNAL-DIRECTORY). Resolving the
-   link tells the two apart without a second setting to keep in sync: follow
-   concept-types.lisp to its truename and take the directory it landed in.
-   Falls back to *CGRAPH-TYPES-DIRECTORY* itself when there is no such file."
-  (let* ((dir  (uiop:ensure-directory-pathname *cgraph-types-directory*))
+  "The directory this session's type files really live in -- the domain.
+   *CGRAPH-TYPES-DIRECTORY* names it directly; TRUENAME still follows a
+   symlinked concept-types.lisp, so a set whose files are links into another
+   directory is found where the files are. Falls back to
+   *CGRAPH-TYPES-DIRECTORY* itself when there is no such file."
+  (let* ((dir  (uiop:ensure-directory-pathname (or *cgraph-types-directory*
+                                                   (default-types-directory))))
          (link (ignore-errors (truename (merge-pathnames "concept-types.lisp" dir)))))
     (if link (uiop:pathname-directory-pathname link) dir)))
 
 
-(defun initialize-types (&key (external-types-directory *external-types-directory* type-supplied) supress-warnings)
-  (when type-supplied
-    (setf *external-types-directory*  external-types-directory))
+(defun initialize-types (&key directory external-types-directory supress-warnings)
+  "Load the type catalog from a type set: DIRECTORY (or its older name
+   EXTERNAL-TYPES-DIRECTORY) when given, which also makes it current;
+   otherwise *CGRAPH-TYPES-DIRECTORY*; otherwise the shipped defaults. Reads
+   only: nothing is copied, linked or deleted."
+  (let ((given (or directory external-types-directory)))
+    (when given
+      (setf *cgraph-types-directory* (type-set-directory given))))
+  (unless *cgraph-types-directory*
+    (setf *cgraph-types-directory* (default-types-directory)))
 
-  ;; ensure files are setup
-  (cond (external-types-directory
-         (link-cgraph-types-to-external-directory external-types-directory))
-        ((not (and
-               (probe-file (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
-               (probe-file (format nil "~arelation-types.lisp" *cgraph-types-directory*))))
-         (copy-example-type-definitions)))
-
-  ;; load the types
-  (when (and (probe-file (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
-             (probe-file (format nil "~arelation-types.lisp" *cgraph-types-directory*)))
-    (clear-cgraph-type-catalogs)
-    (load-cgraph-types supress-warnings)
-
-    ;; ... and the English that goes with them. A domain may ship
-    ;; lexicon-overrides.lisp beside its type files to say how its types are
-    ;; worded; absence is legal and silent (see *DOMAIN-LEXICON-LOADER*).
-    ;; After the catalog, so the lint that reads these entries has types to
-    ;; check them against.
-    (when *domain-lexicon-loader*
-      (funcall *domain-lexicon-loader* (domain-types-directory)))))
+  (cond ((type-set-files-exist-p *cgraph-types-directory*)
+         (clear-cgraph-type-catalogs)
+         (load-cgraph-types supress-warnings)
+         ;; ... and the English that goes with them. A domain may ship
+         ;; lexicon-overrides.lisp beside its type files to say how its types are
+         ;; worded; absence is legal and silent (see *DOMAIN-LEXICON-LOADER*).
+         ;; After the catalog, so the lint that reads these entries has types to
+         ;; check them against.
+         (when *domain-lexicon-loader*
+           (funcall *domain-lexicon-loader* (domain-types-directory))))
+        (t
+         (warn "No type set at ~a: it needs concept-types.lisp and relation-types.lisp."
+               *cgraph-types-directory*))))
 
 
 (defun initialize-parameters ()
@@ -170,7 +212,13 @@
 ;;; relation-types is the path to the relation-types file
 ;;;
 
-(defun setup-cgraph (code-base &key external-types-directory)
+(defun setup-cgraph (code-base &key types external-types-directory)
+  "Set cgraph up for a session and load a type catalog. TYPES names the type
+   set to use -- a name for ~/.cgraph/types/NAME/, or a directory path (see
+   TYPE-SET-DIRECTORY); EXTERNAL-TYPES-DIRECTORY is its older spelling. With
+   neither, the shipped default types are used, read-only. Setup writes
+   nothing: ~/.cgraph/data/ and ~/.cgraph/logs/ are created only when a plot
+   or a web-server log is first written there."
   ;; CODE-BASE is no longer used. Setup used to finish with
   ;; (CLEANUP-FILES CODE-BASE), deleting every *.fasl, *.lisp~ and *.lisp#
   ;; under it recursively -- harmless given the cgraph source directory, but a
@@ -179,18 +227,19 @@
   ;; CLEANUP-FILES is still there to call by hand.
   (declare (ignore code-base))
   (let* ((cgraph-base (format nil "~a.cgraph/" (namestring (user-homedir-pathname))))
-         (types-directory (format nil "~atypes/" cgraph-base))
-         (data-directory (format nil "~adata/" cgraph-base))
-         (log-directory (format nil "~alogs/" cgraph-base))
-         (concept-types-path (format nil "~aconcept-types.lisp" cgraph-base))
-         (relation-types-path (format nil "~arelation-types.lisp" cgraph-base)))
-    (setf *cgraph* (ensure-directories-exist cgraph-base))
-    (setf *cgraph-types-directory* (ensure-directories-exist types-directory))
-    (setf *cgraph-data-directory*  (ensure-directories-exist data-directory))
-    (setf *cgraph-log-directory*   (ensure-directories-exist log-directory))
-    (setf *cgraph-examples-directory* (format nil "~adefault-types/" (asdf::system-source-directory :cgraph)))
-    (setf *initial-types-directory* *cgraph-types-directory*)
-    (initialize-types :external-types-directory external-types-directory))
+         (chosen      (or types external-types-directory))
+         (type-set    (and chosen (type-set-directory chosen))))
+    (when (and type-set (not (type-set-files-exist-p type-set)))
+      (error "No type set at ~a: it needs concept-types.lisp and relation-types.lisp. ~
+              (cg:create-type-set ~s) makes one from the current types."
+             type-set chosen))
+    (setf *cgraph*                    cgraph-base
+          *cgraph-data-directory*     (format nil "~adata/" cgraph-base)
+          *cgraph-log-directory*      (format nil "~alogs/" cgraph-base)
+          *cgraph-examples-directory* (default-types-directory)
+          *external-types-directory*  type-set
+          *cgraph-types-directory*    (or type-set (default-types-directory)))
+    (initialize-types))
 
   ;; REPL tools: SUP:RAPROPOS and friends.  A secondary system, so the main
   ;; one needn't depend on cl-ppcre.  They are a convenience, never a

@@ -31,7 +31,8 @@
   "Resolve *WEB-LOG-DESTINATION* into a Hunchentoot log destination for KIND:
    a pathname to append to, a stream, or NIL for no logging."
   (ecase *web-log-destination*
-    (:file  (pathname (web-log-file kind)))
+    ;; Created here, on first use, rather than at setup: setup writes nothing.
+    (:file  (ensure-directories-exist (pathname (web-log-file kind))))
     (:repl  *error-output*)
     ((nil)  nil)))
 

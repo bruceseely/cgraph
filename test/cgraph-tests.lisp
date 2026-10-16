@@ -23,7 +23,7 @@
                      test-types-directory)))
           (t
            (unload-cgraph-types)
-           (initialize-types :external-types-directory test-types-directory)
+           (initialize-types :directory test-types-directory)
            (when verbose
              (print-concept-types)))))
   t)
@@ -31,23 +31,16 @@
 (defmacro with-test-types (&body body)
   "Evaluate BODY with the test type catalog loaded. On exit (including
    non-local exit) restore whichever catalog was loaded on entry, using
-   *loaded-types-source* to identify it. NIL prior states stay as the
-   test catalog (nothing meaningful to restore); :default re-establishes
-   the copied example-types fallback; an external-directory string is
-   re-linked and reloaded."
+   *loaded-types-source* to identify it. A NIL prior state stays as the
+   test catalog (nothing meaningful to restore); otherwise the prior type set
+   is made current and reloaded. Both are reads: nothing on disk changes."
   (let ((prior (gensym "PRIOR-TYPES-SOURCE-")))
     `(let ((,prior *loaded-types-source*))
        (load-test-types)
        (unwind-protect (progn ,@body)
-         (cond ((or (null ,prior)
-                    (equal ,prior *loaded-types-source*))
-                nil)
-               ((eq ,prior :default)
-                (delete-type-files)
-                (clear-cgraph-type-catalogs)
-                (initialize-types :external-types-directory nil))
-               (t
-                (initialize-types :external-types-directory ,prior)))))))
+         (unless (or (null ,prior)
+                     (equal ,prior *loaded-types-source*))
+           (initialize-types :directory ,prior))))))
 
 
 

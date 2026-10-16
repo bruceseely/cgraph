@@ -360,10 +360,20 @@
 ;;; the file needs an in-place splice and is deliberately out of scope here.
 
 (defun concept-types-file ()
-  "TRUENAME of the concept-types source file. Resolving the ~/.cgraph symlink up
-front means every write targets the REAL file (the repo it links to), and never
-replaces the link with a plain copy the way a write-then-rename save would."
+  "TRUENAME of the concept-types source file. Resolving a symlink up front means
+every write targets the REAL file, and never replaces the link with a plain copy
+the way a write-then-rename save would."
   (truename (merge-pathnames "concept-types.lisp" *cgraph-types-directory*)))
+
+(defun writable-types-file (kind)
+  "The KIND (:CONCEPT or :RELATION) type file, for a handler about to write it.
+Signals first if the current type set is the read-only shipped defaults -- before
+the handler touches the live catalog, so a refused save leaves nothing behind in
+memory that the file doesn't have."
+  (ensure-types-writable)
+  (ecase kind
+    (:concept  (concept-types-file))
+    (:relation (relation-types-file))))
 
 ;;; --- Type-definition files, either kind ------------------------------------
 ;;;
@@ -441,7 +451,7 @@ whole FORMS, so it matches a form that spans several lines. Standard readtable/:
   "Replace the (:label LABEL ...) form in FILE with NEW-TEXT, preserving every
 other byte — comments, ordering, other types and their manual (even multi-line)
 formatting — verbatim. Returns T if replaced, NIL if the form was absent (caller then
-appends). Writes the truename'd path, so a ~/.cgraph symlink stays intact.
+appends). Writes the truename'd path, so a symlinked file stays a symlink.
 
 NEW-TEXT is rendered by the caller rather than by a def-string function passed in,
 because the two kinds of definition take entirely different arguments and a
@@ -683,7 +693,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
         (dolist (s super-tokens)
           (unless (ignore-errors (get-concept-type s))
             (error "unknown supertype: ~a" s)))
-        (let* ((file        (concept-types-file))
+        (let* ((file        (writable-types-file :concept))
                (sym         (intern (string-upcase label) :cg))
                (super-syms  (mapcar (lambda (s) (intern (string-upcase s) :cg)) super-tokens))
                (pre-existed (ignore-errors (get-concept-type sym))))
@@ -776,7 +786,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
               (error "unknown supertype: ~a" s)))
           (when (member label super-tokens :test #'string-equal)
             (error "a type cannot be its own supertype"))
-          (let* ((file        (concept-types-file))
+          (let* ((file        (writable-types-file :concept))
                  (canon-same  (canonical-unchanged-p canonical label node))
                  (supers-same (supertypes-unchanged-p super-tokens node))
                  (note-same   (string= (or note "")
@@ -846,7 +856,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
           (let ((referrers (concept-type-referrers label)))
             (when referrers
               (error "~a is still in use: ~{~a~^; ~}" label referrers)))
-          (let* ((file    (concept-types-file))
+          (let* ((file    (writable-types-file :concept))
                  (in-file (type-def-in-file-p label file)))
             ;; live first: rollback-concept-type unlinks the inheritance AND
             ;; drops the catalog entry, which is what keeps it out of /api/types.
@@ -986,9 +996,8 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
 ;;; layer that can say so at the moment it happens.
 
 (defun relation-types-file ()
-  "TRUENAME of the relation-types source file. Resolved for the same reason
-CONCEPT-TYPES-FILE resolves: ~/.cgraph/types/* are symlinks, and writing through
-the link is what keeps the real file in the types repo as the thing being edited."
+  "TRUENAME of the relation-types source file, resolved for the same reason
+CONCEPT-TYPES-FILE is: a write through a symlink should land in the real file."
   (truename (merge-pathnames "relation-types.lisp" *cgraph-types-directory*)))
 
 (defun relation-source-tokens-text (sources)
@@ -1267,7 +1276,7 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
   (handler-case
       (let* ((fields (parse-relation-form label supertypes sources dest role prep desc note))
              (label  (getf fields :label))
-             (file   (relation-types-file)))
+             (file   (writable-types-file :relation)))
         (when (type-def-in-file-p label file)
           (error "~a is already defined in the relation file; use Edit to change it"
                  label))
@@ -1308,7 +1317,7 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
         (destructuring-bind (&key supers sources dest role prep desc note
                              &allow-other-keys)
             fields
-          (let ((file (relation-types-file)))
+          (let ((file (writable-types-file :relation)))
             (unless (splice-type-def
                      label
                      (relation-type-def-string label supers sources dest role prep desc note)
@@ -1339,7 +1348,7 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
         (let ((referrers (relation-type-referrers label)))
           (when referrers
             (error "~a is still in use: ~{~a~^; ~}" label referrers)))
-        (let* ((file    (relation-types-file))
+        (let* ((file    (writable-types-file :relation))
                (in-file (type-def-in-file-p label file)))
           (rollback-relation-type label)
           (when in-file (remove-type-def label file))

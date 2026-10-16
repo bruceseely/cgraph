@@ -2023,7 +2023,7 @@
    quoted form read back correctly.
 
    Names are written bare and lower-case, matching the files this reads and
-   default-types/relation-types.text. TYPE-TEST4 holds the round trip."
+   default-types/relation-types.lisp. TYPE-TEST4 holds the round trip."
   (with-open-file (stream filename
 			  :direction :output
 			  :if-does-not-exist :create
@@ -2082,7 +2082,7 @@
          (list
           (load-concept-types (format nil "~aconcept-types.lisp" *cgraph-types-directory*))
           (load-relation-types (format nil "~arelation-types.lisp" *cgraph-types-directory*)))))
-    (setf *loaded-types-source* (or *external-types-directory* :default))
+    (setf *loaded-types-source* (namestring *cgraph-types-directory*))
     result))
 
 

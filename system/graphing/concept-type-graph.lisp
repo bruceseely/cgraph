@@ -176,10 +176,13 @@
     (setf type-name-list (list type-name-list)))
 
   (let* ((graph-name (string-trim "()" (substitute #\- #\space (format nil "~(~a~)" type-name-list))))
-         (file-dir (format nil "~a.cgraph/data/" (namestring (user-homedir-pathname))))
+         (file-dir (or *cgraph-data-directory*
+                       (format nil "~a.cgraph/data/" (namestring (user-homedir-pathname)))))
          (file-name (format nil "~a~(~a~).dot" file-dir graph-name)))
 
     (when (every #'(lambda (c) (get-concept-type c)) type-name-list)
+      ;; Created on first use: setup no longer makes ~/.cgraph/data/.
+      (ensure-directories-exist file-name)
 
       (with-open-file (stream file-name :direction :output :if-exists :supersede :if-does-not-exist :create)
         (generate-concept-type-digraph :type-name-list type-name-list

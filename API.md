@@ -27,15 +27,14 @@ A session starts with:
 
 ## Setup and Initialization
 
-### `setup-cgraph (code-base &key external-types-directory)`
-Entry point for initial CGraph setup. Called once at startup. It:
-
-- creates `~/.cgraph/` with `types/`, `data/` and `logs/` under it;
-- copies the shipped `default-types/` into `~/.cgraph/types/`, or, given
-  `external-types-directory`, symlinks the type files there to that
-  directory's;
-- loads the type definitions, and sets up SLIME integration when SWANK is
-  present.
+### `setup-cgraph (code-base &key types external-types-directory)`
+Entry point for initial CGraph setup. Called once at startup. It loads a type
+set and writes nothing. `types` names the set: a name for
+`~/.cgraph/types/<name>/`, or a directory path. With none, the shipped
+default types are used, read-only. `external-types-directory` is the older
+spelling of `types`. It also sets up SLIME integration when SWANK is present.
+`~/.cgraph/data/` and `~/.cgraph/logs/` are created only when something is
+first written there.
 
 `code-base` is ignored; it's kept so existing calls keep working. Pass
 `(asdf:system-source-directory "cgraph")`.
@@ -49,6 +48,20 @@ reloads type definitions, and runs initialization parameters.
 ### `reset-cgraph ()`
 Full reset: clears context, counters, and display flags, then calls
 `initialize-cgraph`.
+
+### `create-type-set (name-or-path &key from switch)` → directory
+Copy a type set into a new one and, by default, switch to it, so the type
+editor saves there. `name-or-path` is a name for `~/.cgraph/types/<name>/`
+or a directory path. `from` is the set to copy, by default the one loaded now
+(the shipped defaults until you choose another). Every file in the source
+directory is copied except hidden ones; an existing set is never overwritten.
+Pass `:switch nil` to copy without switching.
+
+```lisp
+(create-type-set "kitchen")   ; → ".../.cgraph/types/kitchen/"
+;; next session:
+(setup-cgraph (asdf:system-source-directory "cgraph") :types "kitchen")
+```
 
 ### `report-directories ()`
 Prints current CGraph configuration paths (types, data, logs,
@@ -910,7 +923,7 @@ Display a DOT file in Emacs via `graphviz-dot-mode`. Requires SLIME.
 | `*concept-type-top*` | The top (⊤) concept-type instance |
 | `*concept-type-bottom*` | The bottom (⊥) concept-type instance |
 | `*cgraph*` | Base CGraph directory (~/.cgraph/) |
-| `*cgraph-types-directory*` | Directory containing type definition files |
+| `*cgraph-types-directory*` | The type set in use: the directory its type files are read from, and saved to |
 | `*cgraph-data-directory*` | Directory for generated plots and data |
 | `*concise*` | When T (default), omit extra spaces in formatting |
 | `*debug-mode*` | When T, include debug info (marks, node refs) in output |

@@ -75,8 +75,10 @@ Clone the repository somewhere ASDF can find it, such as
 (cg:reset-cgraph)
 ```
 
-`setup-cgraph` creates `~/.cgraph/` and copies the shipped type definitions
-into `~/.cgraph/types/`, where you can edit them.
+That loads the shipped type definitions, read-only, and writes nothing. To
+change or add types, make a type set of your own: `(cg:create-type-set
+"mine")` copies the current types to `~/.cgraph/types/mine/` and switches to
+it, and next time `(cg:setup-cgraph … :types "mine")` loads it.
 
 Basic usage:
 

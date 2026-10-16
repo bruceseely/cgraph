@@ -44,17 +44,24 @@
 ;;; set by user
 (defvar *cgraph-types-repo* (format nil "~a/repo/cgraph-types/" *home*))
 
-;;; for overriding the directories holding types and data diretories
-(defvar *cgraph-types-directory* nil)
-(defvar *cgraph-examples-directory* nil)
-(defvar *cgraph-data-directory* nil)
-(defvar *cgraph-log-directory* nil)
-(defvar *external-types-directory* nil)
+;;; A TYPE SET is a directory holding concept-types.lisp and relation-types.lisp
+;;; (and optionally lexicon-overrides.lisp). Types are read from it in place:
+;;; nothing is copied or linked. The shipped set, default-types/, is read-only.
+(defvar *cgraph-types-directory* nil
+  "The type set the catalog is loaded from, and the one the type editor saves
+   into. NIL until setup; INITIALIZE-TYPES then falls back to default-types/.")
+(defvar *cgraph-examples-directory* nil
+  "The shipped type set, default-types/ in the cgraph source tree.")
+(defvar *cgraph-data-directory* nil
+  "Where generated plots go. Created when something is first written there.")
+(defvar *cgraph-log-directory* nil
+  "Where the web server logs. Created when the server first logs to a file.")
+(defvar *external-types-directory* nil
+  "The type set the user chose at setup, or NIL for the shipped defaults.")
 
 ;;; Tracks which type catalog is currently in memory so callers can avoid
-;;; redundant unload/reload cycles. NIL means no types loaded;
-;;; :default means the example types were copied (no external source);
-;;; otherwise holds the external-directory string that was loaded from.
+;;; redundant unload/reload cycles: NIL when no types are loaded, otherwise the
+;;; namestring of the type set they were loaded from.
 (defvar *loaded-types-source* nil)
 
 (defvar *cgraph-inits*  ())
