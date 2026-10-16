@@ -127,7 +127,7 @@
         "{\"ok\":true}")
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-internal-server-error+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
 
 ;;; POST /api/save?types=...&expand_sub=...&reveal=...
 ;;; Writes <name>.dot and <name>.png to *cgraph-data-directory*.
@@ -148,7 +148,7 @@
             (error (e)
               (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
               (return-from handle-api-save
-                (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))))
+                (error-json e))))))
     (when (null validated)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
       (return-from handle-api-save "{\"error\":\"no types specified\"}"))
@@ -722,7 +722,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
           (saved-type-json label)))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
 
 ;;; GET /api/type-def?label=X — the editable definition for the Edit form: supertypes
 ;;; and canonical from the live catalog, note from the source file (the loader drops
@@ -750,7 +750,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                   (json-escape note))))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
 
 ;;; POST /api/edit-type?label=...&supertypes=a,b&canonical=...&note=...
 ;;; Replace an EXISTING type's definition: same checks as create, but the new
@@ -820,7 +820,38 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
               (saved-type-json label)))))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
+
+;;; POST /api/create-type-set?name=N -- copy the current type set to a new one.
+;;;
+;;; What the page calls when a save is refused because the loaded types are the
+;;; read-only shipped defaults: it offers to make a type set, posts the name
+;;; here, then retries the save, which now lands in the new set. Only a NAME is
+;;; accepted (so ~/.cgraph/types/N/), never a path: a page has no business
+;;; choosing where on disk things are written.
+
+(defun valid-type-set-name-p (name)
+  (and (stringp name)
+       (plusp (length name))
+       (alphanumericp (char name 0))
+       (every (lambda (c) (or (alphanumericp c) (find c "-_."))) name)))
+
+(hunchentoot:define-easy-handler (handle-api-create-type-set :uri "/api/create-type-set") (name)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (unless (eq (hunchentoot:request-method*) :post)
+    (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
+    (return-from handle-api-create-type-set "{\"error\":\"POST required\"}"))
+  (handler-case
+      (let ((name (and name (string-trim '(#\Space #\Tab) name))))
+        (unless (valid-type-set-name-p name)
+          (error "A type set name is letters, digits, - _ and ., starting with a ~
+                  letter or digit."))
+        (let ((directory (create-type-set name)))
+          (format nil "{\"ok\":true,\"name\":\"~a\",\"directory\":\"~a\"}"
+                  (json-escape name) (json-escape directory))))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (error-json e))))
 
 ;;; POST /api/delete-type?label=X — remove a concept type, live and on disk.
 ;;;
@@ -867,7 +898,7 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
                     in-file))))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
 
 ;;; Helper: JSON-escape a string (handles the characters JSON requires escaping).
 (defun json-escape (s)
@@ -880,6 +911,14 @@ reader.lisp interns bracketed type names in *package*, and the catalog is keyed 
         (#\Return  (write-string "\\r" out))
         (#\Tab     (write-string "\\t" out))
         (otherwise (write-char c out))))))
+
+(defun error-json (condition)
+  "The JSON body for a request that failed with CONDITION. A refusal to write
+the read-only default types carries \"readOnly\":true besides the message, so
+the page can offer to make a type set and retry instead of just reporting it."
+  (format nil "{\"error\":\"~a\"~:[~;,\"readOnly\":true~]}"
+          (json-escape (princ-to-string condition))
+          (typep condition 'types-read-only)))
 
 ;;; Helper: serialize one relation entry as a JSON object.
 (defun json-relation-entry (rel-type exact-p)
@@ -1142,7 +1181,7 @@ re-listing these fields or splicing braces back together."
         (format nil "[~{~a~^,~}]" (mapcar #'relation-type-json rels)))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-internal-server-error+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
 
 ;;; GET /api/relation-type-def?label=X — the editable definition for the Edit form.
 (hunchentoot:define-easy-handler (handle-api-relation-type-def :uri "/api/relation-type-def")
@@ -1167,7 +1206,7 @@ re-listing these fields or splicing braces back together."
                          (json-escape (or (relation-syntax-warning label) "")))))))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
 
 (defun parse-relation-form (label supers sources dest role prep desc note)
   "Validate and normalize a relation form's fields, returning them as a plist.
@@ -1292,7 +1331,7 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
         (relation-write-response label (relation-syntax-warning label)))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
 
 ;;; POST /api/edit-relation-type — same checks as create; the new definition
 ;;; supplants the old one live and in the file (spliced in place, or appended if
@@ -1309,6 +1348,9 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
              (label  (getf fields :label)))
         (unless (ignore-errors (get-relation-type (intern (string-upcase label) :cg)))
           (error "no such relation type: ~a" label))
+        ;; Before anything below changes the live catalog: a refused save must
+        ;; leave nothing behind (the file is looked up only after the install).
+        (ensure-types-writable)
         ;; An edit that drops :role must drop the registration too. Nothing else
         ;; would: INSTALL-RELATION-TYPE only ever ADDS a registration, so without
         ;; this the old role would survive its own removal.
@@ -1327,7 +1369,7 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
         (relation-write-response label (relation-syntax-warning label)))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
 
 ;;; POST /api/delete-relation-type?label=X
 (hunchentoot:define-easy-handler (handle-api-delete-relation-type
@@ -1357,7 +1399,7 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
                   in-file)))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))
 
 ;;; GET /api/syntax-roles — the roles a relation may be given, for the form's
 ;;; Role menu. Served rather than hard-coded in JS for the reason this whole
@@ -1392,4 +1434,4 @@ error: the write succeeded either way, and the UI decides how loudly to say it."
         (format nil "[~{~a~^,~}]" entries))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-internal-server-error+)
-      (format nil "{\"error\":\"~a\"}" (json-escape (princ-to-string e))))))
+      (error-json e))))

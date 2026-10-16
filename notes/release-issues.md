@@ -49,8 +49,8 @@ Items are in priority order.
   and the type editor refuses to save into them. `create-type-set` clones the
   current set into `~/.cgraph/types/<name>/` (or a path) and switches to it;
   `setup-cgraph :types` takes a name or a path. `data/` and `logs/` are made
-  on first write. Step 2, still to do: the type editor offers to create a set
-  instead of only refusing.
+  on first write. The type editor, on a refused save, offers to make a type
+  set by name and then retries the save (`/api/create-type-set`).
 
 ## 2. Portability
 

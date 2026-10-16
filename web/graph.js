@@ -44,6 +44,94 @@ function showError(msg) { console.error('[cgraph]', msg); errorMsg.textContent =
 function showInfo(msg)  { errorMsg.textContent = msg; errorMsg.className = 'is-info'; }
 function clearError()   { errorMsg.textContent = ''; errorMsg.className = ''; }
 
+// ── Saving types: the read-only defaults ────────────────────────────────────
+//
+// With no type set chosen, cgraph reads the shipped default types, and the
+// server refuses to write them: {"readOnly":true}. Every type-saving request
+// goes through POSTTYPECHANGE, which on that refusal asks for a name, has the
+// server copy the current types into ~/.cgraph/types/NAME/ (switching to it),
+// and retries the request -- so the edit that was refused is the one saved.
+// Cancel hands back the refusal, and the caller reports it as any other error.
+
+const tsPanel  = document.getElementById('ts-panel');
+const tsMsg    = document.getElementById('ts-msg');
+const tsAsk    = document.getElementById('ts-ask');
+const tsName   = document.getElementById('ts-name');
+const tsStatus = document.getElementById('ts-status');
+const tsClose  = document.getElementById('ts-close');
+let tsPending  = null;     // the open question's promise, shared by concurrent saves
+
+function hideTypeSetPanel() { tsPanel.hidden = true; tsStatus.textContent = ''; }
+
+function askForTypeSet() {
+  if (tsPending) return tsPending;
+  tsPending = new Promise(resolve => {
+    const finish = ok => { tsPending = null; resolve(ok); };
+    tsMsg.textContent = 'The default types are read-only. Save into a new type set, a copy of the current types:';
+    tsAsk.hidden = false; tsClose.hidden = true;
+    tsStatus.textContent = '';
+    tsName.value = '';
+    tsPanel.hidden = false;
+    tsName.focus();
+
+    const create = async () => {
+      const name = tsName.value.trim();
+      if (!name) { tsStatus.textContent = 'a name is required'; tsName.focus(); return; }
+      tsStatus.textContent = '';
+      try {
+        const resp = await fetch(`/api/create-type-set?name=${encodeURIComponent(name)}`,
+                                 { method: 'POST' });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          tsStatus.textContent = data.error || `failed: ${resp.status}`;
+          tsName.focus();
+          return;
+        }
+        // The receipt: where saves go now, and how to get this set back.
+        tsAsk.hidden = true; tsClose.hidden = false;
+        tsMsg.innerHTML = '';
+        tsMsg.append(`Saving into type set "${data.name}" (${data.directory}). Next session, load it with `);
+        const code = document.createElement('code');
+        code.textContent = `(cg:setup-cgraph … :types "${data.name}")`;
+        tsMsg.append(code, '.');
+        cleanup(); finish(true);
+      } catch (err) {
+        tsStatus.textContent = err.message;
+      }
+    };
+    const cancel = () => { cleanup(); hideTypeSetPanel(); finish(false); };
+    const onKey = e => {
+      if (e.key === 'Enter') { e.preventDefault(); create(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    };
+    const createBtn = document.getElementById('ts-create');
+    const cancelBtn = document.getElementById('ts-cancel');
+    function cleanup() {
+      createBtn.removeEventListener('click', create);
+      cancelBtn.removeEventListener('click', cancel);
+      tsName.removeEventListener('keydown', onKey);
+    }
+    createBtn.addEventListener('click', create);
+    cancelBtn.addEventListener('click', cancel);
+    tsName.addEventListener('keydown', onKey);
+  });
+  return tsPending;
+}
+
+tsClose.addEventListener('click', hideTypeSetPanel);
+
+// POST a type-changing request; on a read-only refusal, offer a type set and
+// retry once. Returns { resp, data } like the fetch-then-json it replaces.
+async function postTypeChange(url) {
+  let resp = await fetch(url, { method: 'POST' });
+  let data = await resp.json().catch(() => ({}));
+  if (!resp.ok && data.readOnly && await askForTypeSet()) {
+    resp = await fetch(url, { method: 'POST' });
+    data = await resp.json().catch(() => ({}));
+  }
+  return { resp, data };
+}
+
 // ── Viz initialisation ────────────────────────────────────────────────────────
 
 let vizInstance = null;
@@ -1343,9 +1431,7 @@ async function deleteType() {
   disarmDelete();
   setNtHint(`deleting ${label}…`);
   try {
-    const resp = await fetch(`/api/delete-type?label=${encodeURIComponent(label)}`,
-                             { method: 'POST' });
-    const data = await resp.json().catch(() => ({}));
+    const { resp, data } = await postTypeChange(`/api/delete-type?label=${encodeURIComponent(label)}`);
     if (!resp.ok || !data.ok) {
       setNtHint('');
       showError(data.error || `failed: ${resp.status}`);
@@ -1428,8 +1514,7 @@ async function submitType() {
               + `&supertypes=${encodeURIComponent([...superSet].join(','))}`
               + `&canonical=${encodeURIComponent(canon)}`
               + `&note=${encodeURIComponent(note)}`;
-    const resp = await fetch(url, { method: 'POST' });
-    const data = await resp.json().catch(() => ({}));
+    const { resp, data } = await postTypeChange(url);
     if (!resp.ok || !data.ok) {
       const msg = data.error || `failed: ${resp.status}`;
       setNtHint('');
@@ -2010,8 +2095,7 @@ async function submitRelation() {
               + `&prep=${encodeURIComponent(nrPrep.disabled ? '' : nrPrep.value.trim())}`
               + `&desc=${encodeURIComponent(nrDesc.value.trim())}`
               + `&note=${encodeURIComponent(nrNote.value.trim())}`;
-    const resp = await fetch(url, { method: 'POST' });
-    const data = await resp.json().catch(() => ({}));
+    const { resp, data } = await postTypeChange(url);
     if (!resp.ok || !data.ok) {
       setNrHint('');
       showError(data.error || `failed: ${resp.status}`);
@@ -2098,9 +2182,7 @@ nrDeleteBtn.addEventListener('click', async () => {
   disarmRelDelete();
   setNrHint(`deleting ${label}…`);
   try {
-    const resp = await fetch(`/api/delete-relation-type?label=${encodeURIComponent(label)}`,
-                             { method: 'POST' });
-    const data = await resp.json().catch(() => ({}));
+    const { resp, data } = await postTypeChange(`/api/delete-relation-type?label=${encodeURIComponent(label)}`);
     if (!resp.ok || !data.ok) {
       setNrHint('');
       showError(data.error || `failed: ${resp.status}`);

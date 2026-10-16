@@ -77,6 +77,14 @@ may carry a lexicon, notes, a README), and refuses to overwrite a set that
 exists. `:from` names a different set to copy; `:switch nil` copies without
 switching. Next session, pass `:types "kitchen"` to `setup-cgraph`.
 
+The web type editor does the same from the page. A save while the defaults
+are loaded is refused, and a strip under the toolbar asks for a type set name
+instead; *Create and save* makes the set and then makes the save that was
+refused, so nothing typed is lost. *Cancel* leaves the form as it was and
+reports why the save didn't happen. The page only accepts a name (letters,
+digits, `-`, `_`, `.`), never a path, so sets made there always land in
+`~/.cgraph/types/`.
+
 The `(initialize-types)` function parses the current set's type files to
 create type objects. `(reset-cgraph)` runs it, and evaluates the forms in
 `initializations.lisp`; run it after changing the type files by hand.

@@ -55,14 +55,23 @@
        (equal (ignore-errors (truename directory))
               (ignore-errors (truename (default-types-directory))))))
 
+(define-condition types-read-only (error)
+  ()
+  (:report (lambda (condition stream)
+             (declare (ignore condition))
+             (format stream "The default types are read-only. To edit types, make a ~
+                             type set of your own: (cg:create-type-set \"name\") copies ~
+                             the current types to ~a<name>/ and switches to it."
+                     (named-type-sets-directory))))
+  (:documentation "Signalled on an attempt to write the shipped default types.
+   A condition of its own so the web UI can tell it from other refusals and
+   offer to create a type set instead."))
+
 (defun ensure-types-writable (&optional (directory *cgraph-types-directory*))
-  "Signal an error unless the type set in DIRECTORY may be written. Only the
-   shipped defaults are refused; any set the user chose is theirs to edit."
+  "Signal TYPES-READ-ONLY unless the type set in DIRECTORY may be written. Only
+   the shipped defaults are refused; any set the user chose is theirs to edit."
   (when (or (null directory) (default-types-p directory))
-    (error "The default types are read-only. To edit types, make a type set of ~
-            your own: (cg:create-type-set \"name\") copies the current types to ~
-            ~a<name>/ and switches to it."
-           (named-type-sets-directory))))
+    (error 'types-read-only)))
 
 (defun create-type-set (designator &key from (switch t))
   "Copy a type set into a new one named by DESIGNATOR (see TYPE-SET-DIRECTORY:
