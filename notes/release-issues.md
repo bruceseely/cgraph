@@ -24,8 +24,11 @@ Items are in priority order.
   2026-10-14: `SET` and `TYPE` are now shadowed in the `defpackage`, and the
   unlock and the `disable-package-locks` declaims are gone. cgraph, cgraph-web,
   cgraph-editor and the test suite all load into a stock SBCL with `CL` locked.
-- **The package uses `#:cl-user`** (`cgraph.asd:5`), which imports whatever
-  happens to be in the user's `CL-USER`. Use only `#:cl` and `#:uiop`.
+- ~~**The package uses `#:cl-user`**~~ Done 2026-10-17: now only `#:cl` and
+  `#:uiop`. It was harmless in practice: `:use` inherits only exported symbols,
+  and SBCL's `CL-USER` exports none (checked with and without an init file),
+  but anything a user exported from it would have leaked in. The dead
+  `make-package` fallback in `start-cgraph` went with it.
 - ~~**SWANK is a hard dependency.**~~ Done 2026-10-16, with run-time checks
   rather than a separate `cgraph/emacs` system: `cgraph.asd` no longer depends
   on SWANK, no source file names a SWANK symbol, and the `#+swank` guards are

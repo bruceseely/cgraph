@@ -2,7 +2,7 @@
 
 
 (defpackage :conceptual-graphs
-  (:use #:cl #:cl-user #:uiop)
+  (:use #:cl #:uiop)
   ;; SET and TYPE are conceptual-graph vocabulary (the SET node class, the TYPE
   ;; reader on type objects). Shadow them so cgraph gets its own symbols instead
   ;; of redefining COMMON-LISP's, which would need CL's package lock removed.

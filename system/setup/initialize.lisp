@@ -285,10 +285,7 @@
 
 ;;; This is the transition from the :cl-user package to the :cg package
 (defun start-cgraph (code-path &key external-types-directory)
-  (setf *package* (or (find-package :conceptual-graphs)
-                      (make-package :conceptual-graphs
-                                    :use '(:common-lisp :common-lisp-user :uiop)
-                                    :nicknames '(:cg :cgraph))))
+  (setf *package* (find-package :conceptual-graphs))
 
   (cg::setup-cgraph code-path :external-types-directory external-types-directory)
 
