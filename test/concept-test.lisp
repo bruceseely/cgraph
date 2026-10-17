@@ -131,20 +131,21 @@
 
 
 (defun concept-test ( &optional verbose)
-  (let ((*include-node-ref* nil))
+  (with-test-types
+    (let ((*include-node-ref* nil))
 
-    (when verbose
-      (format t "~%CONCEPT-TEST~%"))
-    (and
-     (let ((*concise* t)
-           )
-       (when verbose
-         (format t "~2&Concise:~%"))
-       (test-concepts verbose))
-     (let ((*concise* nil))
-       (when verbose
-         (format t "~2&Not Concise:~%"))
-       (test-concepts verbose)))))
+      (when verbose
+        (format t "~%CONCEPT-TEST~%"))
+      (and
+       (let ((*concise* t)
+             )
+         (when verbose
+           (format t "~2&Concise:~%"))
+         (test-concepts verbose))
+       (let ((*concise* nil))
+         (when verbose
+           (format t "~2&Not Concise:~%"))
+         (test-concepts verbose))))))
 
 
 ;;; --- MAKE-CONCEPT from a property list --------------------------------------

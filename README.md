@@ -114,7 +114,9 @@ test/run-tests.sh
 ```
 
 That runs the engine's own suite in a fresh SBCL, against a throwaway type
-catalog, so your `~/.cgraph` is never touched. cgraph is also a dependency of
+catalog, so your `~/.cgraph` is never touched. In a running image,
+`(cg::test-all t)` does the same from any package: each suite loads the test
+types and puts your own back afterwards. cgraph is also a dependency of
 the [`cg-from-parse`](https://github.com/bruceseely/cg-from-parse)
 conceptual-graph extractor, whose `test/run-all-suites.sh` is a **whole-stack
 gate**: it runs this suite alongside the PARSIFAL parser and the extractor's

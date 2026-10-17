@@ -73,7 +73,7 @@
 
 (defun get-graph-string (n)
   (let* ((name (format nil "GRAPH-STRING-~d" n))
-        (symbol (intern name))
+        (symbol (intern name :cg))
         (bound-p (boundp symbol)))
     (when bound-p
       (symbol-value symbol))))

@@ -96,7 +96,7 @@
 
 
 (defmethod make-test-graph ((id number))
-  (let ((sym (intern (format nil "TEST-GRAPH-~d" id))))
+  (let ((sym (intern (format nil "TEST-GRAPH-~d" id) :cg)))
     (multiple-value-bind (graph text) (funcall sym)
       (setf (symbol-value sym) (list graph text)))))
 

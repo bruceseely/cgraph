@@ -94,12 +94,14 @@ just the engine:
 - **Tests run only in a live image** via `(cg:test-all t)`. Hook them into
   `asdf:test-system`, using FiveAM, Parachute, or a thin adapter over the
   existing suite.
-- **`test-all` passes only in the runner's environment.** After an ordinary
-  `setup-cgraph` + `reset-cgraph`, 7 suites fail with `*package*` = `:cg`
-  (referent, concept, parse, projection, graph-every, graph-equality,
-  decomposition) and 9 from `CL-USER`. This predates the 2026-10-14 changes.
-  `test/run-tests.sh` reproduces the runner's setup (a throwaway types
-  directory, `*package*` = `:cg`) and passes; the README points there.
+- ~~**`test-all` passes only in the runner's environment.**~~ Done 2026-10-17.
+  Two causes. Seven suites (referent, concept, parse, projection, graph-every,
+  graph-equality, decomposition) never loaded the test types; they passed only
+  when an earlier suite left them loaded, or when the user's own types happened
+  to define GIRL, PIE and so on. They now use `with-test-types` like the rest.
+  And the runners and four suites found tests by a bare `intern`, i.e. in
+  `*package*`, so from `CL-USER` every suite looked undefined; those now intern
+  in `:cg`. `(cg::test-all t)` passes from either package after an ordinary setup.
 - **CI runs only the whole stack** (parsifal + cg-from-parse), and still
   passes `secrets.STACK_CHECKOUT_TOKEN` even though the workflow's own comment
   says no token is needed. Add a standalone job that runs only cgraph's tests on

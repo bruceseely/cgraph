@@ -8,8 +8,8 @@
 # ASDF can find it (e.g. ~/quicklisp/local-projects/).
 #
 # This is the cgraph step of cg-from-parse's test/run-all-suites.sh, on its
-# own. Running (cg::test-all) by hand after an ordinary SETUP-CGRAPH does not
-# pass -- see notes/release-issues.md.
+# own. (cg::test-all t) also passes by hand, from any package, after an
+# ordinary SETUP-CGRAPH; this is the version with nothing else in the image.
 #
 # Usage:   test/run-tests.sh            (per-suite pass/fail lines)
 # Env:     SBCL=/path/to/sbcl           (default: sbcl on PATH)

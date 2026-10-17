@@ -414,7 +414,7 @@
   (reset-cgraph)
   (setf *context* (make-context))
   (let* ((*print-pretty* nil)
-         (setup-sym (intern (format nil "SETUP~d" test-number))))
+         (setup-sym (intern (format nil "SETUP~d" test-number) :cg)))
 
     (when (ignore-errors (symbol-function setup-sym))
       (let ((setup-fn (symbol-function setup-sym)))

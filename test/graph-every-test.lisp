@@ -86,7 +86,7 @@
   (reset-cgraph)
   (load-cgraph-types)
   (let* ((*print-pretty* nil)
-         (graph-name (intern (format nil "GRAPH-STRING~4,'0d" test-number)))
+         (graph-name (intern (format nil "GRAPH-STRING~4,'0d" test-number) :cg))
          (graph-string (symbol-value graph-name)))
     (when verbose
       (format t "~&~s~%" graph-string))
@@ -96,14 +96,15 @@
         ))))
 
 (defun graph-every-test (&optional verbose)
+  (with-test-types
 
 
-  (let ((tests '(1000 1002 1010 1020 1030 1040 1050 1060 1070 1080 1090 1100 1120 1200 1300)))
-    (when verbose
-      (format t "~%GRAPH-EVERY-TEST~2%"))
-
-    (dolist (test-id tests)
-      (getest test-id verbose)
+    (let ((tests '(1000 1002 1010 1020 1030 1040 1050 1060 1070 1080 1090 1100 1120 1200 1300)))
       (when verbose
-        (format t "~3&== test ~4,'0d ==========================================~%" test-id))))
-  t)
+        (format t "~%GRAPH-EVERY-TEST~2%"))
+
+      (dolist (test-id tests)
+        (getest test-id verbose)
+        (when verbose
+          (format t "~3&== test ~4,'0d ==========================================~%" test-id))))
+    t))

@@ -250,43 +250,44 @@
 
 (defun ptestx  (test-id)
   (clear-id-cache)
-  (let ((graph-name (intern (format nil "graph-string~3,'0d" test-id))))
+  (let ((graph-name (intern (format nil "GRAPH-STRING~3,'0d" test-id) :cg)))
     (ptest graph-name)))
 
 
 (defun parse-test (&optional verbose)
-  (when verbose (format t "~%parse-test~%"))
-  (reset-cgraph)
+  (with-test-types
+    (when verbose (format t "~%parse-test~%"))
+    (reset-cgraph)
 
-  (let ((*concise* t)
-        (*include-node-ref* nil)
-        (failed (list))
-        (collect (list)))
+    (let ((*concise* t)
+          (*include-node-ref* nil)
+          (failed (list))
+          (collect (list)))
 
-    (dotimes (test-id 500)
-      (let ((graph-name-string (format nil "GRAPH-STRING~3,'0d" test-id)))
-        (when (find-symbol graph-name-string)
-          (let ((test-name (format nil "test-~d" test-id))
-                (graph-name (intern graph-name-string)))
+      (dotimes (test-id 500)
+        (let ((graph-name-string (format nil "GRAPH-STRING~3,'0d" test-id)))
+          (when (find-symbol graph-name-string :cg)
+            (let ((test-name (format nil "test-~d" test-id))
+                  (graph-name (intern graph-name-string :cg)))
 
-            (when verbose
-              (format t "~3%== ~a;  === ~3,'0d ======================================~%" test-name graph-name))
-            (multiple-value-bind (pass initial result)
-                (ptest graph-name)
-
-              (unless pass (push (intern test-name) failed))
-              (push pass collect)
-
-              (when (or verbose (not pass))
-                (format t "~&parsing...      ~s~%" (flatten-cgraph (canonicalize-graph-string initial)))
-                (format t "~&formatted to... ~s~%" (flatten-cgraph result)))
               (when verbose
-                (format t "~&~a ~:[failed ********~;passed~]" test-name pass)))))))
+                (format t "~3%== ~a;  === ~3,'0d ======================================~%" test-name graph-name))
+              (multiple-value-bind (pass initial result)
+                  (ptest graph-name)
 
-    (let ((test-passed (every #'identity collect)))
-      (when failed
-        (format t "~2&failed: ~:a~%"  (reverse failed)))
-      test-passed)))
+                (unless pass (push (intern test-name :cg) failed))
+                (push pass collect)
+
+                (when (or verbose (not pass))
+                  (format t "~&parsing...      ~s~%" (flatten-cgraph (canonicalize-graph-string initial)))
+                  (format t "~&formatted to... ~s~%" (flatten-cgraph result)))
+                (when verbose
+                  (format t "~&~a ~:[failed ********~;passed~]" test-name pass)))))))
+
+      (let ((test-passed (every #'identity collect)))
+        (when failed
+          (format t "~2&failed: ~:a~%"  (reverse failed)))
+        test-passed))))
 
 
 

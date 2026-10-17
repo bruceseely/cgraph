@@ -238,14 +238,15 @@
 
 (defun projection-test (&optional verbose)
   "Run all projection tests. Returns T if all pass, NIL otherwise."
-  (let ((pass t)
-        (*allow-dynamic-individual-creation* t))
+  (with-test-types
+    (let ((pass t)
+          (*allow-dynamic-individual-creation* t))
 
-    (when verbose
-      (format t "~&~%=== Projection Tests ===~%"))
-    (dolist (test-fn (projection-test-defs))
-      (let ((result (funcall test-fn verbose)))
-        (setf pass (and pass result))))
-    (when verbose
-      (format t "~&~%Overall: ~:[SOME TESTS FAILED~;ALL TESTS PASSED~]~2%" pass))
-    pass))
+      (when verbose
+        (format t "~&~%=== Projection Tests ===~%"))
+      (dolist (test-fn (projection-test-defs))
+        (let ((result (funcall test-fn verbose)))
+          (setf pass (and pass result))))
+      (when verbose
+        (format t "~&~%Overall: ~:[SOME TESTS FAILED~;ALL TESTS PASSED~]~2%" pass))
+      pass)))

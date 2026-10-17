@@ -68,7 +68,7 @@
          (text (format nil "~a ~a ~a~a" sep1 name sep2 sep3))
          (pass (ignore-errors
                 (let ((*standard-output* sb-impl::*null-broadcast-stream*))
-                  (funcall (intern (string-upcase name)))))))
+                  (funcall (intern (string-upcase name) :cg))))))
     (when (or verbose (not pass))
       (format t "~&~a ~:[failed <<<~;passed~]~%"
               (subseq text 0 (+ *max-test-name-len* 8))

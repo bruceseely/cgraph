@@ -45,125 +45,126 @@
              (graphs-equivalent-p again rejoined))))))
 
 (defun decomposition-test (&optional verbose)
-  (let ((ok t))
-    (flet ((check (name result)
-             (setf ok (and ok (and result t)))
-             (when (or verbose (not result))
-               (format t "~&  ~:[fail~;pass~] ~a~%" result name))))
-      (when verbose (format t "~&DECOMPOSITION-TEST~%"))
+  (with-test-types
+    (let ((ok t))
+      (flet ((check (name result)
+               (setf ok (and ok (and result t)))
+               (when (or verbose (not result))
+                 (format t "~&  ~:[fail~;pass~] ~a~%" result name))))
+        (when verbose (format t "~&DECOMPOSITION-TEST~%"))
 
-      ;; --- where a graph may be cut ---------------------------------------
-      (check "a two-concept chain has nothing holding it together"
-             (null (cut-concepts (parse-cgraph "[EAT]→(agnt)→[DOG]."))))
+        ;; --- where a graph may be cut ---------------------------------------
+        (check "a two-concept chain has nothing holding it together"
+               (null (cut-concepts (parse-cgraph "[EAT]→(agnt)→[DOG]."))))
 
-      ;; The ring closes through coreference rather than through arcs, so an
-      ;; arc walk sees a path and would offer to cut it. Referents, not nodes.
-      (check "a ring closed by coreference is still a ring"
-             (null (cut-concepts
-                    (parse-cgraph "[EAT]-
+        ;; The ring closes through coreference rather than through arcs, so an
+        ;; arc walk sees a path and would offer to cut it. Referents, not nodes.
+        (check "a ring closed by coreference is still a ring"
+               (null (cut-concepts
+                      (parse-cgraph "[EAT]-
                                      (agnt)→[PERSON: sue #503]→(poss)→[PIE: *x]
                                      (obj)→[PIE: ?x]."))))
 
-      (let ((cuts (cut-concepts
-                   (parse-cgraph "[CHEVY-VEHICLE]-
+        (let ((cuts (cut-concepts
+                     (parse-cgraph "[CHEVY-VEHICLE]-
                                     (attr)→[OLD]
                                     (inst)←[DRIVE]-
                                        (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
                                        (dest)→[CITY: Baltimore #502],
                                     (poss)←[PERSON: dave #501 *x]."))))
-        (check "a graph with three seams reports three"
-               (= 3 (length cuts)))
-        ;; Dave is mentioned twice and is one place to cut, not two.
-        (check "one entry per referent, not per mention"
-               (= 1 (count 'person cuts :key (lambda (c) (label (concept-type c)))))))
+          (check "a graph with three seams reports three"
+                 (= 3 (length cuts)))
+          ;; Dave is mentioned twice and is one place to cut, not two.
+          (check "one entry per referent, not per mention"
+                 (= 1 (count 'person cuts :key (lambda (c) (label (concept-type c)))))))
 
-      ;; --- the cut is join run backwards -----------------------------------
-      (check "an individual carries its own identity across the cut"
-             (decomposition-round-trip-p
-              "[CHEVY-VEHICLE]-
+        ;; --- the cut is join run backwards -----------------------------------
+        (check "an individual carries its own identity across the cut"
+               (decomposition-round-trip-p
+                "[CHEVY-VEHICLE]-
                  (attr)→[OLD]
                  (inst)←[DRIVE]-
                     (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
                     (dest)→[CITY: Baltimore #502],
                  (poss)←[PERSON: dave #501 *x]."
-              'person))
+                'person))
 
-      ;; A generic has no identity of its own, so the cut has to leave a
-      ;; coreference label -- without one the pieces would assert two dogs.
-      (check "a generic gets a coreference label, and rejoins"
-             (decomposition-round-trip-p
-              "[EAT]-
+        ;; A generic has no identity of its own, so the cut has to leave a
+        ;; coreference label -- without one the pieces would assert two dogs.
+        (check "a generic gets a coreference label, and rejoins"
+               (decomposition-round-trip-p
+                "[EAT]-
                  (agnt)→[DOG]→(attr)→[OLD]
                  (obj)→[CAKE]."
-              'dog))
+                'dog))
 
-      (let* ((nodes (parse-cgraph "[EAT]-
+        (let* ((nodes (parse-cgraph "[EAT]-
                                      (agnt)→[DOG]→(attr)→[OLD]
                                      (obj)→[CAKE]."))
-             (pieces (decompose-cgraph nodes :at (first (cut-concepts nodes))))
-             (texts (mapcar #'format-cgraph pieces)))
-        (check "the pieces are labelled *x and ?x"
-               (and (some (lambda (text) (search "*" text)) texts)
-                    (some (lambda (text) (search "?" text)) texts))))
+               (pieces (decompose-cgraph nodes :at (first (cut-concepts nodes))))
+               (texts (mapcar #'format-cgraph pieces)))
+          (check "the pieces are labelled *x and ?x"
+                 (and (some (lambda (text) (search "*" text)) texts)
+                      (some (lambda (text) (search "?" text)) texts))))
 
-      ;; --- refusals ---------------------------------------------------------
-      (let* ((nodes (parse-cgraph "[EAT]-
+        ;; --- refusals ---------------------------------------------------------
+        (let* ((nodes (parse-cgraph "[EAT]-
                                      (agnt)→[DOG]→(attr)→[OLD]
                                      (obj)→[CAKE]."))
-             (leaf (find 'cake (decomposition-concepts nodes)
-                         :key (lambda (c) (label (concept-type c))))))
-        (check "cutting where nothing comes apart is refused"
-               (handler-case (progn (decompose-cgraph nodes :at leaf) nil)
-                 (error () t))))
+               (leaf (find 'cake (decomposition-concepts nodes)
+                           :key (lambda (c) (label (concept-type c))))))
+          (check "cutting where nothing comes apart is refused"
+                 (handler-case (progn (decompose-cgraph nodes :at leaf) nil)
+                   (error () t))))
 
-      (check "a graph with no seam comes back as itself"
-             (= 1 (length (decompose-cgraph (parse-cgraph "[EAT]→(agnt)→[DOG].")))))
+        (check "a graph with no seam comes back as itself"
+               (= 1 (length (decompose-cgraph (parse-cgraph "[EAT]→(agnt)→[DOG].")))))
 
-      ;; --- and it is spoken as a sentence each ------------------------------
-      ;; The point of the whole exercise. The second sentence must say the
-      ;; repeated concept is the SAME one -- "A dog eats a cake. A dog is old"
-      ;; is two dogs to a reader, whatever the graph says.
-      ;; Cut at DOG deliberately, not at whichever seam comes first. The first
-      ;; is EAT, and cutting a graph at its PREDICATE gives "An old dog eats. A
-      ;; cake is eaten." -- two grammatical sentences that read as two eatings,
-      ;; because English pronominalizes things far more readily than events.
-      ;; That is a question for the policy stage: which seam is worth cutting.
-      (let* ((nodes  (parse-cgraph "[EAT]-
+        ;; --- and it is spoken as a sentence each ------------------------------
+        ;; The point of the whole exercise. The second sentence must say the
+        ;; repeated concept is the SAME one -- "A dog eats a cake. A dog is old"
+        ;; is two dogs to a reader, whatever the graph says.
+        ;; Cut at DOG deliberately, not at whichever seam comes first. The first
+        ;; is EAT, and cutting a graph at its PREDICATE gives "An old dog eats. A
+        ;; cake is eaten." -- two grammatical sentences that read as two eatings,
+        ;; because English pronominalizes things far more readily than events.
+        ;; That is a question for the policy stage: which seam is worth cutting.
+        (let* ((nodes  (parse-cgraph "[EAT]-
                                       (agnt)→[DOG]→(attr)→[OLD]
                                       (obj)→[CAKE]."))
-             (dog    (find 'dog (cut-concepts nodes)
-                           :key (lambda (c) (label (concept-type c)))))
-             (pieces (decompose-cgraph nodes :at dog)))
-        (check "the pieces are spoken as two sentences, the second anaphoric"
-               (string= "A dog eats a cake. It is old." (graphs-to-text pieces)))
-        (check "cross-coref off names it again instead"
-               (string= "A dog eats a cake. A dog is old."
-                        (graphs-to-text pieces :cross-coref nil))))
+               (dog    (find 'dog (cut-concepts nodes)
+                             :key (lambda (c) (label (concept-type c)))))
+               (pieces (decompose-cgraph nodes :at dog)))
+          (check "the pieces are spoken as two sentences, the second anaphoric"
+                 (string= "A dog eats a cake. It is old." (graphs-to-text pieces)))
+          (check "cross-coref off names it again instead"
+                 (string= "A dog eats a cake. A dog is old."
+                          (graphs-to-text pieces :cross-coref nil))))
 
-      (let* ((nodes (parse-cgraph "[CHEVY-VEHICLE]-
+        (let* ((nodes (parse-cgraph "[CHEVY-VEHICLE]-
                                      (attr)→[OLD]
                                      (inst)←[DRIVE]-
                                         (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
                                         (dest)→[CITY: Baltimore #502],
                                      (poss)←[PERSON: dave #501 *x]."))
-             (cut (find 'person (cut-concepts nodes)
-                        :key (lambda (c) (label (concept-type c))))))
-        (check "an individual is pronominalized on the second sentence"
-               (string= "Dave drives with his old Chevy to Baltimore. He is young."
-                        (graphs-to-text (decompose-cgraph nodes :at cut)))))
+               (cut (find 'person (cut-concepts nodes)
+                          :key (lambda (c) (label (concept-type c))))))
+          (check "an individual is pronominalized on the second sentence"
+                 (string= "Dave drives with his old Chevy to Baltimore. He is young."
+                          (graphs-to-text (decompose-cgraph nodes :at cut)))))
 
-      ;; Every clause path must agree about who is a second mention. Three of
-      ;; them rendered their subject with REALIZE-FULL-NP and so never asked --
-      ;; the copula, the have-clause, and the possessive modifier -- which made
-      ;; consecutive sentences disagree about the same person: "Dave has an
-      ;; ancient bag. He is young."
-      (check "every sentence after the first refers back, not afresh"
-             (string= (concatenate 'string
-                                   "Dave drives with his Chevy to Baltimore. "
-                                   "He has an ancient bag containing a cake. "
-                                   "He is young. It is old.")
-                      (graph-to-text-decomposed
-                       (parse-cgraph "[CHEVY-VEHICLE]-
+        ;; Every clause path must agree about who is a second mention. Three of
+        ;; them rendered their subject with REALIZE-FULL-NP and so never asked --
+        ;; the copula, the have-clause, and the possessive modifier -- which made
+        ;; consecutive sentences disagree about the same person: "Dave has an
+        ;; ancient bag. He is young."
+        (check "every sentence after the first refers back, not afresh"
+               (string= (concatenate 'string
+                                     "Dave drives with his Chevy to Baltimore. "
+                                     "He has an ancient bag containing a cake. "
+                                     "He is young. It is old.")
+                        (graph-to-text-decomposed
+                         (parse-cgraph "[CHEVY-VEHICLE]-
                                         (attr)→[OLD]
                                         (inst)←[DRIVE]-
                                            (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
@@ -171,20 +172,20 @@
                                         (poss)←[PERSON: dave #501 *x]→(poss)→[BAG]-
                                            (attr)→[ANCIENT]
                                            (cntns)→[CAKE].")
-                       :threshold 7)))
+                         :threshold 7)))
 
-      ;; The same graph with a second man in it. Nothing may be called "he"
-      ;; now: two candidates compete for it and the text would say neither.
-      ;; The vehicle still refers back, having no competitor until the cake and
-      ;; the bag arrive -- and by the last sentence it is the most recent of
-      ;; them, so "it" is still safe.
-      (check "a second man in the graph costs everyone the pronoun"
-             (string= (concatenate 'string
-                                   "Young Dave drives with a Chevy to Baltimore. "
-                                   "Bob has an ancient bag containing a cake and "
-                                   "the Chevy. It is old.")
-                      (graph-to-text-decomposed
-                       (parse-cgraph "[CHEVY-VEHICLE]-
+        ;; The same graph with a second man in it. Nothing may be called "he"
+        ;; now: two candidates compete for it and the text would say neither.
+        ;; The vehicle still refers back, having no competitor until the cake and
+        ;; the bag arrive -- and by the last sentence it is the most recent of
+        ;; them, so "it" is still safe.
+        (check "a second man in the graph costs everyone the pronoun"
+               (string= (concatenate 'string
+                                     "Young Dave drives with a Chevy to Baltimore. "
+                                     "Bob has an ancient bag containing a cake and "
+                                     "the Chevy. It is old.")
+                        (graph-to-text-decomposed
+                         (parse-cgraph "[CHEVY-VEHICLE]-
                                         (attr)→[OLD]
                                         (inst)←[DRIVE]-
                                            (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
@@ -192,36 +193,36 @@
                                         (poss)←[PERSON: bob #504]→(poss)→[BAG]-
                                            (attr)→[ANCIENT]
                                            (cntns)→[CAKE].")
-                       :threshold 7)))
+                         :threshold 7)))
 
-      ;; --- policy: whether, and where ---------------------------------------
-      (let* ((dave "[CHEVY-VEHICLE]-
+        ;; --- policy: whether, and where ---------------------------------------
+        (let* ((dave "[CHEVY-VEHICLE]-
                       (attr)→[OLD]
                       (inst)←[DRIVE]-
                          (agnt)→[PERSON: dave #501 *x]→(attr)→[YOUNG]
                          (dest)→[CITY: Baltimore #502],
                       (poss)←[PERSON: dave #501 *x].")
-             (nodes (parse-cgraph dave)))
-        ;; Six things, seven nodes: Dave is mentioned twice and is one thing to
-        ;; keep track of, which is what makes a sentence hard.
-        (check "complexity counts referents, not concept nodes"
-               (= 6 (graph-referent-count nodes)))
-        (check "under the threshold nothing is cut"
-               (= 1 (length (decompose-fully nodes :threshold 7))))
-        (check "over the threshold it is"
-               (> (length (decompose-fully nodes :threshold 3)) 1))
-        ;; DRIVE is a seam and is the worst one: cutting a graph at its
-        ;; predicate leaves a piece with no head.
-        (check "the seam chosen is never an act"
-               (not (act-or-event-concept-p (best-seam nodes))))
-        (check "the main predicate is refused as a seam"
-               (null (seam-rank (find-main-predicate (decomposition-concepts nodes))
-                                nodes)))
-        (check "the piece carrying the clause is spoken first"
-               (let ((pieces (decompose-fully nodes :threshold 3)))
-                 (some #'act-or-event-concept-p
-                       (decomposition-concepts (first pieces))))))
+               (nodes (parse-cgraph dave)))
+          ;; Six things, seven nodes: Dave is mentioned twice and is one thing to
+          ;; keep track of, which is what makes a sentence hard.
+          (check "complexity counts referents, not concept nodes"
+                 (= 6 (graph-referent-count nodes)))
+          (check "under the threshold nothing is cut"
+                 (= 1 (length (decompose-fully nodes :threshold 7))))
+          (check "over the threshold it is"
+                 (> (length (decompose-fully nodes :threshold 3)) 1))
+          ;; DRIVE is a seam and is the worst one: cutting a graph at its
+          ;; predicate leaves a piece with no head.
+          (check "the seam chosen is never an act"
+                 (not (act-or-event-concept-p (best-seam nodes))))
+          (check "the main predicate is refused as a seam"
+                 (null (seam-rank (find-main-predicate (decomposition-concepts nodes))
+                                  nodes)))
+          (check "the piece carrying the clause is spoken first"
+                 (let ((pieces (decompose-fully nodes :threshold 3)))
+                   (some #'act-or-event-concept-p
+                         (decomposition-concepts (first pieces))))))
 
-      (when verbose
-        (format t "~&DECOMPOSITION-TEST ~:[failed~;passed~]~%" ok))
-      ok)))
+        (when verbose
+          (format t "~&DECOMPOSITION-TEST ~:[failed~;passed~]~%" ok))
+        ok))))
