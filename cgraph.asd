@@ -123,6 +123,7 @@
   ;; No SWANK dependency: what talks to Emacs finds SWANK at run time
   ;; (EMACS-CONNECTED-P, system/setup/basic-utilities.lisp) and does nothing
   ;; without a SLIME connection.
+  :in-order-to ((test-op (test-op "cgraph/tests")))
   :components ((:module "default-types"
 	        ;; The shipped type set, read in place and never written. Static, not
 	        ;; compiled: these are data that LOAD-CONCEPT-TYPES reads.
@@ -199,12 +200,19 @@
 	        :components (;; support-functions is the "cgraph/support" system, below
                              (:file "debug")
                              ;;(:file "path")
-                             ))
+                             ))))
 
-	       (:module "test"
+;;; The test suites, as their own system so that loading cgraph doesn't compile
+;;; them. (asdf:test-system :cgraph) runs them, and signals an error if any
+;;; suite fails, so a script or CI job sees a non-zero exit; the per-suite
+;;; report is printed either way. In a loaded image, (cg::test-all t).
+(defsystem "cgraph/tests"
+  :description "Test suites for cgraph"
+  :author "Bruce Seely <bruce@bseely.com>"
+  :depends-on ("cgraph")
+  :components ((:module "test"
                 :serial t
-	        :depends-on ("system")
-	        :components ((:file "cgraph-tests")
+                :components ((:file "cgraph-tests")
                              (:file "graphs-for-testing")
                              (:file "type-test")
                              (:file "linkup-test")
@@ -241,8 +249,10 @@
                              (:file "relation-hierarchy-test")
                              (:file "relation-join-test")
                              (:file "morphology-tables-lint-test")
-                             (:file "lint-report-test")
-                             ))))
+                             (:file "lint-report-test"))))
+  :perform (test-op (o c)
+             (unless (uiop:symbol-call :conceptual-graphs :test-all t)
+               (error "cgraph: some test suites failed (see the report above)."))))
 
 
 ;;; REPL and debugging tools -- SUP:RAPROPOS and friends, in package

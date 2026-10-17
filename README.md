@@ -113,8 +113,10 @@ See [API.md](API.md) for the full reference.
 test/run-tests.sh
 ```
 
-That runs the engine's own suite in a fresh SBCL, against a throwaway type
-catalog, so your `~/.cgraph` is never touched. In a running image,
+That is `(asdf:test-system :cgraph)` in a fresh SBCL: it loads the
+`cgraph/tests` system and runs every suite against the test types in
+`test/test-types/`, so your `~/.cgraph` is never touched, and it signals an
+error if any suite fails. In an image that already has `cgraph/tests` loaded,
 `(cg::test-all t)` does the same from any package: each suite loads the test
 types and puts your own back afterwards. cgraph is also a dependency of
 the [`cg-from-parse`](https://github.com/bruceseely/cg-from-parse)

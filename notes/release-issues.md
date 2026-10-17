@@ -94,9 +94,12 @@ just the engine:
 
 ## 5. Tests and CI
 
-- **Tests run only in a live image** via `(cg:test-all t)`. Hook them into
-  `asdf:test-system`, using FiveAM, Parachute, or a thin adapter over the
-  existing suite.
+- ~~**Tests run only in a live image**~~ Done 2026-10-17:
+  `(asdf:test-system :cgraph)` runs them through a `cgraph/tests` system (a
+  thin adapter over the existing suites; no framework), and signals an error
+  when one fails. Loading cgraph no longer compiles the tests. The two
+  `test-all`s became one, driven by `*test-suites*`, which also fails when a
+  `test/*-test.lisp` file's suite isn't listed (`normalize-test` hadn't been).
 - ~~**`test-all` passes only in the runner's environment.**~~ Done 2026-10-17.
   Two causes. Seven suites (referent, concept, parse, projection, graph-every,
   graph-equality, decomposition) never loaded the test types; they passed only

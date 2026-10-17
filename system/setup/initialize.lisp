@@ -326,6 +326,9 @@
       (cg::report-lexicon-lint :min-severity min-sev))
     (terpri))
 
+  ;; The suites are their own system now (cgraph/tests), so loading cgraph
+  ;; doesn't compile them; load them here so (cg::test-all t) is at hand.
+  (asdf:load-system "cgraph/tests")
   (when cg::*run-tests-on-startup*
     (cg::test-cgraph t)))
 
