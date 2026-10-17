@@ -367,18 +367,24 @@ line when it has more than one."
 
 
 
-;;; defined in spike-utilities
-;;; (defmacro destructuring-setq (vars-map form)
-;;;   (let* ((symbols '(&rest &optional &key &allow-other-keys))
-;;;          (bindings (mapcar (lambda (s) (list (gensym) s))
-;;;                            (remove-if (lambda (x)
-;;;                                         (or (not (symbolp x))
-;;;                                             (member x symbols)))
-;;;                                       (flatten vars-map)))))
-;;;     `(let ,(mapcar #'car bindings)
-;;;        (destructuring-bind ,vars-map ,form
-;;;          (setq ,@(apply #'append bindings)))
-;;;        (setq ,@(apply #'append (mapcar #'reverse bindings))))))
+;;; These two used to be support/debug.lisp, in package COMMON-LISP itself --
+;;; which SBCL quietly allowed and ECL refuses (CL is locked).
+(defun flatten (l)
+  (cond ((null l) nil)
+        ((atom l) (list l))
+        (t (loop for a in l appending (flatten a)))))
+
+(defmacro destructuring-setq (vars-map form)
+ (let* ((symbols '(&rest &optional &key &allow-other-keys))
+        (bindings (mapcar (lambda (s) (list (gensym) s))
+                          (remove-if (lambda (x)
+                                       (or (not (symbolp x))
+                                           (member x symbols)))
+                                     (flatten vars-map)))))
+   `(let ,(mapcar #'car bindings)
+      (destructuring-bind ,vars-map ,form
+        (setq ,@(apply #'append bindings)))
+      (setq ,@(apply #'append (mapcar #'reverse bindings))))))
 
 
 
@@ -420,7 +426,7 @@ line when it has more than one."
 	     (format t "~&~v,0t~a (~(~a~))~&" indentation
 		     (class-name class)
 		     (package-name (symbol-package (class-name class))))
-	     (let ((direct-subclasses (copy-list (sb-mop:class-direct-subclasses class))))
+	     (let ((direct-subclasses (copy-list (closer-mop:class-direct-subclasses class))))
 	       (dolist (subclass (sort direct-subclasses #'string< :key #'class-name))
 		 (subclasses-internal subclass (+ indent indentation))))))
     (subclasses-internal class initial-indent)))

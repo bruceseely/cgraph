@@ -192,15 +192,8 @@
                                            (:file "realize-clause")
                                            (:file "generate")
                                            (:file "lexicon-lint")
-                                           (:file "classify-word")))))
+                                           (:file "classify-word")))))))
 
-               (:module "support"
-                :serial t
-	        :depends-on ("system")
-	        :components (;; support-functions is the "cgraph/support" system, below
-                             (:file "debug")
-                             ;;(:file "path")
-                             ))))
 
 ;;; The test suites, as their own system so that loading cgraph doesn't compile
 ;;; them. (asdf:test-system :cgraph) runs them, and signals an error if any
@@ -257,13 +250,13 @@
 
 ;;; REPL and debugging tools -- SUP:RAPROPOS and friends, in package
 ;;; :cgraph-support (nickname :sup).  Kept as a secondary system so the main
-;;; system needn't depend on cl-ppcre, which nothing else here uses.  It
+;;; system needn't depend on cl-ppcre or closer-mop, which nothing else uses.  It
 ;;; deliberately depends on nothing from :cgraph, so it can move to a
 ;;; repository of its own later without untangling anything.
 ;;; setup-cgraph loads it; on its own: (asdf:load-system "cgraph/support")
 (defsystem "cgraph/support"
   :description "Lisp REPL and debugging tools, in package :cgraph-support (:sup)"
   :author "Bruce Seely <bruce@bseely.com>"
-  :depends-on (:cl-ppcre)
+  :depends-on (:cl-ppcre :closer-mop)
   :components ((:module "support"
                 :components ((:file "support-functions")))))

@@ -769,7 +769,8 @@ Use ?~a for cross-context co-reference instead."
 (defun concept-reader (stream initial-char)
   "Read a concept '[TYPE]', '[TYPE: features]', '[TYPE: [graph]]', or
    the anonymous '[[graph]]' shorthand for '[PROPOSITION: [graph]]'.
-   Returns (values concept 'concept) or NIL when nothing is built."
+   Returns the concept, or NIL when nothing is built -- one value: a reader
+   macro may return at most one (SBCL ignores extras; ECL signals an error)."
   (unless (char-equal initial-char #\[)
     (error "concept parse error"))
   (with-readtable-mods (list (list #\: #'referent-reader)
@@ -797,8 +798,7 @@ Use ?~a for cross-context co-reference instead."
       (skip-char stream #\])
       (when (and concept *negated-concept*)
         (setf (negated concept) t))
-      (when concept
-        (values concept 'concept)))))
+      concept)))
 
 
 (defun relation-reader (stream initial-char)
