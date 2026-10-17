@@ -57,10 +57,18 @@ Items are in priority order.
 
 ## 2. Portability
 
-- **SBCL-specific code is small**: now that the package-lock handling is gone,
-  only four `sb-mop` calls in `conformity.lisp` remain, and `closer-mop`
-  replaces them. After that the code may run on CCL/ECL.
-  If not, state "SBCL only" plainly.
+- ~~**SBCL-specific code is small**~~ Done 2026-10-17. The four `sb-mop` calls
+  in `conformity.lisp` turned out to be commented out; the one live one (the
+  REPL tools) uses closer-mop. Loading under ECL 26.5.5 found three real bugs
+  SBCL had tolerated: definitions made in package `COMMON-LISP` itself
+  (support/debug.lisp), a reader macro returning two values, and output order
+  taken from `SET-DIFFERENCE`, whose result order is unspecified (SBCL
+  reverses, ECL doesn't). cgraph now shadows `UNION`, `INTERSECTION` and
+  `SET-DIFFERENCE` with versions that give SBCL's order everywhere
+  (system/setup/set-operations.lisp, checked against SBCL's own by
+  `set-operations-test`). All 35 suites pass on SBCL and ECL. Not yet run
+  elsewhere: the web UI and editor on ECL; CCL (no native Apple Silicon
+  build); an ECL job in CI.
 - **No Quicklisp install path.** Getting into the Quicklisp dist, or at least
   Ultralisp, is how CL users find and try libraries.
 

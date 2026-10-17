@@ -6,7 +6,10 @@
   ;; SET and TYPE are conceptual-graph vocabulary (the SET node class, the TYPE
   ;; reader on type objects). Shadow them so cgraph gets its own symbols instead
   ;; of redefining COMMON-LISP's, which would need CL's package lock removed.
-  (:shadow #:set #:type)
+  ;; UNION, INTERSECTION and SET-DIFFERENCE are cgraph's own versions with a
+  ;; defined result order (system/setup/set-operations.lisp): the standard
+  ;; leaves it unspecified, and the order graphs are walked in comes from it.
+  (:shadow #:set #:type #:union #:intersection #:set-difference)
   (:nicknames :cg :cgraph)
   ;; The public API: what API.md documents, plus the entry points it doesn't
   ;; cover yet. Everything else is internal and reachable only as CG::NAME.
@@ -134,7 +137,8 @@
 	        :depends-on ("default-types")
 	        :components ((:module "setup"
                               :serial t
-	                      :components ((:file "definitions")
+	                      :components ((:file "set-operations")
+                                           (:file "definitions")
                                            (:file "initialize")
                                            (:file "basic-utilities")))
                              (:module "core"
@@ -207,6 +211,7 @@
                 :serial t
                 :components ((:file "cgraph-tests")
                              (:file "graphs-for-testing")
+                             (:file "set-operations-test")
                              (:file "type-test")
                              (:file "linkup-test")
                              (:file "segment-test")

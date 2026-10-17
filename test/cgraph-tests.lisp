@@ -42,7 +42,8 @@
 ;;; (cg::test-all t) does the same in a loaded image, from any package.
 
 (defparameter *test-suites*
-  '(type-test
+  '(set-operations-test
+    type-test
     segment-test
     variable-test
     individual-test

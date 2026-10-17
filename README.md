@@ -59,7 +59,8 @@ View concept-type hierarchy and canonical graphs in a web browser
 
 ## Requirements
 
-- **SBCL** (Steel Bank Common Lisp)
+- **A Common Lisp**: developed on **SBCL**; the engine and its test suite
+  also pass on **ECL**. The web UI and editor have only been run on SBCL.
 - **Quicklisp**, to fetch dependencies
 - **Graphviz** (optional, for type hierarchy visualization)
 - **Emacs + SLIME** (optional, for the Emacs integration below)
