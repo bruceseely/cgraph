@@ -148,9 +148,17 @@ just the engine:
   which `default-types/` doesn't define; `API.md` documented `add-graph` and
   `fcg` (which don't exist), and `query`'s keyword as `:all-solutions`
   (it's `:first-only`).
-- **`default-types/` has loose ends**: the relation types refer to `TIME` and
-  `NUMBER`, which the concept types don't define, so a fresh setup prints
-  undefined-type warnings; and `poss` and `rcpt` are each defined twice.
+- ~~**`default-types/` has loose ends**~~ Done 2026-10-19, following
+  `cgraph-types`: `NUMBER` is defined (under `ABSTRACT-QUALITY`), `age` is
+  physical → `AGE` and `dur` situation → `TIME-DURATION`, so `(cg:init)`
+  prints nothing; the duplicate `poss` and `rcpt` are gone (keeping the ones
+  that were in effect). `check-type-lattice` now passes on the shipped set:
+  `MANNER` is one definition, `CHARACTERISTIC` and `BODY-PART` are defined,
+  and `PLACE`'s canonical graph says `[⊤]`, not `[T]`. Not fixed: a type
+  that is only named as a supertype is created without ⊤'s back-link (what
+  `CHARACTERISTIC` was hitting), and `betw` has no syntax role, so the
+  lexicon lint reports an error. (The back-link cause is inferred: the broken
+  link went away once `CHARACTERISTIC` was defined; the code is unread.)
 - **`parse-cgraph` discards the real cause of a parse failure**: it reports
   "Unable to parse token after: " plus whatever parsed before the failure,
   which is empty when the first concept fails.

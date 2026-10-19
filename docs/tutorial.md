@@ -17,7 +17,7 @@ types and 20 relation types -- and is meant to be replaced by your own (see
 [type sets](setup.md#type-sets)).
 
 ```lisp
-(length (cg:all-concept-types))           ; → 89
+(length (cg:all-concept-types))           ; → 91
 (cg:get-concept-type 'cat)                ; → CAT, a concept-type object
 ```
 
