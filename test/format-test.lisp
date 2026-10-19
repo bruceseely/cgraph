@@ -47,7 +47,6 @@
   (defparameter poss-rel  (make-relation 'poss))
   (defparameter rcpt-rel  (make-relation 'rcpt))
 
-  ;;(defparameter betw-rel  (make-relation 'betw))
   (defparameter attr-rel  (make-relation 'attr))
   (defparameter attr-rel  (make-relation 'attr))
   )
@@ -386,28 +385,6 @@
       ;;(set-variable eat-con)
 
       (values give-con graph-string))))
-
-
-;; (defun setup10 ()
-;;   ;; (trace format-segment-path format-segments-from-node format-segments format-path-tokens format-node)
-;;   (init-format-test-nodes)
-;;   (let ((graph-string
-;;           "[PERSON]<-(betw)-
-;;                         <-2-[PLACE]->(attr)->[HARD]
-;;                         <-1-[ROCK] ."))
-
-;;     ;; [PERSON]<-(betw)
-;;     (set-arc-from-relation person-con  betw-rel)
-
-;;     ;; (betw)<-[ROCK]
-;;     (add-arc-into-relation betw-rel rock-con)
-
-;;     ;; (betw)<-[PLACE]->(attr)->[HARD]."))
-;;     (add-arc-into-relation betw-rel place-con)
-;;     (add-arc-into-relation place-con attr-rel)
-;;     (set-arc-from-relation attr-rel hard-con)
-
-;;     (values person-con graph-string)))
 
 
 (defun ftest (test-number)

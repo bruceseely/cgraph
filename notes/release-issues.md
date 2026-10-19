@@ -166,8 +166,12 @@ just the engine:
   only named as a supertype (what `CHARACTERISTIC` was hitting), or defined
   with no supertypes, was created under ⊤ without ⊤ listing it, so no walk
   down the lattice reached it; `make-concept-type-aux` now makes both links
-  (2026-10-19, checked by `type-test`). Not fixed: `betw` has no syntax
-  role, so the lexicon lint reports an error.
+  (2026-10-19, checked by `type-test`). `betw`, the one relation with two
+  source types, is gone: everything that reads `:source-types` takes the
+  list as alternatives, not as positions, and nothing parses, formats or
+  words numbered arcs, so it never meant "between". It was the lint's one
+  error. Relations of more than two arcs would have to be designed as a
+  feature.
 - ~~**`parse-cgraph` discards the real cause of a parse failure**~~ Done
   2026-10-19, and it was worse than this said: of 22 typical mistakes only
   one got a message that pointed at the problem. Several came back as a

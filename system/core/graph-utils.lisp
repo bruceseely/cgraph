@@ -277,14 +277,6 @@
   ;;              (manr)->[fast],
   ;;    (rcpt)<-[give]->(obj)->[food]."
 
-  ;; "[PERSON]<-(betw)-
-  ;;     <-1-[ROCK]
-  ;;     <-2-[PLACE]->(attr)->[HARD]."
-
-  ;; "[PERSON]<-(betw)-
-  ;;     <-1-[PLACE]->(attr)->[HARD]
-  ;;     <-2-[ROCK]."
-
 
 ;;;
 (defmethod linkup ((tokens list))

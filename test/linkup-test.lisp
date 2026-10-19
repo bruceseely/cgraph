@@ -45,7 +45,6 @@
                         "[GIVE]- (agnt)->[PERSON:Sue] (inst)->[FOOD]<-(obj)<-[EAT:*x] (rcpt)->[DOG: Spot]<-(agnt)<-[EAT:*x]."
                         "[GIVE]- (agnt)->[PERSON: Sue] (inst)->[FOOD]<-(obj)<-[EAT: *x] (rcpt)->[DOG: Spot]<-(agnt)<-[EAT: *x]."
                         "[GIVE]- (agnt)->[PERSON: Suez] (inst)->[FOOD]<-(obj)<-[EAT: *x] (rcpt)->[DOG: Spotz]<-(agnt)<-[EAT: *x]."
-                        ;; "[PERSON]<-(betw)- <-1-[ROCK] <-2-[PLACE]->(attr)->[HARD]."
                         ))
         (result t)
         )
