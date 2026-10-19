@@ -5,6 +5,9 @@ name: whole-stack tests
 # its own SBCL process. Self-contained: no cross-repo token needed -- the two
 # dependency repos are public and checked out directly.
 #
+# Both jobs also run the graph editor's suites, (asdf:test-system
+# :cgraph-editor), which need Hunchentoot and so are kept out of cgraph's own.
+#
 # A second job runs cgraph's own suite on ECL, to keep it portable.
 
 on:
@@ -80,9 +83,20 @@ jobs:
       - name: Run whole-stack gate
         run: bash cg-from-parse/test/run-all-suites.sh
 
+      # The graph editor's suites: a test system of their own, since they need
+      # Hunchentoot. TEST-SYSTEM signals an error when one fails, which
+      # --disable-debugger turns into exit 1.
+      - name: Run graph-editor tests
+        run: |
+          sbcl --non-interactive --disable-debugger \
+               --eval '(ql:quickload "cgraph-editor/tests" :silent t)' \
+               --eval '(handler-bind ((warning (function muffle-warning)))
+                         (asdf:test-system :cgraph-editor))'
+
   # cgraph's own suite on a second implementation, so portability stays tested:
   # ECL found three bugs SBCL had been tolerating (see notes/release-issues.md).
-  # cgraph only -- parsifal and the extractor are SBCL-only for now.
+  # cgraph and its graph editor -- parsifal and the extractor are SBCL-only for
+# now.
   ecl:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -121,5 +135,13 @@ jobs:
           ecl --norc --load ~/quicklisp/setup.lisp \
               --eval '(handler-case (progn (ql:quickload "cgraph/tests")
                                            (asdf:test-system :cgraph)
+                                           (ext:quit 0))
+                        (error (e) (format t "~&~a~%" e) (ext:quit 1)))'
+
+      - name: Run graph-editor tests on ECL
+        run: |
+          ecl --norc --load ~/quicklisp/setup.lisp \
+              --eval '(handler-case (progn (ql:quickload "cgraph-editor/tests")
+                                           (asdf:test-system :cgraph-editor)
                                            (ext:quit 0))
                         (error (e) (format t "~&~a~%" e) (ext:quit 1)))'

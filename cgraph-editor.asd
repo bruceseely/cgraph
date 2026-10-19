@@ -12,20 +12,28 @@
 (defsystem "cgraph-editor"
   :description "Web-based conceptual-graph editor for cgraph"
   :depends-on ("cgraph" "cgraph-web" "hunchentoot" "bordeaux-threads")
+  :in-order-to ((test-op (test-op "cgraph-editor/tests")))
   :serial t
   :components ((:module "system/editor"
                 :serial t
                 :components ((:file "session")
                              (:file "operations")
                              (:file "referent")
-                             (:file "api")))
-               ;; Under test/editor/ rather than test/, because
-               ;; EXTRACT-TEST-NAMES scans test/ by filename and
-               ;; UIOP:DIRECTORY-FILES is not recursive -- so TEST-CGRAPH
-               ;; keeps passing for anyone who loads only :cgraph. Run these
-               ;; with (EDITOR-TEST).
-               (:module "test/editor"
-                :depends-on ("system/editor")
+                             (:file "api")))))
+
+;;; The editor's tests, as their own system, like cgraph/tests: loading the
+;;; editor doesn't compile them, and (asdf:test-system :cgraph-editor) runs them
+;;; and signals an error if any fails. They are kept out of (asdf:test-system
+;;; :cgraph), which would otherwise need Hunchentoot to test the engine. They
+;;; live in test/editor/ so that TEST-ALL, which looks for test/*-test.lisp,
+;;; doesn't count them as cgraph suites. In a loaded image, (cg::editor-test t).
+(defsystem "cgraph-editor/tests"
+  :description "Test suites for the cgraph graph editor"
+  :depends-on ("cgraph-editor" "cgraph/tests")
+  :components ((:module "test/editor"
                 :serial t
                 :components ((:file "editor-operations-test")
-                             (:file "referent-view-test")))))
+                             (:file "referent-view-test"))))
+  :perform (test-op (o c)
+             (unless (uiop:symbol-call :conceptual-graphs :editor-test t)
+               (error "cgraph-editor: some test suites failed (see the report above)."))))

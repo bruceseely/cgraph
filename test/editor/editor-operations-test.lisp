@@ -2,12 +2,10 @@
 
 ;;; Tests for the graph editor's arc operations.
 ;;;
-;;; Deliberately in test/editor/ rather than test/. EXTRACT-TEST-NAMES scans
-;;; test/ by filename and calls the matching function, and UIOP:DIRECTORY-FILES
-;;; is not recursive -- so a file here is invisible to TEST-CGRAPH. That is
-;;; what we want: these need :CGRAPH-EDITOR loaded, and the main suite has to
-;;; keep passing for anyone who loads only :CGRAPH. Run them with
-;;; (EDITOR-TEST).
+;;; In test/editor/ rather than test/, and loaded by the cgraph-editor/tests
+;;; system rather than cgraph/tests: these need :CGRAPH-EDITOR, and the engine's
+;;; suite has to run for anyone who loads only :CGRAPH. Run them with
+;;; (asdf:test-system :cgraph-editor), or (EDITOR-TEST) in a loaded image.
 ;;;
 ;;; The operations mutate the working graph IN PLACE. That is the property
 ;;; test B pins down: rebuilding by re-parsing mints new nodes and churns every
@@ -260,13 +258,22 @@
    Binds *CONCISE* to NIL: the expected strings are written with a space
    after the colon, `[DOG: {*}]', which is how *CONCISE* NIL formats them, and
    the default is T. They passed only where ~/.cgraph/initializations.lisp
-   happened to set it to NIL."
+   happened to set it to NIL.
+
+   Variables and coreferences are initialized too, as every parse does, since
+   in a fresh image nothing has made them yet."
   (initialize-individuals)
+  (initialize-variables)
+  (initialize-coreferences)
   (let* ((*concise* nil)
-         (results (list (cons "editor-operations-test"
-                              (editor-operations-test verbose))
-                        (cons "referent-view-test"
-                              (referent-view-test verbose)))))
+         ;; A context of their own, so they run in a fresh image (where
+         ;; there is none) and leave the caller's knowledge base alone.
+         (*context* (make-context nil))
+         (results (with-test-types
+                    (list (cons "editor-operations-test"
+                                (editor-operations-test verbose))
+                          (cons "referent-view-test"
+                                (referent-view-test verbose))))))
     (dolist (r results)
       (format t "~&-=- ~a~34t~:[failed <<<~;passed~]~%" (car r) (cdr r)))
     (every #'cdr results)))

@@ -66,9 +66,11 @@ Items are in priority order.
   reverses, ECL doesn't). cgraph now shadows `UNION`, `INTERSECTION` and
   `SET-DIFFERENCE` with versions that give SBCL's order everywhere
   (system/setup/set-operations.lisp, checked against SBCL's own by
-  `set-operations-test`). All 35 suites pass on SBCL and ECL. Not yet run
-  elsewhere: the web UI and editor on ECL; CCL (no native Apple Silicon
-  build); an ECL job in CI.
+  `set-operations-test`). All 35 suites pass on SBCL and ECL; CI runs them
+  on ECL since 2026-10-17, and the graph editor's suites too since
+  2026-10-19, so the web and editor code loads on ECL. Not yet run
+  elsewhere: the web UI itself in a browser on ECL; CCL (no native Apple
+  Silicon build).
 - **No Quicklisp install path.** Getting into the Quicklisp dist, or at least
   Ultralisp, is how CL users find and try libraries.
 
@@ -113,6 +115,11 @@ just the engine:
   when one fails. Loading cgraph no longer compiles the tests. The two
   `test-all`s became one, driven by `*test-suites*`, which also fails when a
   `test/*-test.lisp` file's suite isn't listed (`normalize-test` hadn't been).
+  The graph editor's suites followed on 2026-10-19: `(asdf:test-system
+  :cgraph-editor)`, through a `cgraph-editor/tests` system, run by
+  `test/run-tests.sh` and both CI jobs. They had been reachable only by
+  calling `(editor-test)` by hand, needed an initialized image, and passed
+  only with `*concise*` NIL as one user's initializations.lisp set it.
 - ~~**`test-all` passes only in the runner's environment.**~~ Done 2026-10-17.
   Two causes. Seven suites (referent, concept, parse, projection, graph-every,
   graph-equality, decomposition) never loaded the test types; they passed only
