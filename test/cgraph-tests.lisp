@@ -58,6 +58,7 @@
     concept-cache-index-test
     linkup-test
     parse-test
+    parse-error-test
     formation-rules-test
     combine-test
     projection-test

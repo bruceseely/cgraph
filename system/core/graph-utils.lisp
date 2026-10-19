@@ -289,17 +289,13 @@
         ;; clauses that match on m-arc must preceed clauses that match on arc
 
         (flet ((match (types)
-                 ;;(format t "~&? (match ~s)" types)
-                 (let* ((match-list (mapcar (lambda (type-term token)
-                                              (typep token type-term))
-                                            types sublist))
-                        (match-p (every #'identity match-list)))
-
-                   ;; (setf length (when match-p (length match-list)))
-                   #+nil(when match-p
-                     (format t "~&match-list: ~s~%"  match-list)
-                     (format t "~&>> ~a matched ~a~%"  (subseq sublist 0 length) types))
-                   match-p)))
+                 ;; Every type must have a token: MAPCAR stops at the shorter
+                 ;; list, so without the length check a pattern longer than
+                 ;; what is left "matched" the tail of the tokens, and the
+                 ;; DESTRUCTURING-BIND below it failed on a missing element.
+                 (and (>= (length sublist) (length types))
+                      (every (lambda (type-term token) (typep token type-term))
+                             types sublist))))
 
           (cond
             ((match '(concept arc relation m-arc arc number))
@@ -364,18 +360,60 @@
                ))
 
 
-            (t (unless *in-graph-referent*
-                 (format t "~2% ---- unhandled by linkup ------~%")
-                 ;;(format t "~& ---- types ~s~%" types)
-                 (format t "~& ---- sampling ~s~%" sublist)
-                 (format t "~& ---- input tokens: ~s~%"  tokens))
-               (push tokens failed-inputs)))
+            ;; Inside a graph referent, concepts may sit side by side with
+            ;; nothing joining them: a context holds several graphs, as in
+            ;; ~[[A] ~[B]]. Anywhere else, tokens no clause matches are a
+            ;; graph that can't be what was meant.
+            ((and *in-graph-referent* (match '(concept concept)))
+             (push tokens failed-inputs))
+
+            (t (linkup-failure sublist)))
 
           ;;(setf sublist (subseq sublist (1- length)))
           ;;(print (pcg (car tokens)))
           (setf sublist (cddr sublist))))
 
+      (check-relation-arcs tokens)
       (values tokens failed-inputs))))
+
+
+(defun linkup-failure (sublist)
+  "Signal a parse error for the tokens at the head of SUBLIST, which no
+   LINKUP clause matches, saying what is wrong with them."
+  (destructuring-bind (&optional first second third &rest rest) sublist
+    (declare (ignore rest))
+    (let ((at (token-position (or second first))))
+      (cond ((and (concept-p first) (arc-p second) (concept-p third))
+             (parse-failure at "an arrow joins two concepts, ~a and ~a; a relation ~
+                                goes between them, as in ~a→(rel)→~a"
+                            first third first third))
+            ((and (relation-p first) (arc-p second) (relation-p third))
+             (parse-failure at "an arrow joins two relations, ~a and ~a; a concept ~
+                                goes between them" first third))
+            ((and (arc-p second) (null third))
+             (parse-failure at "the arrow after ~a doesn't lead to anything" first))
+            ((and (concept-p first) (concept-p second))
+             (parse-failure at "nothing joins ~a and ~a; put a relation between them, ~
+                                as in ~a→(rel)→~a" first second first second))
+            ((and (arc-p first) (arc-p second))
+             (parse-failure at "two arrows in a row"))
+            (second
+             (parse-failure at "~a can't follow ~a" second first))
+            (t
+             (parse-failure (token-position first) "~a is left over" first))))))
+
+(defun check-relation-arcs (tokens)
+  "Signal a parse error for a relation in TOKENS left without an arc on either
+   side, as in [CAT]←(agnt) -- the linker accepts it, since it only ever
+   links the tokens it is given."
+  (dolist (token tokens)
+    (when (relation-p token)
+      (cond ((null (outarc token))
+             (parse-failure (token-position token)
+                            "the relation ~a has no arrow out to a concept" token))
+            ((null (remove nil (inarcs token)))
+             (parse-failure (token-position token)
+                            "the relation ~a has no arrow in from a concept" token))))))
 
 
 (defmethod path ((tokens list))

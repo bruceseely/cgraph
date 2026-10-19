@@ -1194,7 +1194,7 @@
 (defmethod get-relation-type ((type-name symbol))
   (let ((cached-relation-type (gethash (type-label-symbol type-name) *relation-type-catalog*)))
     (cond (cached-relation-type)
-          (t (error 'relation-type-lookup-failed :text (princ-to-string type-name))))))
+          (t (error 'relation-type-lookup-failed :type (princ-to-string type-name))))))
 
 ;;; The string case LOOKS UP, like every other method on this generic function,
 ;;; rather than returning the interned symbol and leaving the caller to finish

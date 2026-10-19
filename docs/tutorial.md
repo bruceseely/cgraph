@@ -65,14 +65,25 @@ line:
 ;                       (rcpt)→[DOG:Spot]."
 ```
 
+A string that isn't a graph is refused with a `cgraph-parse-error`, which
+says what is wrong and puts a caret under it:
+
+```lisp
+(cg:make-cgraph "[CAT]→(agnt)→[EAT")
+; Can't parse the graph: the concept [EAT has no closing ]
+;   [CAT]→(agnt)→[EAT
+;                    ^
+```
+
 Every concept and relation is checked against the catalog as the graph is
 built. `agnt` links an act to its agent, so a graph with an animal in the act's
 place is refused, with an explanation of which types would have fitted:
 
 ```lisp
 (cg:make-cgraph "[CAT]←(agnt)←[ANIMAL].")
-; error: concept-type ANIMAL is not consistent with ACT, the in-arc type
-; of the agnt relation ...
+; Can't parse the graph: While connecting #<CONCEPT ANIMAL>→#<RELATION agnt>,
+; concept-type CONCEPTUAL-GRAPHS::ANIMAL is not consistent with
+; CONCEPTUAL-GRAPHS::ACT, the in-arc type of the #<RELATION agnt> relation. ...
 ```
 
 ## Referents

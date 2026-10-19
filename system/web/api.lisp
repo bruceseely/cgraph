@@ -647,16 +647,17 @@ the way /api/type-def presents them — top and bottom excluded, case-insensitiv
 
 (defun validate-canonical-graph (string)
   "Parse STRING as a conceptual graph against the live catalog; return NIL when it
-is well-formed, else a one-line error message. Covers the three failure modes PCG
-surfaces — unknown concept type, unknown relation type, malformed syntax.
-parse-cgraph already re-signals concept-type and token errors with good text; the
-relation lookup leaks its raw condition, so it is named here. *package* must be :cg:
-reader.lisp interns bracketed type names in *package*, and the catalog is keyed :cg."
+is well-formed, else an error message. parse-cgraph reports every failure -- an
+unknown type, malformed syntax, a concept that doesn't fit its relation -- as a
+CGRAPH-PARSE-ERROR; its message alone is returned, without the copy of the string
+and the caret under it, since the person is looking at the string in the field.
+*package* must be :cg: reader.lisp interns bracketed type names in *package*, and
+the catalog is keyed :cg."
   (handler-case
       (progn (let ((*package* (find-package :conceptual-graphs)))
                (with-cg-readtable (pcg string)))
              nil)
-    (relation-type-lookup-failed () "unknown relation type in the canonical graph")
+    (cgraph-parse-error (e) (parse-error-message e))
     (error (e)
       ;; Newlines KEPT. The connection errors lay out both remedies -- "either
       ;; the relation should require a supertype ... or the concept should have

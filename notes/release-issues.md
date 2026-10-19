@@ -159,9 +159,23 @@ just the engine:
   `CHARACTERISTIC` was hitting), and `betw` has no syntax role, so the
   lexicon lint reports an error. (The back-link cause is inferred: the broken
   link went away once `CHARACTERISTIC` was defined; the code is unread.)
-- **`parse-cgraph` discards the real cause of a parse failure**: it reports
-  "Unable to parse token after: " plus whatever parsed before the failure,
-  which is empty when the first concept fails.
+- ~~**`parse-cgraph` discards the real cause of a parse failure**~~ Done
+  2026-10-19, and it was worse than this said: of 22 typical mistakes only
+  one got a message that pointed at the problem. Several came back as a
+  different graph with no error (`[CAT]→[DOG]` as `[CAT]`, a stray `]`
+  ending the graph, a bare `FOOD` reversing an arrow), some printed
+  "unhandled by linkup" and carried on, and the rest were Lisp errors (NIL is
+  not a CHARACTER, a DESTRUCTURING-BIND arity error). Now every one is a
+  `cgraph-parse-error` (system/core/parse-error.lisp) saying what is wrong,
+  with the line and a caret; `parse-error-test` holds 18 of them. Found along
+  the way: after a graph referent the concept reader skipped one more `]`,
+  eating the enclosing concept's; and LINKUP's MATCH let a pattern longer than
+  the remaining tokens match. Turned up in `cgraph-types`: LUNCH-EVENT's
+  canonical graph has a doubled `]` and had been silently cut to
+  `[LUNCH-EVENT].` Still rough: a concept whose type doesn't fit its relation
+  is found while linking, after the whole string is read, so its caret is at
+  the end; and that message prints nodes as `#<CONCEPT ANIMAL>` and types with
+  their package.
 - **Fix the `.asd` description typo** ("comceptual", `cgraph.asd:24`) and bump
   `:version` past `0.0.1` when you tag a release.
 

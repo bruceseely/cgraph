@@ -416,7 +416,8 @@ The resulting graph is added to the context (defaulting to \*context\*)
 This is the primary way to create graphs.
 
 #### `parse-cgraph (string)` → concept-node list
-Parse a conceptual graph from linear notation. 
+Parse a conceptual graph from linear notation. Signals `cgraph-parse-error` on
+a string it can't read; see [Parsing](#parsing-text--graph).
 
 ```lisp
 (parse-cgraph "[CAT: Whiskers]←(agnt)←[EAT]→(obj)→[FOOD].")
@@ -591,6 +592,24 @@ Parse a conceptual graph from linear notation.
 
 `parse-cgraph` returns the graph's nodes without adding them to a context; use
 `make-cgraph` for a graph that queries can find.
+
+#### `cgraph-parse-error` (condition)
+Signalled by `parse-cgraph`, and so by `make-cgraph` and every function that
+takes a graph string, on a string it can't read. It says what is wrong and
+shows where:
+
+```lisp
+(make-cgraph "[CAT]→[DOG]")
+; Can't parse the graph: an arrow joins two concepts, [CAT] and [DOG];
+; a relation goes between them, as in [CAT]→(rel)→[DOG]
+;   [CAT]→[DOG]
+;        ^
+```
+
+Its readers are `parse-error-message` (what is wrong), `parse-error-string`
+(the string as passed), `parse-error-position` (the index the caret marks, or
+NIL) and `parse-error-cause` (the condition underneath, when there was one,
+such as `concept-type-lookup-failed` for an unknown type).
 
 ### String Utilities
 

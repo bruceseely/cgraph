@@ -60,6 +60,8 @@
 
    ;; --- graphs
    #:make-cgraph #:parse-cgraph
+   #:cgraph-parse-error #:parse-error-string #:parse-error-position
+   #:parse-error-message #:parse-error-cause
    #:head #:graph-head #:nodes #:graph-concepts #:graph-relations
    #:concepts-of-type #:concept-count #:relation-count #:graph-p #:graphs-equal
    #:graph-referent #:graph-referent-p #:referent-concepts #:referent-relations
@@ -159,6 +161,7 @@
                                            (:file "link")
                                            (:file "context")
                                            (:file "coreference")
+                                           (:file "parse-error")
                                            (:file "graph-utils")
                                            (:file "segment")
                                            (:file "formatter")
@@ -226,6 +229,7 @@
                              (:file "format-test")
                              (:file "normalize-test")
                              (:file "parse-test")
+                             (:file "parse-error-test")
                              (:file "cache-test")
                              (:file "coreference-test")
                              (:file "negative-context-test")

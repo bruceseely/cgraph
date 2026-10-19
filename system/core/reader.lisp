@@ -8,8 +8,6 @@
   (find char '(#\space #\tab #\return #\newline) :test #'char=))
 
 
-(define-condition token-parse-error (error)
-  ((context :initarg :context :reader context)))
 
 
 ;; (defmethod compress-whitespace ((text string))
@@ -359,7 +357,8 @@
                              (equal feature "")
                              (equal feature "}")))
                 (return))))))
-      (skip-char stream #\})
+      (unless (skip-char stream #\})
+        (parse-failure nil "the set {~a has no closing }" trimmed))
       ;; `{}' -- braces with nothing between them. Still a SET, so it needs a
       ;; spec list RESOLVE-TARGET-CONCEPT will act on, but not a generic one:
       ;; the empty set is not the generic collection. This placeholder used to
@@ -533,6 +532,8 @@
          (parse-at-word word)))
       (t
        (let ((size (read-number stream)))
+         (unless size
+           (parse-failure nil "@ needs a number after it, as in @3, or a word, as in @every"))
          (consume-whitespace stream)
          (let ((units (read-string stream :end-chars referent-rt-terms)))
            (list :measure `(,size ,units))))))))
@@ -614,7 +615,7 @@
            (type-label    (cond (string-type-p stripped)
                                 (t (type-label-symbol stripped)))))
       (unless (get-concept-type type-label)
-        (error 'concept-type-lookup-failed :text type-label))
+        (error 'concept-type-lookup-failed :type type-label))
       (values type-label next-char))))
 
 (defun read-graph-referent-concept (stream type-label)
@@ -627,7 +628,9 @@
          ;; Inner concepts must NOT inherit the outer ~negation marker.
          (*context*           (make-context *context* :negated *negated-concept*))
          (*negated-concept*   nil)
-         (graph-tokens  (read-cgraph-tokens stream))
+         (graph-tokens  (multiple-value-bind (tokens ending) (read-cgraph-tokens stream)
+                          (setf *graph-referent-closed* (eq ending :bracket))
+                          tokens))
          (linked-tokens (linkup graph-tokens))
          (graph         (make-cgraph linked-tokens))
          (ctype         (get-concept-type type-label))
@@ -773,10 +776,12 @@ Use ?~a for cross-context co-reference instead."
    macro may return at most one (SBCL ignores extras; ECL signals an error)."
   (unless (char-equal initial-char #\[)
     (error "concept parse error"))
+  (setf *node-start* (let ((here (parse-stream-position))) (and here (1- here))))
   (with-readtable-mods (list (list #\: #'referent-reader)
                              (list #\] #'concept-ender))
     (let ((concept nil)
-          (*referent-contents* (list)))
+          (*referent-contents* (list))
+          (*graph-referent-closed* nil))
       (consume-whitespace stream)
       (let ((peek-next (peek-char nil stream nil nil)))
         (cond
@@ -787,24 +792,40 @@ Use ?~a for cross-context co-reference instead."
           (t
            (multiple-value-bind (type-label next-char)
                (read-concept-type-label stream)
-             (cond ((char-equal next-char #\])
+             (cond ((null next-char)
+                    (parse-failure nil "the concept [~a has no closing ]" type-label))
+                   ((char-equal next-char #\])
                     ;; Generic concept: no referent. Not cached.
                     (setf concept (make-concept type-label nil)))
                    ((skip-char stream #\:)
                     (setf concept (read-concept-with-referent stream type-label)))
                    ((skip-char stream #\+)
                     ;; Trailing '+N' node-ref marker — consume and ignore.
-                    (read-number stream)))))))
-      (skip-char stream #\])
+                    (read-number stream))
+                   (t
+                    (parse-failure nil "after the type in [~a, expected ] or :, not ~s"
+                                   type-label (string next-char))))))))
+      ;; A graph referent's reader consumes the ] that closes it, unless the
+      ;; inner graph ended with a dot. Skipping another ] after it used to eat
+      ;; the ] of the concept around this one.
+      (unless (or *graph-referent-closed* (skip-char stream #\]))
+        (parse-failure nil "~:[a concept~;the concept ~:*~a~] has no closing ]" concept))
       (when (and concept *negated-concept*)
         (setf (negated concept) t))
       concept)))
 
 
 (defun relation-reader (stream initial-char)
+  (setf *node-start* (let ((here (parse-stream-position))) (and here (1- here))))
   (when (char-equal initial-char #\()
+    (when (skip-char stream #\))
+      (parse-failure nil "() has no relation name in it"))
     (multiple-value-bind (type-string next-char) (alpha-read stream)
-      (cond ((char-equal next-char #\.))
+      (cond ((null next-char)
+             (parse-failure nil "the relation (~a has no closing )" type-string))
+            ((char-equal next-char #\.))
+            ((not (char-equal next-char #\)))
+             (parse-failure nil "the relation (~a has no closing )" type-string))
             ((char-equal next-char #\))
              (let ((relation-type (get-relation-type (string-upcase type-string))))
                (when relation-type
@@ -913,7 +934,11 @@ Use ?~a for cross-context co-reference instead."
 
 
 (defmethod read-cgraph-tokens (stream)
+  "Read the tokens of one graph from STREAM. Returns them, and how the graph
+   ended: :BRACKET at the ] closing a graph referent (which is consumed), :DOT
+   at a final dot, or :EOL at the end of the input."
   (let ((tokens (list))
+        (ending nil)
         (cg-readtable-mods (list (list #\( #'relation-reader)
                                  (list #\[ #'concept-reader)
                                  (list #\~ #'negation-reader)
@@ -933,28 +958,44 @@ Use ?~a for cross-context co-reference instead."
       (block nil
         (loop
           ;;(format t "~&--- peeking: ~s" (peek-char nil stream nil nil))
-          (let ((token (read stream nil :eol)))
-            ;;(format t "~&token: ~s~%"  token)
+          (let* ((start (ignore-errors (file-position stream)))
+                 (token (read stream nil :eol)))
+            (when (and *token-positions* start (typep token 'standard-object))
+              (setf (gethash token *token-positions*) start))
             (cond ((null token)
-                   (let ((*always-format-nodes* t))
-                     (error 'token-parse-error :context (format nil "~{~a~}" (reverse tokens)))))
+                   (parse-failure start "can't read what starts here"))
 
                   ((eq token :eol)
+                   (when *in-graph-referent*
+                     (parse-failure nil "a graph inside a concept has no closing ]"))
+                   (setf ending :eol)
                    (return))
 
                   ((and (typep token 'character) (char-equal token #\.))
+                   (setf ending :dot)
                    (return))
 
                   ;; for referent containing a graph
                   ((and (typep token 'character) (char-equal token #\]))
+                   (unless *in-graph-referent*
+                     (parse-failure start "a ] that closes nothing"))
+                   (setf ending :bracket)
                    (return))
+
+                  ;; A word outside brackets and parentheses: `agnt' for
+                  ;; `(agnt)', `FOOD' for `[FOOD]'.
+                  ((and (symbolp token) (not (keywordp token)))
+                   (parse-failure start "~a is neither a concept nor a relation: write a ~
+                                         concept type in brackets, [~:@(~a~)], and a ~
+                                         relation in parentheses, (~(~a~))"
+                                  token token token))
 
                   (token
                    (push token tokens)
                    (when (concept-p token)
                      (pushnew token *concepts-in-graph* :test #'nodes-eq))))))))
 
-    (reverse tokens)))
+    (values (reverse tokens) ending)))
 
 
 ;;; (frob-substrings s (list right-arrow-string) "->")
@@ -976,22 +1017,81 @@ Use ?~a for cross-context co-reference instead."
   ;; remove the reference number shown in debug mode
   (setf string (arrows-to-ascii (remove-ref-number string)))
   (let* ((*concepts-in-graph* (list))
+         ;; A parse started while a graph referent is being read (a type
+         ;; definition, say) is a graph of its own, not part of that one.
+         (*in-graph-referent* nil)
          (stream (make-string-input-stream string))
+         (*parse-stream* stream)
+         (*token-positions* (make-hash-table :test #'eq))
          (tokens (read-cgraph-tokens stream))
          (linked-tokens (linkup tokens)))
     linked-tokens))
 
 
+(defun original-string-position (original position)
+  "POSITION in (ARROWS-TO-ASCII ORIGINAL), as an index into ORIGINAL: each
+   arrow character there became two characters, -> or <-."
+  (when position
+    (let ((ascii 0))
+      (dotimes (index (length original) (length original))
+        (let ((width (if (member (char original index) (list right-arrow left-arrow)) 2 1)))
+          (when (> (+ ascii width) position)
+            (return index))
+          (incf ascii width))))))
+
+(defun parse-cause-message (condition)
+  "What to say about CONDITION, signalled while parsing."
+  (typecase condition
+    (concept-type-lookup-failed
+     (format nil "there is no concept type ~a" (type condition)))
+    (relation-type-lookup-failed
+     (format nil "there is no relation type ~(~a~)" (type condition)))
+    (t (princ-to-string condition))))
+
 (defun parse-cgraph (string)
-  (let (tokens )
-    (handler-case (setq tokens (cgraph-tokens string))
-      (concept-type-lookup-failed (condition-object)
-        (let ((type (type condition-object)))
-          (error "Unknown concept-type '~a' encountered while while parsing: ~a" type string )))
-      (token-parse-error (condition-object)
-        (let ((context (context condition-object)))
-          (error "Unable to parse token after: ~a~% while parsing: ~a" context string ))))
-    (remove-if #'arc-p tokens)))
+  "Parse STRING, in CG linear notation, and return its nodes, the head
+   first. Signals CGRAPH-PARSE-ERROR, which shows where, on anything it can't
+   read; the error raised underneath, if any, is its PARSE-ERROR-CAUSE."
+  (let ((position nil)
+        (*node-start* nil)
+        ;; Positions are found in the string as read, which has had its ref
+        ;; numbers removed and its arrows made ASCII. They map back onto
+        ;; STRING only when no ref number was removed.
+        (mappable (string= string (remove-ref-number string))))
+    (flet ((report (message cause)
+             (error 'cgraph-parse-error
+                    :string string
+                    :position (and mappable (original-string-position string position))
+                    :message message
+                    :cause cause)))
+      (handler-case
+          (handler-bind ((error (lambda (condition)
+                                  ;; Where the reader was when it went wrong,
+                                  ;; before unwinding moves on.
+                                  (unless (or position
+                                              (and (typep condition 'cgraph-parse-error)
+                                                   (parse-error-string condition)))
+                                    (setf position
+                                          (typecase condition
+                                            (cgraph-parse-error
+                                             (parse-error-position condition))
+                                            ;; An unknown type: point at its [ or (.
+                                            ((or concept-type-lookup-failed
+                                                 relation-type-lookup-failed)
+                                             (or *node-start* (parse-stream-position)))
+                                            (t (parse-stream-position))))))))
+            (let ((nodes (remove-if #'arc-p (cgraph-tokens string))))
+              (unless (find-if #'concept-p nodes)
+                (parse-failure 0 "there is no concept in it"))
+              nodes))
+        (cgraph-parse-error (condition)
+          ;; One that already has its string came from a parse nested in this
+          ;; one, and its position is in that string: pass it on as it is.
+          (if (parse-error-string condition)
+              (error condition)
+              (report (parse-error-message condition) (parse-error-cause condition))))
+        (error (condition)
+          (report (parse-cause-message condition) condition))))))
 
 
 (defmethod pcg ((graph string))
