@@ -44,6 +44,7 @@
 (defparameter *test-suites*
   '(set-operations-test
     type-test
+    canonical-inheritance-test
     segment-test
     variable-test
     individual-test

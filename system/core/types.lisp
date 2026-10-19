@@ -966,30 +966,117 @@
                    (values :inherited ancestors)
                    (values :none nil)))))))
 
-(defun canonical-graph-inheritance-problems (node)
-  "Relations NODE's canonical graph owes its ancestors, as a list of messages.
+(defun format-canonical-arc (arc)
+  "ARC, a plist from CANONICAL-GRAPH-ARCS, as notation relative to the head:
+   →(obj)→[FOOD] for an arc out of it, ←(agnt)←[PERSON] for one into it."
+  (if (eq (getf arc :direction) :forward)
+      (format nil "→(~a)→[~:@(~a~)]" (getf arc :relation) (getf arc :type))
+      (format nil "←(~a)←[~:@(~a~)]" (getf arc :relation) (getf arc :type))))
 
-   A subtype's canonical graph must contain every relation its ancestors'
-   graphs have -- it is a specialization of them, not a replacement. Split out
-   of CHECK-TYPE-LATTICE so ONE type can be asked at the moment it is saved,
-   which is the moment the answer can still be acted on: the whole-lattice
-   report is only read by someone who thought to run it, and a type saved with
-   an incomplete graph otherwise leaves the ontology inconsistent silently."
+(defun canonical-type-under-p (type wanted)
+  "Whether TYPE, a label, is WANTED or a subtype of it."
+  (let ((have (ignore-errors (get-concept-type type)))
+        (want (ignore-errors (get-concept-type wanted))))
+    (and have want (ignore-errors (subtype-p have want)) t)))
+
+(defun canonical-graph-inheritance-problems (node)
+  "What NODE's canonical graph owes its ancestors', as a list of messages.
+
+   A subtype's canonical graph is a restriction of its ancestors': it keeps
+   every arc they give their head, in the same direction, with the same type
+   at the far end or a narrower one. So for each such arc NODE's graph needs
+   an arc with the same relation and direction whose type is under the
+   ancestor's -- EAT may narrow INGEST's (obj)→[SUBSTANCE] to (obj)→[FOOD],
+   but not drop it, turn it round, or widen it to [ENTITY]. The ancestors are
+   the nearest ones with a canonical graph, one per branch. An ancestor that
+   names a relation twice (TIME-PERIOD's (attr) to [START-TIME] and to
+   [END-TIME]) needs each one matched. Relations deeper in an ancestor's graph
+   than its head's own arcs are checked by name only.
+
+   It matters because the graph editor's guidance stops at the nearest type
+   with a canonical graph: an arc a subtype's graph leaves out is no longer
+   asked for, for that type or any type below it.
+
+   Split out of CHECK-TYPE-LATTICE so ONE type can be asked at the moment it is
+   saved, which is the moment the answer can still be acted on: the
+   whole-lattice report is only read by someone who thought to run it, and a
+   type saved with an incomplete graph otherwise leaves the ontology
+   inconsistent silently."
   (let ((node-cg (effective-canonical-graph-string node))
         (problems nil))
     (when node-cg
-      (let ((node-relations (extract-cg-relations node-cg)))
-        (dolist (ancestor (all-ancestor-types node))
-          (let ((ancestor-cg (effective-canonical-graph-string ancestor)))
+      (let ((node-arcs      (canonical-graph-arcs node-cg))
+            (node-relations (extract-cg-relations node-cg)))
+        ;; Against the NEAREST ancestors with a canonical graph, one per
+        ;; branch, as the editor's guidance walks: those are the graphs this one
+        ;; replaces, and each of them is checked against its own in turn, so
+        ;; the ones further up are covered without being reported twice.
+        (dolist (entry (nearest-canonical-graphs node :skip-own t))
+          (let ((ancestor    (car entry))
+                (ancestor-cg (cdr entry)))
             (when ancestor-cg
-              (let ((missing (set-difference (extract-cg-relations ancestor-cg)
-                                             node-relations
-                                             :test #'string=)))
-                (when missing
-                  (push (format nil "Canonical graph of ~a is missing relation~p inherited from ~a: ~{(~a)~^, ~}"
-                                (label node) (length missing) (label ancestor) missing)
-                        problems))))))))
+              (let ((ancestor-arcs (canonical-graph-arcs ancestor-cg)))
+                ;; The head's own arcs: relation, direction and type. Not when
+                ;; NODE's graph won't parse, which would make every arc look
+                ;; missing; that is reported on its own.
+                (when node-arcs
+                  (dolist (arc ancestor-arcs)
+                    (let* ((same-way (remove-if-not
+                                      (lambda (mine)
+                                        (and (string= (getf mine :relation) (getf arc :relation))
+                                             (eq (getf mine :direction) (getf arc :direction))))
+                                      node-arcs))
+                           (turned   (and (null same-way)
+                                          (find (getf arc :relation) node-arcs
+                                                :key (lambda (mine) (getf mine :relation))
+                                                :test #'string=))))
+                      (cond
+                        (turned
+                         (push (format nil "Canonical graph of ~a has ~a where ~a's has ~a: ~
+                                            the arc runs the other way"
+                                       (label node) (format-canonical-arc turned)
+                                       (label ancestor) (format-canonical-arc arc))
+                               problems))
+                        ((null same-way)
+                         (push (format nil "Canonical graph of ~a is missing ~a, from ~a's"
+                                       (label node) (format-canonical-arc arc) (label ancestor))
+                               problems))
+                        ((notany (lambda (mine)
+                                   (canonical-type-under-p (getf mine :type) (getf arc :type)))
+                                 same-way)
+                         (push (format nil "Canonical graph of ~a has ~{~a~^ and ~} where ~a's has ~
+                                            ~a: ~:@(~a~) or a kind of it is needed there"
+                                       (label node) (mapcar #'format-canonical-arc same-way)
+                                       (label ancestor) (format-canonical-arc arc)
+                                       (getf arc :type))
+                               problems))))))
+                ;; Relations deeper in the ancestor's graph: by name.
+                (let ((missing (set-difference
+                                (set-difference (extract-cg-relations ancestor-cg)
+                                                (mapcar (lambda (arc) (getf arc :relation))
+                                                        ancestor-arcs)
+                                                :test #'string=)
+                                node-relations
+                                :test #'string=)))
+                  (when missing
+                    (push (format nil "Canonical graph of ~a is missing relation~p inherited from ~a: ~
+                                       ~{(~a)~^, ~}"
+                                  (label node) (length missing) (label ancestor) missing)
+                          problems)))))))))
     (nreverse problems)))
+
+(defun canonical-graph-build-problem (node)
+  "A message when NODE's own canonical graph doesn't build -- a syntax error,
+   or a concept its relation doesn't allow -- else NIL."
+  (let ((cg (effective-canonical-graph-string node)))
+    (when (and cg (plusp (length (string-trim " " cg))))
+      (handler-case (let ((*package* (find-package "CONCEPTUAL-GRAPHS")))
+                      (parse-cgraph cg)
+                      nil)
+        (cgraph-parse-error (condition)
+          (format nil "Canonical graph of ~a doesn't build: ~a"
+                  (label node) (substitute #\Space #\Newline
+                                           (parse-error-message condition))))))))
 
 (defun extract-cg-type-names (cg-string)
   "Return a list of uppercase type-name strings found inside [...] brackets in CG-STRING.
@@ -1125,6 +1212,17 @@
                            (eq node *concept-type-bottom*))
                  (setf problems
                        (append (canonical-graph-inheritance-problems node) problems))))
+             *concept-type-catalog*)
+
+    ;; Check that each canonical graph builds: it parses, and every concept fits
+    ;; its relation. A graph that doesn't shows as an error in the type browser
+    ;; and gives the editor no guidance.
+    (maphash (lambda (key node)
+               (declare (ignore key))
+               (unless (or (eq node *concept-type-top*)
+                           (eq node *concept-type-bottom*))
+                 (let ((problem (canonical-graph-build-problem node)))
+                   (when problem (push problem problems)))))
              *concept-type-catalog*)
 
     ;; Check that all concept types and relations referenced in canonical graph strings are defined

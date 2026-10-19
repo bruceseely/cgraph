@@ -732,12 +732,17 @@ use. Two details are load-bearing:
 An unknown or misspelled name is not refused. It can only fail to turn the
 flag on, and the guidance is then exactly what an ordinary session shows.
 
-What this does **not** yet do: check that the restatement is complete. Nothing
-verifies that a child's graph carries the arcs its parent asks for, and because
-the walk stops at the first hit, a dropped arc silently weakens the constraint
-for the whole subtree — DRIVE without `dest` would make a destinationless drive
-canonical for DRIVE and everything under it. The guidance is now computed at
-the moment that could be caught; the warning is not written.
+Because the walk stops at the first hit, a dropped arc silently weakens the
+constraint for the whole subtree — DRIVE without `dest` would make a
+destinationless drive canonical for DRIVE and everything under it. That is
+checked: `canonical-graph-inheritance-problems` (types.lisp), run by
+`check-type-lattice` and by the type browser when a type is saved, compared
+relation *names* from 2026-08-31, and since 2026-10-19 checks each arc of the
+nearest ancestors' heads by relation, direction and type, so a child may narrow
+an arc but not drop, reverse or widen it (`canonical-inheritance-test`). This
+paragraph said for seven weeks after the name check existed that nothing
+verified it, which is how a question about EAT and INGEST was first answered
+wrongly.
 
 ### Union within a graph, intersection across graphs
 

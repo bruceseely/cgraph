@@ -217,6 +217,7 @@
                              (:file "graphs-for-testing")
                              (:file "set-operations-test")
                              (:file "type-test")
+                             (:file "canonical-inheritance-test")
                              (:file "linkup-test")
                              (:file "segment-test")
                              (:file "variable-test")
