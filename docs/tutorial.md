@@ -1,169 +1,218 @@
-## Tutorial
+# Tutorial
 
-The idea here is to provide some examples that demonstrate the functionality.
+A first session with CGraph. Every example below runs as written, from any
+package, on the shipped default types, and shows its real result. If you
+haven't installed CGraph yet, see [setup](setup.md).
 
-### Setup
-
-Read the `cgraph/notes/setup.md` note for assistance in setting up CGraph.
-
-### Types
-
-list of all concept-type names (symbols):  `(all-concept-types)`
-list of all relation-type names (symbols):  `(all-relation-types)`
-
-summary of concept-types:  `(print-concept-types)`
-summary of relation-types:  `(print-relation-types)`
-
-(get-concept-type 'girl) - returns a concept-type-object 
-The argument can be a string, symbol, or a concept-type object.
-(The function accepts a concept-type object so there is no need to test its argument to see if it is already a concept-type-object)
-
-`(eq (get-concept-type "girl") (get-concept-type 'girl))`   ==> T
-`(eq (get-concept-type (get-concept-type 'girl))  (get-concept-type 'girl))` ==> T
-
-- Case doesn't matter. I represent concept-types in uppercase and relation-types in lowercase because I think it's easier to read. 
-
-### Some handy functions
-
-##### pcg(*arg*)  is a shortcut for
-
-- `(print-cgraph graph)`  returning a *string*
-- `(parse-cgraph string)`  returning a linked list of concepts  in the graph
-
-​	It is here just to make it easier to type concepts and relations into the REPL
-
-​	`(pcg "[dog: Spot]←(agnt)←[eat]→(obj)→[pie].")` ==> 
-​		`(#<CONCEPT DOG> #<CONCEPT EAT> #<CONCEPT PIE>)`
-
-##### make-cgraph (*string  &optional context*) - returns a graph object
-
-​	`(make-cgraph "[dog: Spot]←(agnt)←[eat]→(obj)→[pie].")` ==>
-​		`#<GRAPH [DOG:Spot]←(agnt)←[EAT]→(obj)→[PIE].>`
-
-​	make-cgraph can also be called on a list of connected nodes:
-​		`(make-cgraph (pcg "[dog: Spot]←(agnt)←[eat]→(obj)→[pie].")))`
-​	or just a graph node: 
-​		`(make-cgraph  (car (pcg "[dog: Spot]←(agnt)←[eat]→(obj)→[pie].")))`
-
-make-cgraph adds the created graph to the \*context\*.
-
-### concepts
-
-#### referents
-
-Most of the referent markers that Sowa describes are available. For more information, look at the code in the file `cgraph/test/referent-test.lisp` for examples
-One difference is the way individuals are handled. Sowa refers just to an individual marker. CGraph has an Individual class. the referent markers, like a name, are properties of the individual-object of the referent. For more information, see the file `cgraph/notes/individuals.md`  Individual-objects are not part of CGraph in the sense that they don't affect the processing of graphs. In a sense, they are a connection to a host system that is using CGraph, providing a tie in to the objects of that system, maybe as mixins. There is a special variable that determines whether CGraph is permitted to create Individual-objects. The intent is to allow the host system to have exclusive control over the objects. However for activities like testing, CGraph needs to be able to create individual-objects.
-
-`*ALLOW-DYNAMIC-INDIVIDUAL-CREATION*`   whether CGraph is permitted to create Individual-objects
-
-- graphs are first-class objects:
-  (setq g1 (make-cgraph "[GIRL]←(agnt)←[EAT]→(manr)→[fast]"))
-  (pcg g1)
-  "[GIRL]←(agnt)←[EAT]→(manr)→[FAST]."
-
-- how graphs behave in the REPL
-
-  - combining two graphs with `combine-conceptual-graphs`
-
-    
-
-    `````lisp
-    CG> (pcg "[GIRL]←(agnt)←[EAT]→(manr)→[fast]")
-    ([GIRL] [EAT] [FAST])
-    CG> (make-cgraph "[PERSON: Sue]←(agnt)←[EAT]→(obj)→[PIE]")
-    #<GRAPH [PERSON:Sue]←(agnt)←[EAT]→(obj)→[PIE].>
-    CG> (combine-conceptual-graphs * **)
-    #<GRAPH [GIRL:Sue]←(agnt)←[EAT]-(manr)→[FAST](obj)→[PIE].>
-    CG> (pcg *)
-    "[GIRL: Sue]←(agnt)←[EAT]-
-                        (manr)→[FAST]
-                        (obj)→[PIE]."
-    `````
-
-  - combining multiple graphs
-
-
-```Lisp
-CG> (initialize-context *context*)
-NIL
-CG> (make-cgraph "[person: Jim]→(poss)→[car]")
-[PERSON: Jim]→(poss)→[CAR].
-CG> (combine-cgraphs (list "[PERSON: Dave]←(agnt)←[DRIVE]"
-                       "[person: Sue]←(agnt)←[eat]→(obj)→[pie]"
-                       "[CHEVY]→(attr)→[OLD]"
-                       "[PERSON: Dave]→(poss)→[CHEVY]"
-                       "[DRIVE]→(inst)→[CHEVY]"
-                       "[dog: Spot]→(attr)→[fast]"
-                       "[CITY: Baltimore]←(dest)<-[DRIVE]"
-                       "[PERSON: Dave]→(attr)→[YOUNG]"
-                       "[girl]←(agnt)←[eat]→(manr)→[quickly]"
-                       "[dog: Spot]→(poss)→[cake]"))
-([CHEVY]-
-   (attr)→[OLD]
-   (inst)←[DRIVE]-
-              (agnt)→[PERSON: Dave *x]→(attr)→[YOUNG]
-              (dest)→[CITY: Baltimore],
-   (poss)←[PERSON: Dave *x].
- [GIRL: Sue]←(agnt)←[EAT]-
-                    (manr)→[QUICKLY]
-                    (obj)→[PIE].
- [DOG: Spot]-
-       (attr)→[FAST]
-       (poss)→[CAKE].)
-CG> (graphs *context*)
-([CHEVY]-
-   (attr)→[OLD]
-   (inst)←[DRIVE]-
-              (agnt)→[PERSON: Dave *x]→(attr)→[YOUNG]
-              (dest)→[CITY: Baltimore],
-   (poss)←[PERSON: Dave *x].
- [GIRL: Sue]←(agnt)←[EAT]-
-                    (manr)→[QUICKLY]
-                    (obj)→[PIE].
- [DOG: Spot]-
-       (attr)→[FAST]
-       (poss)→[CAKE].
- [PERSON: Jim]→(poss)→[CAR].)
-CG> 
+```lisp
+(ql:quickload "cgraph")
+(cg:init)
 ```
 
+## Types
 
+A conceptual graph is built from typed concepts and relations, so a session
+starts with a type catalog. The shipped one is small -- about 90 concept
+types and 20 relation types -- and is meant to be replaced by your own (see
+[type sets](setup.md#type-sets)).
 
-### Some settings
+```lisp
+(length (cg:all-concept-types))           ; → 89
+(cg:get-concept-type 'cat)                ; → CAT, a concept-type object
+```
 
-`*ALWAYS-FORMAT-NODES*`
-When nil, concepts and relations are displayed as non-printable objects.
-When non-nil, they are formatted, as they appear in graphs.
+A type can be named by a symbol, a keyword or a string, in any case, from any
+package; they all find the same object:
 
-`*ALWAYS-SHOW-INDIVIDUAL-ID*` 
-Each individual has a unique id. It is displayed in a concept-referent when there is a need to distinguish one referent from another because they look the same otherwise, but it is frequently not displayed. Tho force it to be displayed set to non-nil.
+```lisp
+(eq (cg:get-concept-type "cat") (cg:get-concept-type :cat))   ; → T
+```
 
-`*ALWAYS-SHOW-NODE-REF*`
-Each concept and relation node has a unique reference id that is not typically displayed.  However sometimes two concepts look the same but may not be the same concept. To force display of the ref id, set  to non nil.
+The types form a lattice, not a tree: a type may have several supertypes,
+everything is below the top type ⊤, and everything is above the bottom type ⊥.
 
-On startup, any forms in the file `cgraph/system/setup/initializations.lisp` are evaluated. That is the best place for setting these variables automatically.
+```lisp
+(cg:direct-supertypes 'cat)               ; → (ANIMAL)
+(cg:direct-subtypes 'animal)              ; → (DOG CAT)
+(cg:subtype-p 'cat 'animal)               ; → T
+(cg:subtype-p 'car 'animal)               ; → NIL
+(cg:minimal-common-supertype 'cat 'car)   ; → PHYSICAL
+```
 
+`(cg:print-concept-types)` prints the whole lattice, and the
+[type browser](type-browser.md) draws it.
 
+## Graphs
 
-### Concept type browser
+Graphs are written in CG linear notation: concepts in square brackets,
+relations in parentheses, arrows between them. `make-cgraph` parses a string
+into a graph:
 
-It is assumed that the user will provide definitions for concept-types and relation-types that are consistent with the domain of their system.  The setup note describes how type definitions are accessed.  A web-based concept-type browser is provided to help in process of defining concept definitions. 
+```lisp
+(cg:make-cgraph "[person: Sue]←(agnt)←[give]-(obj)→[cake] (rcpt)→[dog: Spot].")
+; → #<GRAPH [PERSON:Sue]←(agnt)←[GIVE]-(obj)→[CAKE](rcpt)→[DOG:Spot].>
+```
 
+The `-` after `[give]` says that more than one relation hangs off that
+concept; each one follows. `format-cgraph` lays a graph out, one branch per
+line:
 
+```lisp
+(cg:format-cgraph
+ (cg:make-cgraph "[PERSON: Sue]←(agnt)←[GIVE]-(obj)→[CAKE] (rcpt)→[DOG: Spot]."))
+; → "[PERSON:Sue]←(agnt)←[GIVE]-
+;                       (obj)→[CAKE]
+;                       (rcpt)→[DOG:Spot]."
+```
 
-#### Emacs
+Every concept and relation is checked against the catalog as the graph is
+built. `agnt` links an act to its agent, so a graph with an animal in the act's
+place is refused, with an explanation of which types would have fitted:
 
-keybindings
+```lisp
+(cg:make-cgraph "[CAT]←(agnt)←[ANIMAL].")
+; error: concept-type ANIMAL is not consistent with ACT, the in-arc type
+; of the agnt relation ...
+```
 
-| **Key** | **Description**                                              |
-| ------- | ------------------------------------------------------------ |
-| C-M-‘   | normalize graph string; upcase concept-types, downcase relation-types |
-| C-c t   | insert concept-type -top symbol, ⊤                           |
-| C-c b   | insert concept-type-bottom symbol, ⊥                         |
+## Referents
 
-typing <- followed by space or punctuation automatically converts to ←.
-typing -> followed by space or punctuation automatically converts to →.
+What follows the colon in a concept is its referent: which thing, or how many.
 
+| Concept | Means |
+|---------|-------|
+| `[CAT]` | a cat |
+| `[CAT: Tom]` | the cat named Tom |
+| `[CAT: #]` | the cat (a specific one, not named) |
+| `[DOG: {Fido, Spot}]` | the dogs Fido and Spot |
+| `[CAT: {*} @3]` | three cats |
+| `[PROPOSITION: [DOG: Spot]←(agnt)←[EAT]]` | the proposition that Spot eats |
 
+A graph can sit inside a concept as its referent, which is how CGraph says
+what someone believes, says or knows. [Referents](referents.md) catalogs
+every form the reader accepts, including coreference (`*x`, `?x`) and
+measures. A named thing is an *individual*, an object of its own that every
+concept naming it shares; see [individuals](individuals.md).
 
-There is an API document and a readme document  in the cgraph directory.
+## English
+
+`graph-to-text` says a graph in English:
+
+```lisp
+(cg:graph-to-text
+ (cg:make-cgraph "[PERSON: Sue]←(agnt)←[GIVE]-(obj)→[CAKE] (rcpt)→[DOG: Spot]."))
+; → "Sue gives a cake to Spot."
+
+(cg:graph-to-text (cg:make-cgraph "[CAT: {*} @3]←(agnt)←[EAT]→(obj)→[FOOD]."))
+; → "Three cats eat food."
+
+(cg:graph-to-text (cg:make-cgraph "[CAT: #]←(agnt)←[EAT]→(obj)→[FOOD]."))
+; → "The cat eats food."
+
+(cg:graph-to-text
+ (cg:make-cgraph "[PERSON: Sue]←(agnt)←[INFORM]-(rcpt)→[PERSON: Dave]
+                    (thme)→[PROPOSITION: [DOG: Spot]←(agnt)←[EAT]→(obj)→[CAKE]]."))
+; → "Sue informs Dave that Spot eats a cake."
+```
+
+The words come from the type names and the lattice: a type under `ACT` is a
+verb, one under `ENTITY` a noun. Where that guesses wrong, a
+[lexicon override](lexicon-overrides.md) says otherwise.
+[Generation](generation.md) is a tour of everything the generator produces.
+
+## A knowledge base
+
+`cg:init` makes an empty context, `*context*`, and every graph `make-cgraph`
+builds is added to it. `query` finds the graphs that match a pattern, binding
+the pattern's variables:
+
+```lisp
+(cg:init)                                   ; start with an empty context
+(cg:make-cgraph "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
+(cg:make-cgraph "[DOG: Spike]←(agnt)←[EAT]→(obj)→[CAKE].")
+(cg:make-cgraph "[PERSON: Dave]←(agnt)←[DRIVE]→(obj)→[CAR].")
+
+(cg:format-query-results (cg:query "[ANIMAL: *x]←(agnt)←[EAT]" cg:*context*))
+; 2 matches found:
+;   Graph: [CAT:Tom]←(agnt)←[EAT]→(obj)→[FOOD].
+;     X = [CAT:Tom]
+;   Graph: [DOG:Spike]←(agnt)←[EAT]→(obj)→[CAKE].
+;     X = [DOG:Spike]
+
+(cg:format-query-results (cg:query "[PERSON: *x]←(agnt)←[ACT: *y]" cg:*context*))
+; 1 match found:
+;   Graph: [PERSON:Dave]←(agnt)←[DRIVE]→(obj)→[CAR].
+;     Y = [DRIVE]
+;     X = [PERSON:Dave]
+
+(cg:graphs-to-text (cg:graphs cg:*context*))
+; → "Tom eats food. Spike eats a cake. Dave drives a car."
+```
+
+`[ANIMAL: *x]` matches a cat and a dog because both types are below `ANIMAL`;
+`[ACT: *y]` matches `DRIVE` the same way. Calling `(cg:init)` again empties the
+context and keeps the types.
+
+## Operations
+
+Sowa's operations on graphs. Each takes graphs or strings.
+
+**Projection** asks whether one graph is a more general version of another --
+whether the first can be mapped onto the second, each concept onto one of
+the same type or a subtype:
+
+```lisp
+(cg:projection-p "[ANIMAL]←(agnt)←[EAT]." "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
+; → T
+(cg:projection-p "[DOG]←(agnt)←[EAT]." "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
+; → NIL
+(cg:format-projection-mapping
+ (cg:project "[ANIMAL]←(agnt)←[EAT]." "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD]."))
+; → "{[EAT] -> [EAT], [ANIMAL] -> [CAT:Tom]}"
+```
+
+**Maximal join** merges two graphs on the largest part they share:
+
+```lisp
+(cg:format-cgraph (cg:maximal-join "[CAT: Tom]←(agnt)←[EAT]" "[EAT]→(obj)→[FOOD]"))
+; → "[CAT:Tom]←(agnt)←[EAT]→(obj)→[FOOD]."
+```
+
+**Combining** merges two graphs that describe the same situation, specializing
+where one is more general -- here a cat becomes Tom:
+
+```lisp
+(cg:graph-to-text
+ (cg:combine-conceptual-graphs (cg:make-cgraph "[CAT]←(agnt)←[EAT]→(manr)→[QUICKLY].")
+                               (cg:make-cgraph "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")))
+; → "Tom eats food quickly."
+```
+
+**Type definitions** give a type a defining graph, which `expand-type`
+substitutes for it:
+
+```lisp
+(cg:define-concept-type :label 'pet-owner :supertypes '(person)
+                        :definition "[PERSON: *lambda]→(poss)→[ANIMAL]")
+(cg:format-cgraph (cg:expand-type (cg:graph-head (cg:make-cgraph "[PET-OWNER: Sue]."))))
+; → "[PERSON:Sue]→(poss)→[ANIMAL]."
+```
+
+## Settings
+
+These are variables in the `:cg` package. Set them in
+[`~/.cgraph/initializations.lisp`](setup.md#initializationslisp) to have them
+in every session.
+
+| Variable | When true |
+|----------|-----------|
+| `*always-show-individual-id*` | every named concept shows its individual's id, not only when two would otherwise look the same |
+| `*always-show-node-ref*` | every concept and relation shows its node reference, to tell apart nodes that print alike |
+| `*always-format-nodes*` | concepts and relations print as notation, not as `#<CONCEPT CAT>` |
+| `*allow-dynamic-individual-creation*` | (default) a name in a graph creates its individual; turn it off if your own program owns the individuals |
+
+## Next
+
+- [API.md](../API.md) -- every exported function
+- [The type browser](type-browser.md) -- `(cg:init :web t)`
+- [Emacs](emacs.md) -- editing CG notation in Emacs

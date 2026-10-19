@@ -135,9 +135,13 @@ just the engine:
   CoGITaNT, Amine, and CGIF / ISO 24707 Common Logic. CG people will ask about
   interchange formats immediately; CGIF import/export would be the most
   valuable single feature for adoption.
-- **Separate user docs from design journals.** `notes/` mixes them. Move the
-  user-facing pieces (tutorial, setup, individuals) into `docs/` and leave the
-  journals in `notes/`.
+- ~~**Separate user docs from design journals.**~~ Done 2026-10-19: `docs/`
+  holds setup, the tutorial, referents, individuals, generation, the lexicon
+  overrides and tables, the type browser and Emacs, with an index;
+  `notes/` keeps the design notes and journals. The tutorial, setup and
+  type-browser pages were rewritten (every tutorial example runs on the
+  shipped types). Still missing: a user guide for the graph editor, and
+  `cg-utils.el` needs `clopt`, which isn't in the repository.
 - ~~**README and `API.md` examples didn't run.**~~ Fixed 2026-10-14: every
   example now runs as written from a fresh setup. The README's graphs had
   their `agnt` arrows backwards; both files used `BONE`, `WALK` and `PET`,

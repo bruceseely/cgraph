@@ -1,4 +1,4 @@
-## Individuals
+# Individuals
 
 Sowa uses an individual-id to indicate the presence of an individual. The referent contains text indicating the characteristics of the referent. CGraph uses an Individual class. The characteristics of the individual are in the Individual object. This allows these features
 
@@ -13,7 +13,7 @@ The *id* is globally unique among individuals. The *type* is a concept-type, as 
 
 #### Ids
 
-Ids are integers. A variable keeps track of the maximum used value. A function is provided to update the variable and return the value. The id slot can be
+Ids are integers. `make-individual` takes the next unused one, or the one you give it with `:id`; `(cg:init)` starts the numbering over.
 
 #### Properties
 
@@ -34,10 +34,10 @@ Sowa introduces the use of shortcuts in the referent that express characters abo
   a generic set of four dogs - [DOG: {\*} @4] or  [DOG: {} @4]
   a partially generic set of four dogs - [DOG: {Spot, \*} @4]
 
-CGraph represents properties as a Lisp property-list, with keys :name :set and :mean
+CGraph represents properties as a Lisp property list, with the keys `:name`, `:set` and `:measure`.
 
 Spaces in the referent section are (or at least should be) insignificant.
-The referent-test.lisp file, in the test subdirectory is a good place to see what variants are handled.
+[Referents](referents.md) catalogs every form the reader accepts; `test/referent-test.lisp` exercises them.
 
 
 

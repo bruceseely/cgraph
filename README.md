@@ -55,7 +55,8 @@ CGraph implements Sowa's core operations:
 ### Visualization
 
 Export concept type hierarchies to Graphviz DOT format for rendering as diagrams.
-View concept-type hierarchy and canonical graphs in a web browser
+View the concept-type hierarchy and canonical graphs in a web browser:
+see [the type browser](docs/type-browser.md).
 
 ## Requirements
 
@@ -108,7 +109,8 @@ Basic usage:
 ; → "{[EAT] -> [EAT], [ANIMAL] -> [CAT:Tom]}"
 ```
 
-See [API.md](API.md) for the full reference.
+The [tutorial](docs/tutorial.md) goes further, and [API.md](API.md) is the
+full reference; [docs/](docs/README.md) lists the rest.
 
 ### Running the tests
 
@@ -137,6 +139,8 @@ CGraph includes Emacs support in the `emacs/` directory:
   "<-" followed by "[", "(", or space is replaced by "←"
 - **SLIME bridge** — Evaluate CG expressions directly from Emacs buffers
 
+See [docs/emacs.md](docs/emacs.md).
+
 ## Project Structure
 
 ```
@@ -151,6 +155,8 @@ system/
   web/          Web type browser (the cgraph-web system)
   editor/       Web graph editor (the cgraph-editor system)
 default-types/  Predefined concept and relation type definitions
+docs/           User documentation
+notes/          Design notes and working journals
 emacs/          Emacs major mode and SLIME integration
 test/           Test suite (run with test/run-tests.sh)
 ```

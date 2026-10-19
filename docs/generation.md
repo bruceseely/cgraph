@@ -9,9 +9,9 @@ The basic call is `(graph-to-text (make-cgraph "<CGIF string>"))`. The
 graph carries its head (the bracketed concept the parser entered first),
 which matters for the head-driven passive transformation in §5.
 
-For internals — dispatch order, file split, lexicon-override slot list,
-where to extend — see `memory/project_generation_architecture.md`. For
-deferred work, see `notes/graph-to-text-todo.md`.
+For the override slots, see [lexicon overrides](lexicon-overrides.md); for
+which tables to touch when adding a type, [generation tables](generation-tables.md).
+For deferred work, see `notes/graph-to-text-todo.md`.
 
 ## 1. Noun phrases
 
@@ -535,9 +535,9 @@ only bad output can set it honestly.
 
 ## 18. Where to look next
 
-- **Architecture**: `memory/project_generation_architecture.md` — file
-  split, dispatch order, extension-point rationale, anaphora toggle,
-  customize-sync gotcha.
+- **Extending it**: [lexicon overrides](lexicon-overrides.md) and
+  [generation tables](generation-tables.md); the files themselves are
+  `system/generation/`, listed in order in `cgraph.asd`.
 - **Sowa rules**: `notes/graph-to-text-rules.text` — the six rules the
   realizer is built around.
 - **Tests**: `test/generation-test.lisp` — every example above is a
