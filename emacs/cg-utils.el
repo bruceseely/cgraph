@@ -269,7 +269,10 @@ and a relation type share the same name."
 ;;;
 ;;; The sync machinery is system-agnostic and lives in clopt.el, in
 ;;; ~/repo/elisp-extensions (on load-path from dot-emacs) rather than here, so
-;;; that other Lisp systems can use it without depending on cgraph.  This file
+;;; that other Lisp systems can use it without depending on cgraph.  clopt
+;;; isn't distributed with cgraph, so it is optional: without it the options
+;;; below are not defined, the two sync commands do nothing, and the rest of
+;;; this file works as usual.  This file
 ;;; only declares cgraph's own options.  To add one, write a single
 ;;; clopt-defcustom form below -- the Emacs/CL symbol pairing is registered
 ;;; from the form itself, so there is no second list to keep in step.
@@ -278,7 +281,10 @@ and a relation type share the same name."
 ;;; DEFVARs in initializations.lisp, and cgraph runs unchanged with no Emacs
 ;;; and no SLIME.
 
-(require 'clopt)
+(unless (require 'clopt nil t)
+  (defmacro clopt-defcustom (&rest _args)
+    "Stand-in for clopt's, which isn't installed: define nothing."
+    nil))
 
 (defgroup cgraph nil
   "Options for the CGraph conceptual graphs system."
@@ -393,12 +399,15 @@ server that is already running."
 (defun cgraph-read-options-from-cl ()
   "Reconcile cgraph's options with the connected Lisp.  See `clopt-read-from-cl'."
   (interactive)
-  (clopt-read-from-cl 'cgraph))
+  (when (featurep 'clopt)
+    (clopt-read-from-cl 'cgraph)))
 
 (defun cgraph-sync-options-to-cl ()
   "Push all Emacs cgraph option values to CL, overriding initializations.lisp."
   (interactive)
-  (clopt-sync-to-cl 'cgraph))
+  (if (featurep 'clopt)
+      (clopt-sync-to-cl 'cgraph)
+    (message "cgraph options need clopt.el, which isn't installed")))
 
 
 (add-hook 'slime-connected-hook #'cgraph-read-options-from-cl)

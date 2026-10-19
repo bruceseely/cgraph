@@ -155,8 +155,9 @@ just the engine:
   `notes/` keeps the design notes and journals. The tutorial, setup and
   type-browser pages were rewritten (every tutorial example runs on the
   shipped types). `docs/graph-editor.md`, a user guide for the graph editor,
-  followed the same day. Still missing: `cg-utils.el` needs `clopt`, which
-  isn't in the repository.
+  followed the same day. `cg-utils.el` used to fail to load without `clopt`,
+  which isn't in the repository; since 2026-10-19 it loads without it, minus
+  the Customize options (packaging `clopt` on its own is the later fix).
 - ~~**README and `API.md` examples didn't run.**~~ Fixed 2026-10-14: every
   example now runs as written from a fresh setup. The README's graphs had
   their `agnt` arrows backwards; both files used `BONE`, `WALK` and `PET`,

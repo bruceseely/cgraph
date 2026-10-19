@@ -4,16 +4,16 @@ CGraph runs without Emacs. With Emacs and SLIME, the files in `emacs/` add
 editing aids for CG linear notation. They talk to the running Lisp through
 SLIME, so most of them need a connected REPL with cgraph loaded.
 
-**Status:** these files are written for the author's own Emacs setup.
-`cg-utils.el` does `(require 'clopt)`, a Customize-to-Lisp option sync that is
-not yet part of this repository, so loading it elsewhere fails at that line.
-Until that is fixed, the other files can be loaded on their own.
+The Customize options in `cg-utils.el` need `clopt.el`, a Customize-to-Lisp
+option sync that isn't part of this repository yet. Without it, `cg-utils.el`
+still loads and its commands and keys work; only the `cgraph` Customize
+options are missing, and `cgraph-sync-options-to-cl` says so.
 
 ## Files
 
 | File | What it is |
 |------|------------|
-| `cg-utils.el` | the commands and keybindings below, and Customize options (`M-x customize-group RET cgraph`) mirrored from the Lisp side |
+| `cg-utils.el` | the commands and keybindings below, and, with `clopt.el`, Customize options (`M-x customize-group RET cgraph`) mirrored from the Lisp side |
 | `cg-mode.el` | a major mode for CG notation: highlighting, indentation, bracket matching |
 | `cg-indent.el` | indentation and graph formatting, used by `cg-mode` |
 | `graphviz-dot-mode.el` | a mode for the `.dot` files that `graph-concept-types` and `display-graph` write |
