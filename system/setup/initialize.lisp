@@ -247,7 +247,13 @@
 (defun load-support-tools ()
   "Load cgraph/support -- SUP:RAPROPOS and friends. A secondary system, so the
    main one needn't depend on cl-ppcre. They are a convenience, never a
-   prerequisite -- a missing dependency must not abort setup."
+   prerequisite -- a missing dependency must not abort setup. When a dependency
+   isn't installed (a fresh Quicklisp has no cl-ppcre) they are skipped
+   quietly: INIT fetches nothing, and a new user needn't hear about tools they
+   didn't ask for. (ql:quickload \"cgraph/support\") fetches and loads them."
+  (unless (every (lambda (dependency) (asdf:find-system dependency nil))
+                 (asdf:system-depends-on (asdf:find-system "cgraph/support")))
+    (return-from load-support-tools nil))
   (handler-case (asdf:load-system "cgraph/support")
     (error (condition)
       (format t "~&;; cgraph/support not loaded (SUP:RAPROPOS unavailable): ~a~%"

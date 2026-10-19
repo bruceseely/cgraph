@@ -4,6 +4,36 @@
 
 A Common Lisp implementation of John Sowa's **Conceptual Graphs** — a knowledge representation formalism based on semantic networks and first-order logic.
 
+## Quick start
+
+From a shell, with [SBCL](https://www.sbcl.org/) installed (`brew install
+sbcl`, or your package manager; a recent version). Skip the Quicklisp step
+if you already have it:
+
+```sh
+curl -O https://beta.quicklisp.org/quicklisp.lisp
+sbcl --non-interactive --load quicklisp.lisp \
+     --eval '(quicklisp-quickstart:install)' \
+     --eval '(ql-util:without-prompting (ql:add-to-init-file))'
+git clone https://github.com/bruceseely/cgraph.git ~/quicklisp/local-projects/cgraph
+sbcl
+```
+
+Then, at the SBCL prompt:
+
+```lisp
+(ql:quickload "cgraph")
+(cg:init)
+(cg:graph-to-text (cg:make-cgraph "[DOG: Spike]<-(agnt)<-[EAT]->(obj)->[FOOD]."))
+; → "Spike eats food."
+(cg:format-cgraph (cg:make-cgraph "[DOG: Spike]<-(agnt)<-[EAT]->(obj)->[FOOD]."))
+; → "[DOG:Spike]←(agnt)←[EAT]→(obj)→[FOOD]."
+```
+
+`<-` and `->` can be typed for `←` and `→`. No editor is needed; Emacs and
+SLIME are optional (see [Emacs integration](#emacs-integration)). The
+[tutorial](docs/tutorial.md) starts from here.
+
 ## What It Does
 
 CGraph lets you represent knowledge as typed, labeled graphs and reason over them using Sowa's formal operations. If you need a system for:
@@ -70,8 +100,9 @@ both started by `(cg:init :web t)`.
 
 ## Getting Started
 
-Clone the repository somewhere ASDF can find it, such as
-`~/quicklisp/local-projects/`, then load it and start a session:
+The [quick start](#quick-start) clones cgraph into
+`~/quicklisp/local-projects/`; anywhere ASDF can find it will do. A session
+starts with:
 
 ```lisp
 (ql:quickload "cgraph")

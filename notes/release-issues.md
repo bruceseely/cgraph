@@ -138,9 +138,13 @@ just the engine:
 
 ## 6. Documentation for strangers
 
-- **Open the README with one runnable copy-paste session** that works on a
-  fresh machine with Quicklisp. Emacs and SLIME are listed under Requirements,
-  which will put off non-Emacs users; mark them optional.
+- ~~**Open the README with one runnable copy-paste session**~~ Done
+  2026-10-19: a quick start from a shell with only SBCL -- install
+  Quicklisp, clone, load, `cg:init`, two graphs -- run as written in an empty
+  HOME. Emacs and SLIME were already marked optional. The run found that
+  `cg:init` on a fresh Quicklisp printed "cgraph/support not loaded ...
+  CL-PPCRE not found"; the REPL tools are now skipped quietly when their
+  dependencies aren't installed.
 - **Add a "what this is not, and how it compares" paragraph** covering
   CoGITaNT, Amine, and CGIF / ISO 24707 Common Logic. CG people will ask about
   interchange formats immediately; CGIF import/export would be the most
