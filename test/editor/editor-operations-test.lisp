@@ -255,12 +255,18 @@
    `Referent #7 is already named \"Baltimore\"', two suites away from its
    cause and only in one running order. GENERATION-TEST has always begun this
    way, by way of RESET-CGRAPH; this is the same courtesy, and the narrower
-   call because the types do not need reloading."
+   call because the types do not need reloading.
+
+   Binds *CONCISE* to NIL: the expected strings are written with a space
+   after the colon, `[DOG: {*}]', which is how *CONCISE* NIL formats them, and
+   the default is T. They passed only where ~/.cgraph/initializations.lisp
+   happened to set it to NIL."
   (initialize-individuals)
-  (let ((results (list (cons "editor-operations-test"
-                             (editor-operations-test verbose))
-                       (cons "referent-view-test"
-                             (referent-view-test verbose)))))
+  (let* ((*concise* nil)
+         (results (list (cons "editor-operations-test"
+                              (editor-operations-test verbose))
+                        (cons "referent-view-test"
+                              (referent-view-test verbose)))))
     (dolist (r results)
       (format t "~&-=- ~a~34t~:[failed <<<~;passed~]~%" (car r) (cdr r)))
     (every #'cdr results)))
