@@ -91,6 +91,12 @@ change what the relation type accepts:
 ;                ^
 ```
 
+Every relation in CGraph has one arc in and one arc out: a source concept and
+a destination concept. Conceptual graphs in general allow relations with more
+arcs, such as Sowa's `(betw)` for "x is between y and z", but CGraph doesn't
+implement them. To say "between", make it a concept with two relations of its
+own.
+
 ## Referents
 
 What follows the colon in a concept is its referent: which thing, or how many.

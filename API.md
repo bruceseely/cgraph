@@ -134,7 +134,9 @@ Remove a concept type from the hierarchy, disconnecting all inheritance links.
 
 #### `make-relation-type (label &key source-types dest-type description supertypes)`
 Create and register a new relation type. `source-types` is a list of
-concept types; `dest-type` is a single concept type. `supertypes` is a list
+concept types, any one of which may be the source: `(animate act)` means "an
+ANIMATE or an ACT", not two inputs. `dest-type` is a single concept type. A
+relation has exactly one source and one destination. `supertypes` is a list
 of relation types; a subtype that gives no `source-types` or `dest-type`
 takes its parent's.
 
@@ -175,7 +177,7 @@ The name of a concept or relation type.
 
 #### `source-types (relation-type)` → list
 #### `dest-type (relation-type)` → concept-type
-A relation type's signature: the types it links from, and the type it
+A relation type's signature: the types it may link from, and the type it
 links to.
 Returns T if the relation type name is present in the catalog.
 
