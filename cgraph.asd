@@ -122,7 +122,7 @@
 ;;; (clear-system :cgraph)
 
 (defsystem "cgraph"
-  :description "basic implementation of Sowa's comceptual graphs"
+  :description "basic implementation of Sowa's conceptual graphs"
   :version "0.0.1"
   :author "Bruce Seely <bruce@bseely.com>"
   ;;:licence "Public Domain"
