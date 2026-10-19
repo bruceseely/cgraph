@@ -162,11 +162,12 @@ just the engine:
   prints nothing; the duplicate `poss` and `rcpt` are gone (keeping the ones
   that were in effect). `check-type-lattice` now passes on the shipped set:
   `MANNER` is one definition, `CHARACTERISTIC` and `BODY-PART` are defined,
-  and `PLACE`'s canonical graph says `[⊤]`, not `[T]`. Not fixed: a type
-  that is only named as a supertype is created without ⊤'s back-link (what
-  `CHARACTERISTIC` was hitting), and `betw` has no syntax role, so the
-  lexicon lint reports an error. (The back-link cause is inferred: the broken
-  link went away once `CHARACTERISTIC` was defined; the code is unread.)
+  and `PLACE`'s canonical graph says `[⊤]`, not `[T]`. A type that is
+  only named as a supertype (what `CHARACTERISTIC` was hitting), or defined
+  with no supertypes, was created under ⊤ without ⊤ listing it, so no walk
+  down the lattice reached it; `make-concept-type-aux` now makes both links
+  (2026-10-19, checked by `type-test`). Not fixed: `betw` has no syntax
+  role, so the lexicon lint reports an error.
 - ~~**`parse-cgraph` discards the real cause of a parse failure**~~ Done
   2026-10-19, and it was worse than this said: of 22 typical mistakes only
   one got a message that pointed at the problem. Several came back as a

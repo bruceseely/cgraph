@@ -152,6 +152,29 @@
            (= (length before) (length after))
            (null diff)))))
 
+;;; A type made with no supertypes sits under ⊤, and ⊤ must list it: a type
+;;; named only as a supertype, or defined with none, used to be left out of
+;;; ⊤'s subtypes, so walks down the lattice never reached it and
+;;; CHECK-TYPE-LATTICE reported a broken link. Defining the placeholder later
+;;; must move it off ⊤.
+(defun type-test5 ()
+  (flet ((under-top-p (label)
+           (and (member (get-concept-type label) (direct-subtypes *concept-type-top*)
+                        :test #'nodes-eq)
+                t))
+         (walked-p (label)
+           (let ((node (get-concept-type label)) seen)
+             (walk-concept-types (lambda (n) (when (nodes-eq n node) (setf seen t))))
+             seen)))
+    (define-concept-type :label 'tt5-child :supertypes '(tt5-placeholder))
+    (define-concept-type :label 'tt5-orphan)
+    (and (under-top-p 'tt5-placeholder) (walked-p 'tt5-placeholder) (walked-p 'tt5-child)
+         (under-top-p 'tt5-orphan) (walked-p 'tt5-orphan)
+         (progn (define-concept-type :label 'tt5-placeholder :supertypes '(animal))
+                (and (not (under-top-p 'tt5-placeholder))
+                     (walked-p 'tt5-placeholder)
+                     (supertype-p 'tt5-child 'animal))))))
+
 (defun type-test (&optional verbose)
   (with-test-types
     (when verbose (format t "~&TYPE-TEST~%"))
@@ -161,6 +184,7 @@
                          (type-test1)
                          (type-test2)
                          (type-test3)
-                         (type-test4))))))
+                         (type-test4)
+                         (type-test5))))))
       (when verbose (format t "~&TYPE-TEST ~:[failed~;passed~]~%" result))
       result)))

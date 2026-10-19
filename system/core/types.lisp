@@ -243,6 +243,11 @@
 	(unless supertype-node
 	  (setq supertype-node (make-concept-type supertype))) ; ?????
         (add-inheritance-link supertype-node concept-type)))
+    ;; with no supertypes it sits under ⊤, which must list it too, or no walk
+    ;; down the lattice reaches it (true of a supertype named before it is defined)
+    (when (and (null supertypes-list)
+               (direct-supertypes concept-type))
+      (add-inheritance-link *concept-type-top* concept-type))
     (record-concept-type concept-type)
     concept-type))
 
