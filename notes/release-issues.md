@@ -172,10 +172,11 @@ just the engine:
   eating the enclosing concept's; and LINKUP's MATCH let a pattern longer than
   the remaining tokens match. Turned up in `cgraph-types`: LUNCH-EVENT's
   canonical graph has a doubled `]` and had been silently cut to
-  `[LUNCH-EVENT].` Still rough: a concept whose type doesn't fit its relation
-  is found while linking, after the whole string is read, so its caret is at
-  the end; and that message prints nodes as `#<CONCEPT ANIMAL>` and types with
-  their package.
+  `[LUNCH-EVENT].` A concept whose type doesn't fit its relation is a
+  `relation-signature-mismatch` of its own (2026-10-19), with the caret on the
+  concept, plain type names, and both fixes spelled out; it used to put the
+  caret at the end, print `#<CONCEPT ANIMAL>` and `CONCEPTUAL-GRAPHS::ACT`,
+  and list ACT's supertypes where it said "a subtype of ACT".
 - **Fix the `.asd` description typo** ("comceptual", `cgraph.asd:24`) and bump
   `:version` past `0.0.1` when you tag a release.
 

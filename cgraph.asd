@@ -18,6 +18,7 @@
    #:concept #:relation #:graph #:concept-type #:relation-type
    #:individual #:referent #:context
    #:concept-type-lookup-failed #:relation-type-lookup-failed
+   #:relation-signature-mismatch #:mismatch-concept #:mismatch-relation #:mismatch-side
 
    ;; --- setup and initialization
    #:init #:setup-cgraph #:initialize-cgraph #:reset-cgraph #:report-directories

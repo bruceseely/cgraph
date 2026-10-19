@@ -27,7 +27,12 @@
     ("[CAT: {Tom, ]"                           "has no closing }"            :end)
     ("[CAT: @@]"                               "@ needs a number"            "@]")
     ("~[PROPOSITION: [CAT]→(on)→[MAT]"         "no closing ]"                :end)
-    (""                                        "there is no concept"         :end)))
+    (""                                        "there is no concept"         :end)
+    ;; A concept whose type its relation doesn't allow: found while linking,
+    ;; after the string is read, and pointed at by the concept.
+    ("[CAT]←(agnt)←[MAT]"                      "[MAT] can't be the source of (agnt)" "[MAT]")
+    ("[EAT]-(agnt)→[MAT] (obj)→[FOOD]"         "[MAT] can't be the destination of (agnt)" "[MAT]")
+    ("[PROPOSITION: [CAT]←(agnt)←[MAT]]"       "can't be the source of (agnt)" "[MAT]")))
 
 (defun parse-error-for (string)
   "The CGRAPH-PARSE-ERROR that parsing STRING signals, or NIL."
@@ -72,6 +77,10 @@
       (check "the report shows the string with a caret under the problem"
              (search (format nil "[CAT]→[DOG]~%       ^")
                      (princ-to-string (parse-error-for "[CAT]→[DOG]"))))
+      (check "a type mismatch keeps its condition, with no package prefixes"
+             (let ((condition (parse-error-for "[CAT]←(agnt)←[MAT]")))
+               (and (typep (parse-error-cause condition) 'relation-signature-mismatch)
+                    (not (search "::" (parse-error-message condition))))))
       (check "make-cgraph signals it too"
              (handler-case (progn (make-cgraph "[CAT]→[DOG]") nil)
                (cgraph-parse-error () t)))

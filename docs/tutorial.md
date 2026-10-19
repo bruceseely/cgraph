@@ -77,13 +77,18 @@ says what is wrong and puts a caret under it:
 
 Every concept and relation is checked against the catalog as the graph is
 built. `agnt` links an act to its agent, so a graph with an animal in the act's
-place is refused, with an explanation of which types would have fitted:
+place is refused, with the two ways to fix it -- change the concept, or
+change what the relation type accepts:
 
 ```lisp
 (cg:make-cgraph "[CAT]←(agnt)←[ANIMAL].")
-; Can't parse the graph: While connecting #<CONCEPT ANIMAL>→#<RELATION agnt>,
-; concept-type CONCEPTUAL-GRAPHS::ANIMAL is not consistent with
-; CONCEPTUAL-GRAPHS::ACT, the in-arc type of the #<RELATION agnt> relation. ...
+; Can't parse the graph: [ANIMAL] can't be the source of (agnt): agnt goes
+; from ACT to ANIMATE, and ANIMAL is not a kind of ACT.
+; Either the concept should be ACT or a kind of it, or the agnt relation type
+; should accept ANIMAL as its source: its source type would have to be ANIMAL
+; or one of its supertypes (ANIMATE, PHYSICAL, ENTITY).
+;   [CAT]←(agnt)←[ANIMAL].
+;                ^
 ```
 
 ## Referents

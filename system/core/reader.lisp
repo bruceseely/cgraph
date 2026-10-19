@@ -1079,6 +1079,13 @@ Use ?~a for cross-context co-reference instead."
                                             ((or concept-type-lookup-failed
                                                  relation-type-lookup-failed)
                                              (or *node-start* (parse-stream-position)))
+                                            ;; A concept that doesn't fit its relation
+                                            ;; is found while linking, after the whole
+                                            ;; string is read: point at the concept.
+                                            (relation-signature-mismatch
+                                             (or (token-position (mismatch-concept condition))
+                                                 (token-position (mismatch-relation condition))
+                                                 (parse-stream-position)))
                                             (t (parse-stream-position))))))))
             (let ((nodes (remove-if #'arc-p (cgraph-tokens string))))
               (unless (find-if #'concept-p nodes)

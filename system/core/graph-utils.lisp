@@ -114,14 +114,60 @@
 ;;            (and (eq use :out) (every (lambda (x) (subtype-p concept-type x )) relation-dest-types) t)
 
 
-;;;; should use a confomity test
-;;; todo check expliciitly for each arc
+;;; --- Signature checks ---------------------------------------------------------
+;;;
+;;; A relation type says what it connects: agnt goes from an ACT to an ANIMATE.
+;;; Linking a concept on either side checks its type against that, and a
+;;; concept that doesn't fit is a RELATION-SIGNATURE-MISMATCH.
+
+(define-condition relation-signature-mismatch (error)
+  ((concept  :initarg :concept  :reader mismatch-concept)
+   (relation :initarg :relation :reader mismatch-relation)
+   (side     :initarg :side     :reader mismatch-side
+             :documentation ":SOURCE when the concept was linked into the relation,
+              :DESTINATION when the relation was linked out to it."))
+  (:report report-relation-signature-mismatch)
+  (:documentation "Signalled when a concept is linked to a relation whose type
+   does not allow the concept's type on that side."))
+
+(defun type-names (types)
+  "TYPES as their bare names -- CAT, not CONCEPTUAL-GRAPHS::CAT."
+  (mapcar (lambda (type)
+            (let ((label (if (typep type 'concept-type) (label type) type)))
+              (if (symbolp label) (symbol-name label) (princ-to-string label))))
+          types))
+
+(defun report-relation-signature-mismatch (condition stream)
+  (let* ((concept       (mismatch-concept condition))
+         (relation      (mismatch-relation condition))
+         (side          (mismatch-side condition))
+         (relation-type (relation-type relation))
+         (sources       (remove-duplicates (type-names (source-types relation-type))
+                                           :test #'string=))
+         (destination   (first (type-names (list (dest-type relation-type)))))
+         (wanted        (if (eq side :source) sources (list destination)))
+         (have          (concept-type concept))
+         (have-name     (first (type-names (list have))))
+         ;; What the relation would have to say instead: the concept's own
+         ;; type or one above it, nearest first, short of the top type.
+         (above         (type-names (reverse (remove *concept-type-top*
+                                                     (proper-supertypes have)))))
+         (name          (string-downcase (first (type-names (list (label relation-type)))))))
+    (let ((*always-format-nodes* t))
+      (format stream "~a can't be the ~(~a~) of ~a: ~a goes from ~{~a~^ or ~} to ~a, ~
+                      and ~a is not a kind of ~{~a~^ or ~}.~%~
+                      Either the concept should be ~{~a~^ or ~} or a kind of it, or the ~a ~
+                      relation type should accept ~a as its ~(~a~): its ~(~a~) type would ~
+                      have to be ~a~@[ or one of its supertypes (~{~a~^, ~})~]."
+              concept side relation name sources destination
+              have-name wanted
+              wanted name have-name side side have-name above))))
+
 (defmethod add-arc-into-relation ((concept concept) (relation relation) &optional index)
   (assert (or (null index) (plusp index)))
   (let* ((relation-type (relation-type relation))
          (relation-source-types (source-types relation-type))
          (concept-type (concept-type concept)))
-
     (cond ((or (some (lambda (type) (is-type concept type)) relation-source-types)
                (some (lambda (type) (supertype-p concept-type type))  relation-source-types)
                (some (lambda (type) (equal concept-type type)) relation-source-types))
@@ -129,24 +175,8 @@
            (add-arc relation concept)
            concept)
           (t
-           (error "While connecting ~a→~a, concept-type ~a is not consistent with ~a, the in-arc type of the ~a relation.~
-               ~%Either~
-               ~% - the relation whose in-arc is linked to concept ~a should require an input type that is a supertype of concept-type ~a:~&~a, or~
-               ~% - the concept linked to the in-arc of the ~a relation should have a type that is a subtype of ~a:~&~a."
-                  ;; first line
-                  concept
-                  relation
-                  (princ-to-string (concept-type concept))
-                  (princ-to-string (car relation-source-types))
-                  relation
-                  ;; third line
-                  concept
-                  concept-type
-                  (princ-to-string (remove *CONCEPT-TYPE-TOP* (supertypes concept-type)))
-                  ;; fourth line
-                  relation
-                  relation-source-types
-                  (remove *CONCEPT-TYPE-TOP* (apply #'append (mapcar #'supertypes relation-source-types))))))))
+           (error 'relation-signature-mismatch
+                  :concept concept :relation relation :side :source)))))
 
 
 
@@ -166,23 +196,8 @@
            (add-arc relation concept)
            concept)
           (t
-           (error "While connecting ~a←~a, concept-type ~a is not consistent with ~a, the out-arc type of the ~a relation.~
-               ~%Either~
-               ~%- the relation whose out-arc is linked to concept ~a should require an output type that is one of:~&~a, or~
-               ~%- the concept linked to the out-arc of the ~a relation should have a type that is a subtype of ~a:~&~a,"
-                  ;; first line
-                  concept
-                  relation
-                  (princ-to-string (concept-type concept))
-                  (princ-to-string relation-dest-type)
-                  relation
-                  ;; third line
-                  concept
-                  (princ-to-string (remove *CONCEPT-TYPE-TOP* (supertypes concept-type)))
-                  ;; fourth line
-                  relation
-                  relation-dest-type
-                  (princ-to-string (subtypes relation-dest-type)))))))
+           (error 'relation-signature-mismatch
+                  :concept concept :relation relation :side :destination)))))
 
 
 

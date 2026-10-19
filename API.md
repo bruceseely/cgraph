@@ -611,6 +611,27 @@ Its readers are `parse-error-message` (what is wrong), `parse-error-string`
 NIL) and `parse-error-cause` (the condition underneath, when there was one,
 such as `concept-type-lookup-failed` for an unknown type).
 
+#### `relation-signature-mismatch` (condition)
+Signalled when a concept is linked to a relation whose type doesn't allow the
+concept's type on that side -- by `make-cgraph` (as the cause of a
+`cgraph-parse-error`, with the caret on the concept) and by anything else that
+links nodes. It names both ways out: change the concept, or change what the
+relation type accepts.
+
+```lisp
+(make-cgraph "[CAT]←(agnt)←[ANIMAL].")
+; Can't parse the graph: [ANIMAL] can't be the source of (agnt): agnt goes
+; from ACT to ANIMATE, and ANIMAL is not a kind of ACT.
+; Either the concept should be ACT or a kind of it, or the agnt relation type
+; should accept ANIMAL as its source: its source type would have to be ANIMAL
+; or one of its supertypes (ANIMATE, PHYSICAL, ENTITY).
+;   [CAT]←(agnt)←[ANIMAL].
+;                ^
+```
+
+Readers: `mismatch-concept`, `mismatch-relation`, and `mismatch-side`
+(`:source` or `:destination`).
+
 ### String Utilities
 
 #### `normalize-cgraph-string (graph-string &key concept-case relation-case)` → string
