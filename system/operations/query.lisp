@@ -128,7 +128,7 @@
   (if (null results)
       (format stream "~&No matches found.~%")
       (progn
-        (format stream "~&~d match~:p found:~%" (length results))
+        (format stream "~&~d match~:[es~;~] found:~%" (length results) (= 1 (length results)))
         (dolist (result results)
           (let ((target (getf result :graph))
                 (bindings (getf result :bindings)))
