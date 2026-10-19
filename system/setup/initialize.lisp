@@ -202,7 +202,6 @@
   (delete-files directory "*.fasl" ))
 
 (defun report-directories ()
-  (reset-cgraph)
   (format t "~&______________________________________________________________  ~%")
   (format t "~&CGraph directory: ~a~50t*cgraph*~%"       *cgraph*)
   (format t "~&type definitions: ~a~50t*cgraph-types-directory*~%" *cgraph-types-directory*)
@@ -215,15 +214,112 @@
 (defvar *home* (namestring (user-homedir-pathname)))
 
 
-;;; This is the entry point
-;;; should be called only on startup
-;;; concept-types is the path to the concept-types file
-;;; relation-types is the path to the relation-types file
+;;; --- Starting a session --------------------------------------------------
 ;;;
+;;; INIT is the one entry point a user needs. SETUP-CGRAPH, RESET-CGRAPH and
+;;; INITIALIZE-CGRAPH stay as the pieces it is made of, for callers that want
+;;; only one of them (the tests, the web UI's reinitialize button).
+
+(defparameter *default-web-port* 8060
+  "The port INIT starts the web server on when given :WEB T.")
+
+(defun set-cgraph-directories (type-set)
+  "Point cgraph's directory variables at ~/.cgraph/ and at TYPE-SET, a type-set
+   directory, or NIL for the shipped defaults. Creates nothing."
+  (let ((cgraph-base (format nil "~a.cgraph/" (namestring (user-homedir-pathname)))))
+    (setf *cgraph*                    cgraph-base
+          *cgraph-data-directory*     (format nil "~adata/" cgraph-base)
+          *cgraph-log-directory*      (format nil "~alogs/" cgraph-base)
+          *cgraph-examples-directory* (default-types-directory)
+          *external-types-directory*  type-set
+          *cgraph-types-directory*    (or type-set (default-types-directory)))))
+
+(defun chosen-type-set (designator)
+  "The type-set directory DESIGNATOR names (see TYPE-SET-DIRECTORY), or NIL
+   when DESIGNATOR is NIL. Signals an error if it holds no type set."
+  (let ((type-set (and designator (type-set-directory designator))))
+    (when (and type-set (not (type-set-files-exist-p type-set)))
+      (error "No type set at ~a: it needs concept-types.lisp and relation-types.lisp. ~
+              (cg:create-type-set ~s) makes one from the current types."
+             type-set designator))
+    type-set))
+
+(defun load-support-tools ()
+  "Load cgraph/support -- SUP:RAPROPOS and friends. A secondary system, so the
+   main one needn't depend on cl-ppcre. They are a convenience, never a
+   prerequisite -- a missing dependency must not abort setup."
+  (handler-case (asdf:load-system "cgraph/support")
+    (error (condition)
+      (format t "~&;; cgraph/support not loaded (SUP:RAPROPOS unavailable): ~a~%"
+	      condition))))
+
+(defvar *swank-readtable-patched* nil
+  "True once SWANK's READTABLE-FOR-PACKAGE has been wrapped, so a second setup
+   doesn't wrap the wrapper.")
+
+(defun install-slime-integration ()
+  "When SWANK is loaded: make :CG the package of SLIME's worker threads, and
+   protect SWANK from the CG readtable. Safe to call any number of times."
+  (when (find-package :swank)
+    (let ((bindings-var (find-symbol "*DEFAULT-WORKER-THREAD-BINDINGS*" :swank))
+          (package (find-package :conceptual-graphs)))
+      (when (and bindings-var (boundp bindings-var))
+        (unless (member (cons '*package* package) (symbol-value bindings-var)
+                        :test #'equal)
+          (push (cons '*package* package) (symbol-value bindings-var))))))
+
+  ;; Protect SWANK's readtable-for-package from the CG readtable.
+  ;; The CG readtable makes ':' a terminating macro char, which breaks
+  ;; (read-from-string "swank::guess-buffer-readtable") if an error is
+  ;; signaled inside a with-readtable-mods/with-cg-readtable scope and
+  ;; the user presses 'v' in SLDB (which runs in the suspended thread).
+  (let* ((spp (find-package :swank/source-path-parser))
+         (sym (and spp (find-symbol "READTABLE-FOR-PACKAGE" spp))))
+    (when (and sym (fboundp sym) (not *swank-readtable-patched*))
+      (let ((orig (symbol-function sym)))
+        (setf (symbol-function sym)
+              (lambda (package)
+                (let ((*readtable* (copy-readtable nil)))
+                  (funcall orig package))))
+        (setf *swank-readtable-patched* t)))))
+
+(defun init (&key types web)
+  "Start, or start over, a cgraph session, and return the type-set directory
+   in use. This is the one call a session needs after loading cgraph.
+
+   TYPES names the type set to load: a name for ~/.cgraph/types/NAME/, or a
+   directory path. Without it, INIT keeps the set already in use, so calling
+   (cg:init) again starts fresh with the same types; the first time, that is
+   the shipped default types, read-only.
+
+   INIT loads the types and their lexicon, then ~/.cgraph/initializations.lisp
+   if there is one, and makes a fresh, empty *CONTEXT*, forgetting every
+   individual, variable and coreference. It writes nothing.
+
+   WEB, when T or a port number, also loads the web type browser and graph
+   editor and starts their server (on port 8060 for T)."
+  (let ((type-set (cond (types (chosen-type-set types))
+                        ((default-types-p) nil)
+                        (t *cgraph-types-directory*)))
+        ;; The type files and initializations.lisp are read and evaluated as
+        ;; cgraph code, whatever package the caller is in.
+        (*package* (find-package :conceptual-graphs)))
+    (set-cgraph-directories type-set)
+    (reset-cgraph)
+    (load-support-tools)
+    (install-slime-integration)
+    (when web
+      (asdf:load-system :cgraph-web)
+      ;; The editor registers its handlers on the server's acceptor.
+      (asdf:load-system :cgraph-editor)
+      (uiop:symbol-call :conceptual-graphs :start-web-server
+                        :port (if (integerp web) web *default-web-port*)))
+    *cgraph-types-directory*))
 
 (defun setup-cgraph (code-base &key types external-types-directory)
-  "Set cgraph up for a session and load a type catalog. TYPES names the type
-   set to use -- a name for ~/.cgraph/types/NAME/, or a directory path (see
+  "Set cgraph up for a session and load a type catalog -- the first half of
+   INIT, which most callers should use instead. TYPES names the type set to
+   use -- a name for ~/.cgraph/types/NAME/, or a directory path (see
    TYPE-SET-DIRECTORY); EXTERNAL-TYPES-DIRECTORY is its older spelling. With
    neither, the shipped default types are used, read-only. Setup writes
    nothing: ~/.cgraph/data/ and ~/.cgraph/logs/ are created only when a plot
@@ -235,59 +331,25 @@
   ;; a home tree. The parameter stays so existing callers keep working;
   ;; CLEANUP-FILES is still there to call by hand.
   (declare (ignore code-base))
-  (let* ((cgraph-base (format nil "~a.cgraph/" (namestring (user-homedir-pathname))))
-         (chosen      (or types external-types-directory))
-         (type-set    (and chosen (type-set-directory chosen))))
-    (when (and type-set (not (type-set-files-exist-p type-set)))
-      (error "No type set at ~a: it needs concept-types.lisp and relation-types.lisp. ~
-              (cg:create-type-set ~s) makes one from the current types."
-             type-set chosen))
-    (setf *cgraph*                    cgraph-base
-          *cgraph-data-directory*     (format nil "~adata/" cgraph-base)
-          *cgraph-log-directory*      (format nil "~alogs/" cgraph-base)
-          *cgraph-examples-directory* (default-types-directory)
-          *external-types-directory*  type-set
-          *cgraph-types-directory*    (or type-set (default-types-directory)))
-    (initialize-types))
-
-  ;; REPL tools: SUP:RAPROPOS and friends.  A secondary system, so the main
-  ;; one needn't depend on cl-ppcre.  They are a convenience, never a
-  ;; prerequisite -- a missing dependency must not abort setup.
-  (handler-case (asdf:load-system "cgraph/support")
-    (error (condition)
-      (format t "~&;; cgraph/support not loaded (SUP:RAPROPOS unavailable): ~a~%"
-	      condition)))
-
-  ;; Set default package for SLIME worker threads (when SLIME is loaded)
-  (when (find-package :swank)
-    (let ((bindings-var (find-symbol "*DEFAULT-WORKER-THREAD-BINDINGS*" :swank)))
-      (when (and bindings-var (boundp bindings-var))
-        (push (cons '*package* (find-package :conceptual-graphs))
-              (symbol-value bindings-var)))))
-
-  ;; Protect SWANK's readtable-for-package from the CG readtable.
-  ;; The CG readtable makes ':' a terminating macro char, which breaks
-  ;; (read-from-string "swank::guess-buffer-readtable") if an error is
-  ;; signaled inside a with-readtable-mods/with-cg-readtable scope and
-  ;; the user presses 'v' in SLDB (which runs in the suspended thread).
-  (let* ((spp (find-package :swank/source-path-parser))
-         (sym (and spp (find-symbol "READTABLE-FOR-PACKAGE" spp))))
-    (when (and sym (fboundp sym))
-      (let ((orig (symbol-function sym)))
-        (setf (symbol-function sym)
-              (lambda (package)
-                (let ((*readtable* (copy-readtable nil)))
-                  (funcall orig package))))))))
+  (set-cgraph-directories (chosen-type-set (or types external-types-directory)))
+  (initialize-types)
+  (load-support-tools)
+  (install-slime-integration))
 
 
 
 (in-package :cl-user)
 
 ;;; This is the transition from the :cl-user package to the :cg package
+;;; This machine's launcher (~/.sbclrc's CGRAPH): CG:INIT with the web server,
+;;; plus what belongs to this setup rather than to cgraph -- the Emacs side,
+;;; the lexicon lint and the test suites.
 (defun start-cgraph (code-path &key external-types-directory)
+  (declare (ignore code-path))
   (setf *package* (find-package :conceptual-graphs))
 
-  (cg::setup-cgraph code-path :external-types-directory external-types-directory)
+  (cg:init :types external-types-directory :web 8060)
+  (terpri)
 
   ;; Load the Emacs side: cg-mode, the C-c t / C-c b keybindings, Customize
   ;; sync. This used to be the end of SETUP-CGRAPH, which made it everyone's:
@@ -305,17 +367,6 @@
       (format t "~&;; Emacs setup failed (Lisp side unaffected): ~a~%" condition)))
 
   (cg::report-directories)
-  (terpri)
-
-  ;; start web server
-  (terpri)
-  (asdf:load-system :cgraph-web)
-  ;; The editor registers its handlers on the acceptor started just below, and
-  ;; EDIT-CGRAPH is not so much as a defined name until this runs. Loaded here
-  ;; rather than on first use so there is one name to remember and no way to
-  ;; meet an undefined function by typing the obvious thing.
-  (asdf:load-system :cgraph-editor)
-  (cg::start-web-server :port 8060)
   (terpri)
 
   (when cg::*run-lexicon-lint-on-startup*

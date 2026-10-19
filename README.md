@@ -68,18 +68,20 @@ View concept-type hierarchy and canonical graphs in a web browser
 ## Getting Started
 
 Clone the repository somewhere ASDF can find it, such as
-`~/quicklisp/local-projects/`, then load and set it up:
+`~/quicklisp/local-projects/`, then load it and start a session:
 
 ```lisp
 (ql:quickload "cgraph")
-(cg:setup-cgraph (asdf:system-source-directory "cgraph"))
-(cg:reset-cgraph)
+(cg:init)
 ```
 
-That loads the shipped type definitions, read-only, and writes nothing. To
-change or add types, make a type set of your own: `(cg:create-type-set
-"mine")` copies the current types to `~/.cgraph/types/mine/` and switches to
-it, and next time `(cg:setup-cgraph … :types "mine")` loads it.
+That loads the shipped type definitions, read-only, and writes nothing.
+Calling `(cg:init)` again starts over with an empty knowledge base and the
+same types. To change or add types, make a type set of your own:
+`(cg:create-type-set "mine")` copies the current types to
+`~/.cgraph/types/mine/` and switches to it, and next time `(cg:init :types
+"mine")` loads it. `(cg:init :web t)` also starts the web type browser and
+graph editor on http://localhost:8060/.
 
 Basic usage:
 

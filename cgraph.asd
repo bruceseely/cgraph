@@ -20,7 +20,7 @@
    #:concept-type-lookup-failed #:relation-type-lookup-failed
 
    ;; --- setup and initialization
-   #:setup-cgraph #:initialize-cgraph #:reset-cgraph #:report-directories
+   #:init #:setup-cgraph #:initialize-cgraph #:reset-cgraph #:report-directories
    #:create-type-set
    #:ensure-concept-types-exist #:ensure-relation-types-exist
 

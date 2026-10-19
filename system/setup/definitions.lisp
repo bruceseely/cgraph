@@ -36,7 +36,7 @@
 (defvar nope-string (princ-to-string nope))
 
 ;;; directory containing the concept-types and relation-types directories
-;;; values are set in setup-cgraph() in initialize.lisp
+;;; values are set by set-cgraph-directories in initialize.lisp
 
 (defvar *home* (namestring (user-homedir-pathname)))
 (defvar *cgraph* nil)

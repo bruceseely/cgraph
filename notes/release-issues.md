@@ -80,10 +80,15 @@ Items are in priority order.
   bases can't coexist in one image. A `with-cgraph-environment` macro that
   binds the specials would help; `system/operations/cg-env.lisp` may be most
   of the way there.
-- **Startup takes ceremony.** Users must know the order `setup-cgraph` →
-  `reset-cgraph` → `initialize-cgraph`, and `start-cgraph` also starts a web
-  server. Provide one documented entry point, e.g.
-  `(cg:init &key types-directory)`, with sensible defaults.
+- ~~**Startup takes ceremony.**~~ Done 2026-10-19: `(cg:init &key types
+  web)` is the one documented entry point. It loads the types once (the old
+  `setup-cgraph` → `reset-cgraph` sequence loaded them twice), reads
+  `initializations.lisp` in `:cg` from any package, and makes a fresh context.
+  Without `:types` it keeps the set in use, so calling it again starts over
+  with the same types. `:web` starts the browser and editor. The SLIME setup
+  is now idempotent, and `report-directories` no longer resets the context.
+  The old three functions remain as its parts; `start-cgraph` is just
+  `cg:init` plus this machine's Emacs, lint and tests.
 - **The CG readtable can leak into error contexts** (the SLDB `v` bug). Make
   the custom read syntax opt-in through `named-readtables` rather than
   installing it dynamically during calls.

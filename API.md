@@ -13,8 +13,7 @@ A session starts with:
 
 ```lisp
 (ql:quickload "cgraph")
-(cg:setup-cgraph (asdf:system-source-directory "cgraph"))
-(cg:reset-cgraph)
+(cg:init)
 ```
 
 
@@ -27,19 +26,36 @@ A session starts with:
 
 ## Setup and Initialization
 
+### `init (&key types web)` → type-set directory
+Start, or start over, a session; the one call a session needs. It loads a type
+set and its lexicon, then `~/.cgraph/initializations.lisp` if there is one,
+and makes a fresh, empty `*context*`, forgetting every individual, variable
+and coreference. It writes nothing, and works the same from any package.
+
+`types` names the type set: a name for `~/.cgraph/types/<name>/`, or a
+directory path. Without it, `init` keeps the set already in use, so a second
+`(init)` starts fresh with the same types; the first time, that is the shipped
+default types, read-only. A `types` that names no type set is an error, and
+leaves the session as it was.
+
+`web`, when `t` or a port number, also loads the web type browser and graph
+editor and starts their server (port 8060 for `t`).
+
+```lisp
+(init)                          ; shipped types
+(init :types "kitchen")         ; ~/.cgraph/types/kitchen/
+(init :types "~/my-domain/")    ; a directory of your own
+(init :web t)                   ; same types, plus http://localhost:8060/
+```
+
+The three functions below are the pieces `init` is made of, for callers that
+need only one of them.
+
 ### `setup-cgraph (code-base &key types external-types-directory)`
-Entry point for initial CGraph setup. Called once at startup. It loads a type
-set and writes nothing. `types` names the set: a name for
-`~/.cgraph/types/<name>/`, or a directory path. With none, the shipped
-default types are used, read-only. `external-types-directory` is the older
-spelling of `types`. It also sets up SLIME integration when SWANK is present.
-`~/.cgraph/data/` and `~/.cgraph/logs/` are created only when something is
-first written there.
-
-`code-base` is ignored; it's kept so existing calls keep working. Pass
-`(asdf:system-source-directory "cgraph")`.
-
-Follow it with `reset-cgraph` to create the context that graphs are added to.
+Points cgraph at a type set and loads it, without making a context; `types`
+is as for `init`, and `external-types-directory` is its older spelling.
+`code-base` is ignored and kept so existing calls keep working. Follow it
+with `reset-cgraph`, or call `init` instead.
 
 ### `initialize-cgraph ()`
 Reinitializes the system: clears variables, coreferences, individuals,
@@ -60,12 +76,12 @@ Pass `:switch nil` to copy without switching.
 ```lisp
 (create-type-set "kitchen")   ; → ".../.cgraph/types/kitchen/"
 ;; next session:
-(setup-cgraph (asdf:system-source-directory "cgraph") :types "kitchen")
+(init :types "kitchen")
 ```
 
 ### `report-directories ()`
 Prints current CGraph configuration paths (types, data, logs,
-initializations). Note that it calls `reset-cgraph` first.
+initializations).
 
 ### `ensure-concept-types-exist (definitions)`
 Creates concept types from a list of definition plists. Each definition
