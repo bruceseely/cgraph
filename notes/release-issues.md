@@ -128,10 +128,13 @@ just the engine:
   And the runners and four suites found tests by a bare `intern`, i.e. in
   `*package*`, so from `CL-USER` every suite looked undefined; those now intern
   in `:cg`. `(cg::test-all t)` passes from either package after an ordinary setup.
-- **CI runs only the whole stack** (parsifal + cg-from-parse), and still
-  passes `secrets.STACK_CHECKOUT_TOKEN` even though the workflow's own comment
-  says no token is needed. Add a standalone job that runs only cgraph's tests on
-  a clean SBCL, so contributors' PRs don't depend on other repos or secrets.
+- ~~**CI runs only the whole stack**~~ Done 2026-10-19. A `cgraph` job runs
+  `test/run-tests.sh` on a clean SBCL with only Quicklisp and CL left locked:
+  no other repos, no secrets. The token the whole-stack job passed was
+  needed after all, since cg-from-parse was private (the comment saying the
+  dependencies were public was wrong). cg-from-parse is public now, so
+  cgraph, parsifal and cg-from-parse all check each other out without one,
+  and a pull request from a fork runs every job.
 
 ## 6. Documentation for strangers
 

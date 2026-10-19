@@ -8,9 +8,8 @@ name: tests
 #   would run.
 # - whole-stack: the gate owned by cg-from-parse, against THIS repo's pushed
 #   code plus current parsifal and cg-from-parse, each suite in its own SBCL
-#   process. cg-from-parse is private, so the checkout needs
-#   STACK_CHECKOUT_TOKEN, which GitHub doesn't give to pull requests from
-#   forks; the job is skipped for those rather than failing.
+#   process. All three repos are public, so they are checked out without a
+#   token, and a pull request from a fork runs this job too.
 # - ecl: cgraph's own suites on ECL, to keep it portable.
 #
 # Every job also runs the graph editor's suites, (asdf:test-system
@@ -68,8 +67,6 @@ jobs:
         run: bash cgraph/test/run-tests.sh
 
   whole-stack:
-    # Skipped on a pull request from a fork, which has no STACK_CHECKOUT_TOKEN.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # The gate takes about two minutes. A hang used to run to GitHub's six-hour
     # default; this fails it in minutes instead.
@@ -89,14 +86,12 @@ jobs:
         with:
           repository: bruceseely/parsifal
           path: parsifal
-          token: ${{ secrets.STACK_CHECKOUT_TOKEN }}
 
       - name: Checkout cg-from-parse
         uses: actions/checkout@v4
         with:
           repository: bruceseely/cg-from-parse
           path: cg-from-parse
-          token: ${{ secrets.STACK_CHECKOUT_TOKEN }}
 
       # The official binary, pinned to the version development runs on. Ubuntu's
       # apt package was SBCL 2.2.9, four years older, and the extractor suite
