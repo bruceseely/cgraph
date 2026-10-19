@@ -50,11 +50,11 @@ can tell them from the paths of your selection.
   type you click is the one edited. In the form, `+` next to the supertypes
   arms a one-time pick: the next type you click becomes a supertype, and
   clicks after that explore the graph again. *Draw…* opens the canonical graph
-  in the graph editor.
+  in the [graph editor](graph-editor.md).
 - **New Relation** opens the relation form; its source and destination slots
   are filled the same way, with `+` and then a click on a type.
 - **Options** sets display options.
-- **Editor** opens the graph editor on an empty graph.
+- **Editor** opens the [graph editor](graph-editor.md) on an empty graph.
 
 ## Saving types
 

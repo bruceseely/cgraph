@@ -55,8 +55,10 @@ CGraph implements Sowa's core operations:
 ### Visualization
 
 Export concept type hierarchies to Graphviz DOT format for rendering as diagrams.
-View the concept-type hierarchy and canonical graphs in a web browser:
-see [the type browser](docs/type-browser.md).
+View the concept-type hierarchy and canonical graphs in a web browser, and
+build graphs by pointing and clicking: see [the type
+browser](docs/type-browser.md) and [the graph editor](docs/graph-editor.md),
+both started by `(cg:init :web t)`.
 
 ## Requirements
 

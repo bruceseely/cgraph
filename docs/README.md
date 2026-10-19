@@ -23,9 +23,8 @@ exported function.
 
 - [The type browser](type-browser.md) -- the web page for exploring and
   editing the type lattice
+- [The graph editor](graph-editor.md) -- building and editing graphs by
+  pointing and clicking, from the browser or with `cg:edit-cgraph`
 - [Emacs](emacs.md) -- editing CG notation under SLIME
-
-The web graph editor has no user guide yet; `notes/graph-editor.md` is its
-design document.
 
 `notes/` holds design notes and working journals, not user documentation.

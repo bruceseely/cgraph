@@ -231,4 +231,6 @@ in every session.
 
 - [API.md](../API.md) -- every exported function
 - [The type browser](type-browser.md) -- `(cg:init :web t)`
+- [The graph editor](graph-editor.md) -- `(cg:edit-cgraph)`, or **Editor** in
+  the type browser
 - [Emacs](emacs.md) -- editing CG notation in Emacs
