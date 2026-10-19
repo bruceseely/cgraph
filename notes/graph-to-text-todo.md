@@ -16,7 +16,7 @@ absent -- are in `notes/known-issues.md`.
 ### 1. ~~Graph decomposition by inference (Sowa Rule 6 second half)~~ — done
 
 Built as `system/operations/decomposition.lisp` plus `graphs-to-text`; see
-§17 of `graph-to-text-features.md` for what it does and
+§17 of `docs/generation.md` for what it does and
 `test/decomposition-test.lisp` for the contract.
 
 The worry recorded here was "the hard part is deciding which rewrites are
@@ -66,7 +66,7 @@ people find awkward.
 
 `pronoun-safe-p` in `system/generation/anaphora.lisp`, beside
 `uttered-or-coref-uttered-p`, which answers the other half of the question.
-Behaviour and examples: §8 of `graph-to-text-features.md`.
+Behaviour and examples: §8 of `docs/generation.md`.
 
 The rule is the smallest one that answers it. A competitor is another
 referent already uttered that would surface as the **same word** — surfaces

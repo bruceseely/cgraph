@@ -698,7 +698,7 @@
    or NIL if the cgraph system source directory can't be resolved."
   (let ((sysdir (ignore-errors (asdf:system-source-directory :cgraph))))
     (when sysdir
-      (let ((path (merge-pathnames "notes/generation-tables.md" sysdir)))
+      (let ((path (merge-pathnames "docs/generation-tables.md" sysdir)))
         (and (probe-file path) path)))))
 
 (defun report-lexicon-lint (&key (stream *standard-output*) (min-severity :info))

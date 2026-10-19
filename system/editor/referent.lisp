@@ -14,7 +14,7 @@
 ;;  properties and is therefore unbounded.
 ;;
 ;;  That three-way split is the whole point, and it is not obvious from the
-;;  list of forms in notes/referent-catalog.md. Read as a list, the forms look
+;;  list of forms in docs/referents.md. Read as a list, the forms look
 ;;  like modes to pick between; they are not. `:id :name :variable :coref :set'
 ;;  are mutually exclusive -- one selector, five states -- while
 ;;  `:quantifier :tense :aspect :voice :measure' are orthogonal to the

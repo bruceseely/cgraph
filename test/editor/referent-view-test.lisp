@@ -3,7 +3,7 @@
 ;;; Stage 0 of the referent editor: does DESCRIBE-REFERENT account for every
 ;;; form the reader accepts?
 ;;;
-;;; The table below is notes/referent-catalog.md, row for row. That is the
+;;; The table below is docs/referents.md, row for row. That is the
 ;;; point of it: the catalog is the specification of what a referent can be, so
 ;;; a decomposition is only trustworthy if it has been shown the whole thing.
 ;;; A row here that starts failing means either the reader grew a feature the

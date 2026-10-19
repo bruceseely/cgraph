@@ -385,7 +385,7 @@ user picks members; the editor decides where the commas go.
 
 #### What a referent is made of
 
-Every form is catalogued in `notes/referent-catalog.md`, with verified
+Every form is catalogued in `docs/referents.md`, with verified
 `reader.lisp` citations. That is the reference; this is the shape.
 
 The keys `resolve-target-concept` pulls out divide in two, and the division is

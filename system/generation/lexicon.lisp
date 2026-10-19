@@ -15,7 +15,7 @@
 
 (defparameter *lexicon-overrides* (make-hash-table :test 'equal)
   "Per-concept-type overrides on the derivational defaults. Key: upcased label
-   string. Value: a plist. See notes/lexicon-overrides.md for the full reference.
+   string. Value: a plist. See docs/lexicon-overrides.md for the full reference.
    Canonical keys:
      Word form:  :lemma :plural :past :past-participle :present-3sg :gerund
                  :particle

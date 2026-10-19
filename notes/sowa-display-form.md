@@ -1,7 +1,7 @@
 # Rendering CGs in Sowa's Display Form — feasibility analysis
 
 *Status: parked (2026-07-23). Not critical — the linear form and the
-concept-type-browser lattice graphs already cover the need. Written up so we can
+type browser's lattice graphs already cover the need. Written up so we can
 pick it up if it ever becomes worth doing.*
 
 ## The idea
