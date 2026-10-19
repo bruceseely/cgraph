@@ -1,14 +1,20 @@
-name: whole-stack tests
+name: tests
 
-# A push to cgraph runs the whole-stack gate (owned by cg-from-parse) against
-# THIS repo's pushed code plus current parsifal and cg-from-parse, each suite in
-# its own SBCL process. Self-contained: no cross-repo token needed -- the two
-# dependency repos are public and checked out directly.
+# Three jobs:
 #
-# Both jobs also run the graph editor's suites, (asdf:test-system
+# - cgraph: cgraph's own suites on a clean SBCL with only Quicklisp -- no other
+#   repos, no secrets, CL left locked. This is the job a contributor's pull
+#   request has to pass, and it runs test/run-tests.sh, the script a new user
+#   would run.
+# - whole-stack: the gate owned by cg-from-parse, against THIS repo's pushed
+#   code plus current parsifal and cg-from-parse, each suite in its own SBCL
+#   process. cg-from-parse is private, so the checkout needs
+#   STACK_CHECKOUT_TOKEN, which GitHub doesn't give to pull requests from
+#   forks; the job is skipped for those rather than failing.
+# - ecl: cgraph's own suites on ECL, to keep it portable.
+#
+# Every job also runs the graph editor's suites, (asdf:test-system
 # :cgraph-editor), which need Hunchentoot and so are kept out of cgraph's own.
-#
-# A second job runs cgraph's own suite on ECL, to keep it portable.
 
 on:
   push:
@@ -17,7 +23,53 @@ on:
   workflow_dispatch:
 
 jobs:
+  cgraph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CL_SOURCE_REGISTRY: '(:source-registry (:tree "${{ github.workspace }}") :inherit-configuration)'
+    steps:
+      - name: Checkout cgraph (this repo, pushed ref)
+        uses: actions/checkout@v4
+        with:
+          path: cgraph
+
+      - name: Install SBCL
+        env:
+          SBCL_VERSION: 2.6.6
+        run: |
+          curl -sSL -o /tmp/sbcl.tar.bz2 \
+            "https://downloads.sourceforge.net/project/sbcl/sbcl/${SBCL_VERSION}/sbcl-${SBCL_VERSION}-x86-64-linux-binary.tar.bz2"
+          tar -xjf /tmp/sbcl.tar.bz2 -C /tmp
+          (cd /tmp/sbcl-${SBCL_VERSION}-x86-64-linux && sudo sh install.sh)
+          sbcl --version
+
+      - name: Cache Quicklisp
+        uses: actions/cache@v4
+        with:
+          path: ~/quicklisp
+          key: quicklisp-${{ runner.os }}
+
+      # Only what a new user would have: Quicklisp loaded from ~/.sbclrc. No
+      # unlock of CL, unlike whole-stack, which needs it for parsifal.
+      - name: Bootstrap Quicklisp + SBCL init
+        run: |
+          if [ ! -f ~/quicklisp/setup.lisp ]; then
+            curl -sSL -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
+            sbcl --non-interactive --load /tmp/quicklisp.lisp \
+                 --eval '(quicklisp-quickstart:install)'
+          fi
+          printf '%s\n' \
+            '(load (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname)))' > ~/.sbclrc
+
+      # Engine suites, then the graph editor's, each in a fresh SBCL; exits 1
+      # if any suite fails.
+      - name: Run cgraph and graph-editor tests
+        run: bash cgraph/test/run-tests.sh
+
   whole-stack:
+    # Skipped on a pull request from a fork, which has no STACK_CHECKOUT_TOKEN.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # The gate takes about two minutes. A hang used to run to GitHub's six-hour
     # default; this fails it in minutes instead.
@@ -96,7 +148,7 @@ jobs:
   # cgraph's own suite on a second implementation, so portability stays tested:
   # ECL found three bugs SBCL had been tolerating (see notes/release-issues.md).
   # cgraph and its graph editor -- parsifal and the extractor are SBCL-only for
-# now.
+  # now.
   ecl:
     runs-on: ubuntu-latest
     timeout-minutes: 30
