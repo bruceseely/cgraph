@@ -85,9 +85,11 @@
                     :relation-not-mapped
                     (format nil "Relation ~A has no syntax entry — it will be ~
                                  silently dropped during generation. To fix: ~
-                                 (register-relation-syntax '~(~A~) :dobj) with ~
-                                 whichever role fits, or add it to ~
-                                 *relation-syntax-table*."
+                                 add a :role (:subject :dobj :iobj :pp :adj ~
+                                 :adv :poss :nmod) to its definition in ~
+                                 relation-types.lisp, give it a :supertypes ~
+                                 that has one, or call ~
+                                 (register-relation-syntax '~(~A~) <role>)."
                             label label)
                     label)
               findings)))
@@ -694,11 +696,12 @@
   (or (position (first finding) *lint-severities*) -1))
 
 (defun %cheat-sheet-pathname ()
-  "Absolute path to the generation-tables cheat sheet shipped with cgraph,
-   or NIL if the cgraph system source directory can't be resolved."
+  "Absolute path to the error reference shipped with cgraph, which has an entry
+   for every finding name, or NIL if the cgraph system source directory can't
+   be resolved."
   (let ((sysdir (ignore-errors (asdf:system-source-directory :cgraph))))
     (when sysdir
-      (let ((path (merge-pathnames "docs/generation-tables.md" sysdir)))
+      (let ((path (merge-pathnames "docs/errors.md" sysdir)))
         (and (probe-file path) path)))))
 
 (defun report-lexicon-lint (&key (stream *standard-output*) (min-severity :info))
@@ -743,7 +746,7 @@
                  (format stream "  [~A] ~A~%" check msg))))
            (let ((cheat-sheet (%cheat-sheet-pathname)))
              (when cheat-sheet
-               (format stream "~%See the cheat sheet for help fixing ~
-                               these findings:~%  file://~A~%"
+               (format stream "~%Each [NAME] above is explained, with how to ~
+                               fix it, in:~%  file://~A~%"
                        (namestring cheat-sheet))))))
     all-findings))
