@@ -177,7 +177,6 @@
                                            ;; is join run backwards, and the
                                            ;; join is what checks it.
                                            (:file "decomposition")
-			                   (:file "cg-env")
                                            (:file "type-definition")
                                            (:file "query")))
                              (:module "graphing"

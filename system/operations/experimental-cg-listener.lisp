@@ -1,4 +1,12 @@
 ;;; -*- Mode: LISP; Syntax: Common-lisp; Base: 10; Lowercase: Yes -*-
+;;;
+;;; EXPERIMENTAL -- NOT LOADED. Deliberately left out of cgraph.asd.
+;;;
+;;; An early start at a cgraph listener: an Emacs buffer for CG notation that
+;;; works the way a Lisp listener does for Lisp (a prompt, a history, commands
+;;; such as :g to add a graph and :s to show them). Kept to come back to, not
+;;; maintained: it has not been loaded since it was set aside, and (CG) calls
+;;; CONCEPTS, which no longer exists. Formerly cg-env.lisp.
 
 (in-package #:conceptual-graphs)
 
