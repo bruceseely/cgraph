@@ -142,6 +142,7 @@
                               :serial t
 	                      :components ((:file "set-operations")
                                            (:file "definitions")
+                                           (:file "environment")
                                            (:file "initialize")
                                            (:file "basic-utilities")))
                              (:module "core"

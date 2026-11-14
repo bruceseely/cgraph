@@ -59,10 +59,8 @@
 (defvar *external-types-directory* nil
   "The type set the user chose at setup, or NIL for the shipped defaults.")
 
-;;; Tracks which type catalog is currently in memory so callers can avoid
-;;; redundant unload/reload cycles: NIL when no types are loaded, otherwise the
-;;; namestring of the type set they were loaded from.
-(defvar *loaded-types-source* nil)
+;;; *LOADED-TYPES-SOURCE* -- which type set is in memory, so callers can avoid
+;;; redundant reloads -- is a slot of the environment; see environment.lisp.
 
 (defvar *cgraph-inits*  ())
 

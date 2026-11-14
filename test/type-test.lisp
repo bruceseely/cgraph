@@ -140,7 +140,13 @@
     ;; Read into a catalog of its own. Loading over the live one would install
     ;; whatever the round trip produced -- which, when it is broken, is exactly
     ;; the damage this test exists to detect, done to the image running it.
-    (let* ((after (let ((*relation-type-catalog* (make-hash-table :test 'eql)))
+    ;; An environment sharing the live concept types, so the relations' source
+    ;; and destination types resolve, with an empty relation catalog.
+    (let* ((after (let ((*environment*
+                          (make-environment
+                           :concept-type-catalog *concept-type-catalog*
+                           :concept-type-top     *concept-type-top*
+                           :concept-type-bottom  *concept-type-bottom*)))
                     (load-relation-types file t)
                     (relation-catalog-snapshot)))
            (diff (loop for b in before

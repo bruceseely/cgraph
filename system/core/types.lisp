@@ -10,13 +10,9 @@
   ((type :initarg :type :reader type)))
 
 
-(eval-when (:load-toplevel :execute)
-  (defvar *concept-type-catalog* (make-hash-table :test 'eql))
-  (defvar *relation-type-catalog* (make-hash-table :test 'eql)))
-
-
-(defvar *concept-type-top*)
-(defvar *concept-type-bottom*)
+;; *CONCEPT-TYPE-CATALOG*, *RELATION-TYPE-CATALOG*, *CONCEPT-TYPE-TOP* and
+;; *CONCEPT-TYPE-BOTTOM* are slots of the current environment; see
+;; setup/environment.lisp.
 
 (defun clear-concept-catalog ()
   (when *concept-type-catalog*
