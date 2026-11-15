@@ -77,7 +77,7 @@
     ("[PERSON: Tom]->(psize)->[SIZE: @2 meters]."              . "Tom is two meters in size.")
     ("[PERSON: Tom]->(temp)->[TEMPERATURE: @37 degrees]."      . "Tom is at a temperature of 37 degrees.")
     ("[EAT]- (agnt)->[CAT]->(hgt)->[DISTANCE: @30 cm] (obj)->[FOOD]." . "A cat 30 centimeters tall eats food.")
-    ("[PERSON: Tom]- (hgt)->[DISTANCE: @6 feet] (wgt)->[MASS: @80 kg]." . "Tom is 80 kilograms in weight and six feet tall.")
+    ("[PERSON: Tom]- (hgt)->[DISTANCE: @6 feet] (wgt)->[MASS: @80 kg]." . "Tom is six feet tall and 80 kilograms in weight.")
     ;; With no measurement, the filler is named by the dimension it measures,
     ;; not its own type -- it was "of weight a mass", "of height a distance".
     ("[PERSON: Tom]->(wgt)->[MASS]."                           . "Tom has a weight.")
@@ -88,14 +88,17 @@
     ;; A definite one is the possessive -- it was "Tom has the weight".
     ("[PERSON: Tom]->(wgt)->[MASS: #]."                        . "Tom's weight.")
     ("[PERSON: Tom]->(age)->[AGE: #]."                         . "Tom's age.")
-    ("[PERSON: Tom]- (hgt)->[DISTANCE: #] (wgt)->[MASS: #]."   . "Tom's weight and height.")
+    ("[PERSON: Tom]- (hgt)->[DISTANCE: #] (wgt)->[MASS: #]."   . "Tom's height and weight.")
     ("[PERSON: #]->(wgt)->[MASS: #]."                          . "The person's weight.")
     ("[MOVE]- (agnt)->[PERSON: Sue] (obj)->[MASS: #]<-(wgt)<-[PERSON: Tom]." . "Sue moves Tom's weight.")
     ("[PERSON: Tom]->(poss)->[CAT: #]."                        . "Tom has the cat.")
     ;; Mixed with something indefinite, a definite dimension takes "a" -- it
     ;; was "Tom has the weight and a height".
-    ("[PERSON: Tom]- (hgt)->[DISTANCE] (wgt)->[MASS: #]."      . "Tom has a weight and a height.")
-    ("[PERSON: Tom]- (poss)->[CAT] (wgt)->[MASS: #]."          . "Tom has a weight and a cat.")
+    ("[PERSON: Tom]- (hgt)->[DISTANCE] (wgt)->[MASS: #]."      . "Tom has a height and a weight.")
+    ("[PERSON: Tom]- (poss)->[CAT] (wgt)->[MASS: #]."          . "Tom has a cat and a weight.")
+    ;; Arcs from one concept come out in the order they were written -- they
+    ;; came out reversed, "Tom has a dog and a cat".
+    ("[PERSON: Tom]- (poss)->[CAT] (poss)->[DOG]."             . "Tom has a cat and a dog.")
     ;; Quantifier inside a nested PROPOSITION referent.
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: @every]<-(agnt)<-[BARK]]."
      . "Ivan knows that every dog barks.")

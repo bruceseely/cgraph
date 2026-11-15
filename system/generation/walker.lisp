@@ -58,8 +58,8 @@
   (first (other-arcs relation concept)))
 
 (defun concept-relations (concept)
-  "All relations attached to CONCEPT (incoming + outgoing)."
-  (arcs concept))
+  "All relations attached to CONCEPT (incoming + outgoing), oldest first."
+  (reverse (arcs concept)))
 
 ;;; --- Main predicate selection -----------------------------------------------
 

@@ -238,14 +238,16 @@
         ;; This was the third and last clause path that rendered its subject
         ;; with REALIZE-FULL-NP and so never asked whether it was a revisit.
         (revisit (uttered-or-coref-uttered-p state possessor)))
-    (mark-uttered state possessor)
+    ;; A revisit is marked after its NP, as in REALIZE-COPULA-CLAUSE.
+    (unless revisit (mark-uttered state possessor))
     ;; Mark the POSS relations traversed BEFORE rendering the topic NP
     ;; so they aren't folded back in as possessive prefixes.
     (dolist (rel (concept-relations possessor))
       (when (eq (relation-role rel) :poss)
         (mark-traversed state rel)))
     (let ((possessor-np (if revisit
-                            (realize-np possessor state :case :nominative)
+                            (prog1 (realize-np possessor state :case :nominative)
+                              (mark-uttered state possessor))
                             (realize-full-np possessor state)))
           (objects      (realize-possessed-objects possessor state)))
       (format nil "~a ~a ~{~a~^ and ~}" possessor-np have-form objects))))
@@ -367,7 +369,12 @@
         ;; share a concept by construction, and the sentence that mentions it
         ;; second was saying "A dog is old" about the dog just named.
         (revisit (uttered-or-coref-uttered-p state topic)))
-    (mark-uttered state topic)
+    ;; A first mention is marked before its NP is built, as it always was. A
+    ;; revisit is marked AFTER: marking stamps it as the latest mention, and
+    ;; PRONOUN-SAFE-P, asked inside REALIZE-NP, would then find no competitor
+    ;; more recent and always allow "it" -- "Bob has the Chevy and a bag
+    ;; containing a cake. It is old."
+    (unless revisit (mark-uttered state topic))
     ;; Mark predicate-bearing relations traversed BEFORE rendering the
     ;; topic NP, so they don't get folded in as pre-modifiers of the noun.
     (dolist (rel (concept-relations topic))
@@ -376,7 +383,8 @@
     (let* ((topic-np    (if revisit
                             ;; Rule 5's anaphoric expression: a pronoun, or the
                             ;; short definite NP REALIZE-NP falls back to.
-                            (realize-np topic state :case :nominative)
+                            (prog1 (realize-np topic state :case :nominative)
+                              (mark-uttered state topic))
                             (realize-full-np topic state)))
            (complements (realize-copula-complements topic state)))
       (cond ((null complements) topic-np)

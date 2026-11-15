@@ -135,8 +135,12 @@
                (dog    (find 'dog (cut-concepts nodes)
                              :key (lambda (c) (label (concept-type c)))))
                (pieces (decompose-cgraph nodes :at dog)))
+          ;; "The dog", not "it": the cake is mentioned after the dog, and the
+          ;; most recent candidate is the one a reader takes "it" for. This
+          ;; said "It is old" while the copula marked its topic mentioned
+          ;; before asking whether the pronoun was safe.
           (check "the pieces are spoken as two sentences, the second anaphoric"
-                 (string= "A dog eats a cake. It is old." (graphs-to-text pieces)))
+                 (string= "A dog eats a cake. The dog is old." (graphs-to-text pieces)))
           (check "cross-coref off names it again instead"
                  (string= "A dog eats a cake. A dog is old."
                           (graphs-to-text pieces :cross-coref nil))))
@@ -157,12 +161,13 @@
         ;; them rendered their subject with REALIZE-FULL-NP and so never asked --
         ;; the copula, the have-clause, and the possessive modifier -- which made
         ;; consecutive sentences disagree about the same person: "Dave has an
-        ;; ancient bag. He is young."
+        ;; ancient bag. He is young." The Chevy is named in the last sentence,
+        ;; not "it": the bag and the cake came after it.
         (check "every sentence after the first refers back, not afresh"
                (string= (concatenate 'string
                                      "Dave drives with his Chevy to Baltimore. "
                                      "He has an ancient bag containing a cake. "
-                                     "He is young. It is old.")
+                                     "He is young. The Chevy is old.")
                         (graph-to-text-decomposed
                          (parse-cgraph "[CHEVY-VEHICLE]-
                                         (attr)→[OLD]
@@ -176,14 +181,17 @@
 
         ;; The same graph with a second man in it. Nothing may be called "he"
         ;; now: two candidates compete for it and the text would say neither.
-        ;; The vehicle still refers back, having no competitor until the cake and
-        ;; the bag arrive -- and by the last sentence it is the most recent of
-        ;; them, so "it" is still safe.
+        ;; Bob's possessions come in the order written, the Chevy first, so by
+        ;; the last sentence the bag and the cake are more recent and "it" would
+        ;; mean the cake: the vehicle is named. (Arcs used to come out reversed,
+        ;; the Chevy last, and "It is old" was right only by that accident --
+        ;; the copula marked its topic as mentioned before asking whether the
+        ;; pronoun was safe, so it always was.)
         (check "a second man in the graph costs everyone the pronoun"
                (string= (concatenate 'string
                                      "Young Dave drives with a Chevy to Baltimore. "
-                                     "Bob has an ancient bag containing a cake and "
-                                     "the Chevy. It is old.")
+                                     "Bob has the Chevy and an ancient bag containing "
+                                     "a cake. The Chevy is old.")
                         (graph-to-text-decomposed
                          (parse-cgraph "[CHEVY-VEHICLE]-
                                         (attr)→[OLD]
