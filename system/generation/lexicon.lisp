@@ -585,36 +585,14 @@
 ;;; the systems already do, generation onto core.
 (setf *mass-type-p* (lambda (ctype) (lexicon-prop ctype :mass-p)))
 
-;;; --- Noun lemma overrides --------------------------------------------------
-;;; BASE-LEMMA falls back to the downcased type label, which is wrong whenever
-;;; the label was chosen to disambiguate rather than to name. A hyphenated
-;;; label keeps its hyphen ("a text-message"), and a label qualified to split a
-;;; polysemous word says more than the English does: the word for an
-;;; EMAIL-MESSAGE is just "email", the word for TELEPHONY is "telephone".
-;;; Pluralization appends to the whole string, so "text messages" comes out
-;;; right.
-
-(register-builtin-lexicon-entry 'text-message  :lemma "text message")
-(register-builtin-lexicon-entry 'email-message :lemma "email" :synonym-ok t)
-
-;;; Compound labels whose hyphen is ontology, not English. A hyphenated label
-;;; surfaces with its hyphen ("a body-part"), and these are types you would
-;;; actually write in a graph, so the hyphen reaches the reader. The label
-;;; stays as it is in every case: BODY-PART and the rest are named to sit in
-;;; the lattice, and GEOGRAPHICAL-STATE earns its qualifier by not being
-;;; STATE-the-situation. Only the English needs saying. (Purely structural
-;;; types -- ABSTRACT-OBJECT, the *-ATTRIBUTEs, the *-EXTENTs -- are left
-;;; alone: they read no better, but nothing puts them in a graph.)
-(register-builtin-lexicon-entry 'body-part            :lemma "body part")
-(register-builtin-lexicon-entry 'food-item            :lemma "food item")
-(register-builtin-lexicon-entry 'city-government      :lemma "city government")
-(register-builtin-lexicon-entry 'office-building      :lemma "office building")
-
-;;; A noun that names an event. Everything under EVENT realizes as a verb by
-;;; default -- without this PARTY comes out "Is partied in a library" -- and
-;;; unlike DINNER-EVENT, which never surfaces because its parts carry the
-;;; clause, a party is usually the subject of its own sentence.
-(register-builtin-lexicon-entry 'party :pos :noun)
+;;; --- What is NOT here ------------------------------------------------------
+;;; Entries that exist because of how an ontology names or places a type --
+;;; a label qualified to disambiguate (CHEVY-VEHICLE -> "Chevy",
+;;; GEOPOLITICAL-STATE -> "state"), a compound label whose hyphen shouldn't
+;;; reach the reader (BODY-PART), a noun filed under EVENT (PARTY) -- belong in
+;;; that type set's lexicon-overrides.lisp, not here: another ontology may name
+;;; the same thing differently. This file holds facts about English words.
+;;; cgraph-types, default-types/ and test/test-types/ each carry their own.
 
 ;;; --- Days of the week ------------------------------------------------------
 ;;; Proper nouns, so no article and a capital: "on Friday", not "at a friday".
@@ -625,30 +603,15 @@
 
 (dolist (day '(monday tuesday wednesday thursday friday saturday sunday))
   (register-builtin-lexicon-entry day :proper-p t :time-prep "on"))
-(register-builtin-lexicon-entry 'geological-landform  :lemma "landform")
-;; English says "state" for both the land and the polity; the split that
-;; matters here is one the ontology makes and the word does not.
-(register-builtin-lexicon-entry 'geographical-state   :lemma "state")
-(register-builtin-lexicon-entry 'geopolitical-state   :lemma "state")
-
-;;; Marques. The -VEHICLE suffix distinguishes the car from the company that
-;;; makes it, a distinction English drops entirely -- you say "a Chevy". Not
-;;; :proper-p, which means no article and would give "Dave has Chevy": a marque
-;;; used for the car is an ordinary count noun that happens to be capitalized.
-(register-builtin-lexicon-entry 'chevy-vehicle :lemma "Chevy")
-(register-builtin-lexicon-entry 'ford-vehicle  :lemma "Ford")
-(register-builtin-lexicon-entry 'tesla-vehicle :lemma "Tesla")
 
 ;;; --- Communication media ---------------------------------------------------
 ;;; A medium is mass ("she told him by email"); the countable thing is the
-;;; message that travels on it (EMAIL-MESSAGE, LETTER). On an instrument arc
-;;; it wants "by" rather than :inst's default "with" -- you reach someone BY
-;;; telephone but WITH a telephone, which is the TELEPHONY/TELEPHONE split
-;;; stated in prepositions.
+;;; message that travels on it (a letter, an email message). On an instrument
+;;; arc it wants "by" rather than :inst's default "with" -- you reach someone
+;;; BY post but WITH a pen.
 
 (register-builtin-lexicon-entry 'email     :mass-p t :inst-prep "by")
 (register-builtin-lexicon-entry 'post      :mass-p t :inst-prep "by")
-(register-builtin-lexicon-entry 'telephony :mass-p t :inst-prep "by" :lemma "telephone" :synonym-ok t)
 
 ;;; --- Adverb-form overrides -------------------------------------------------
 ;;; Some types are abstract category labels rather than specific adjectives,
@@ -709,9 +672,6 @@
 (register-builtin-lexicon-entry 'remind :rcpt-direct t :obj-prep "of")
 (register-builtin-lexicon-entry 'warn   :rcpt-direct t :obj-prep "about")
 (register-builtin-lexicon-entry 'ask    :rcpt-direct t :obj-prep "about")
-;; Same frame, plus a lemma: the verb is "call", not the label "phone-call".
-;; As an NP the same lemma reads "a call", which is what English says too.
-(register-builtin-lexicon-entry 'phone-call :lemma "call" :rcpt-direct t :obj-prep "about")
 ;; Double-object verbs: the info NP follows the recipient with no preposition
 ;; ("tell her the news", "teach the kids math").
 (register-builtin-lexicon-entry 'tell   :rcpt-direct t :obj-prep nil)

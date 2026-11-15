@@ -126,8 +126,8 @@
     registered. PREVIOUS is the plist that was registered before it, or :NONE
     when nothing was. Mounting a second domain rewinds through this first, so
     one domain's English cannot leak into the next -- and a domain that
-    overrode one of cgraph's own registrations (:LEMMA on CITY-GOVERNMENT,
-    say) gives it back rather than deleting it."))
+    overrode one of cgraph's own registrations (:TIME-PREP on FRIDAY, say)
+    gives it back rather than deleting it."))
 
 (defmacro with-environment ((environment) &body body)
   "Evaluate BODY in ENVIRONMENT: every type lookup, graph, individual and

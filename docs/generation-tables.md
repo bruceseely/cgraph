@@ -197,6 +197,9 @@ place for:
 
 System defaults (the lists shipped with cgraph) live in
 `system/generation/lexicon.lisp` and `system/generation/anaphora.lisp`.
+They are facts about English words. An entry that exists because of how an
+ontology labels or places a type (`CHEVY-VEHICLE` → "Chevy", `PARTY` filed
+under `EVENT`) goes in that type set's `lexicon-overrides.lisp` instead.
 If a default is universally wrong, fix it there; if it's a personal addition,
 keep it in `initializations.lisp`.
 

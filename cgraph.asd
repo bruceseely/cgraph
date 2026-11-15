@@ -138,7 +138,8 @@
 	        ;; The shipped type set, read in place and never written. Static, not
 	        ;; compiled: these are data that LOAD-CONCEPT-TYPES reads.
 	        :components ((:static-file "concept-types.lisp")
-	                     (:static-file "relation-types.lisp")))
+	                     (:static-file "relation-types.lisp")
+	                     (:static-file "lexicon-overrides.lisp")))
 
                (:module "system"
 	        :depends-on ("default-types")
