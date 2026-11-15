@@ -1,9 +1,8 @@
 # CGIF import and export: design
 
-Status: **proposal, for approval before any code.** Decided so far
-(2026-11-15): CGIF goes in a separate ASDF system, `cgraph/cgif`, in this
-repo, the way `cgraph/support` does. Everything else here is a
-recommendation. The decisions still needed are collected at the end.
+Status: **approved 2026-11-15.** CGIF goes in a separate ASDF system,
+`cgraph/cgif`, in this repo, the way `cgraph/support` does. The decisions
+are recorded at the end.
 
 ## What CGIF is
 
@@ -176,15 +175,13 @@ Small commits, each with its tests:
 6. Docs: `docs/cgif.md`, `API.md`, a line in the README, and fix
    `docs/generation.md:8`, which calls a linear-form string a "CGIF string".
 
-## Decisions needed
+## Decisions
 
-1. **Default mode:** `:portable` (recommended), `:strict` or `:lossless`.
-2. **Individual ids:** write `#123` as the quoted name `"#123"`
-   (recommended), or refuse outside lossless mode.
-3. **Sets and measures in portable mode:** refuse (recommended), or write
-   Sowa's proposed syntax anyway.
+All five settled on 2026-11-15, each as recommended:
+
+1. **Default mode:** `:portable`.
+2. **Individual ids:** `#123` is written as the quoted name `"#123"`.
+3. **Sets and measures in portable mode:** refused.
 4. **API names and package:** `cg:parse-cgif`, `cg:format-cgif`,
-   `cg:read-cgif-graphs` and `cg:write-cgif-graphs` in `:cg` (recommended),
-   or a separate `:cgif` package like `:sup`.
-5. **If/Then and Either/Or on import** in the first version
-   (recommended), or later.
+   `cg:read-cgif-graphs` and `cg:write-cgif-graphs`, in `:cg`.
+5. **If/Then and Either/Or on import:** in the first version.
