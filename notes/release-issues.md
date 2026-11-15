@@ -76,12 +76,17 @@ Items are in priority order.
 
 ## 3. Global state and the API
 
-- **One global everything.** The type hierarchy, context and name registry
-  are all specials (`*concept-type-top*` etc.), and `make-top-concept-type`
-  makes fresh instances, which leaves stale references behind. Two knowledge
-  bases can't coexist in one image. A `with-cgraph-environment` macro that
-  binds the specials would help; `system/operations/cg-env.lisp` may be most
-  of the way there.
+- ~~**One global everything.**~~ Done 2026-11-15: an ENVIRONMENT object
+  (`system/setup/environment.lisp`) holds the types, type-set directory,
+  individuals, nodes, coreference labels, variables, lexicon and relation
+  syntax registrations, and a root context; the old names are symbol macros
+  for its slots. `cg:make-environment :types`, `cg:with-environment` and
+  `cg:env-let` are exported; the web server and editor sessions bind their
+  environment per request; cg-from-parse's name registry is per environment.
+  See `docs/environments.md`. Still image-wide, deliberately: settings
+  (`*concise*` …), the given-name gender table, cgraph's built-in lexicon.
+  (`cg-env.lisp` turned out to be Bruce's Emacs CG listener, unrelated; it is
+  now `system/operations/experimental-cg-listener.lisp`, not loaded.)
 - ~~**Startup takes ceremony.**~~ Done 2026-10-19: `(cg:init &key types
   web)` is the one documented entry point. It loads the types once (the old
   `setup-cgraph` → `reset-cgraph` sequence loaded them twice), reads
