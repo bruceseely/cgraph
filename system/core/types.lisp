@@ -1066,6 +1066,37 @@
                           problems)))))))))
     (nreverse problems)))
 
+(defun canonical-graph-head-label (graph-string)
+  "The type label of GRAPH-STRING's head concept -- its first concept, the one
+   the graph is about, as CANONICAL-GRAPH-ARCS takes it -- or NIL when the
+   string doesn't parse."
+  (let* ((*package* (find-package "CONCEPTUAL-GRAPHS"))
+         (nodes (ignore-errors (parse-cgraph graph-string)))
+         (head  (find-if (lambda (n) (ignore-errors (concept-p n))) nodes)))
+    (and head (ignore-errors (label (concept-type head))))))
+
+(defun canonical-graph-head-problem (label graph-string)
+  "A message when GRAPH-STRING, offered as the canonical graph of the type
+   named LABEL, is headed by a concept of some other type; else NIL.
+
+   A type's own canonical graph is about that type, so its head is a concept of
+   it: [EAT]- (agnt)→[ANIMATE] (obj)→[FOOD] for EAT. A graph headed by another
+   type describes that type instead. It is nearly always a line copied from a
+   sibling and not edited -- BABY's was CHILD's, [CHILD]→(life-stage)→
+   [CHILDHOOD] -- and the inheritance check can't see it, because the copied
+   arcs satisfy the parent's graph as well as they did for the sibling. (A
+   type with no graph of its own shows its ancestor's, headed by the ancestor;
+   that one is inherited, not its own, and isn't checked here.)
+
+   Takes the label and string rather than a type, so the web editor can ask
+   before it saves."
+  (when (and graph-string (plusp (length (string-trim " " graph-string))))
+    (let ((head (canonical-graph-head-label graph-string)))
+      (when (and head (not (string-equal (string head) (string label))))
+        (format nil "Canonical graph of ~:@(~a~) is headed by [~:@(~a~)]: a type's own ~
+                     canonical graph is about that type, so it starts with [~:@(~a~)]"
+                label head label)))))
+
 (defun canonical-graph-build-problem (node)
   "A message when NODE's own canonical graph doesn't build -- a syntax error,
    or a concept its relation doesn't allow -- else NIL."
@@ -1143,7 +1174,8 @@
 (defun check-type-lattice ()
   "Check the concept type lattice for structural problems.
    Reports cycles, orphaned types, symmetry violations, duplicate
-   definitions, and canonical graph inheritance gaps."
+   definitions, canonical graph inheritance gaps, and canonical graphs headed
+   by a type other than their own."
   (let ((problems nil))
 
     ;; Check each type for cycles via supertypes
@@ -1213,6 +1245,17 @@
                            (eq node *concept-type-bottom*))
                  (setf problems
                        (append (canonical-graph-inheritance-problems node) problems))))
+             *concept-type-catalog*)
+
+    ;; Check that each canonical graph is headed by its own type: a graph headed
+    ;; by another type describes that one, and is usually a copied line.
+    (maphash (lambda (key node)
+               (declare (ignore key))
+               (unless (or (eq node *concept-type-top*)
+                           (eq node *concept-type-bottom*))
+                 (let ((problem (canonical-graph-head-problem
+                                 (label node) (effective-canonical-graph-string node))))
+                   (when problem (push problem problems)))))
              *concept-type-catalog*)
 
     ;; Check that each canonical graph builds: it parses, and every concept fits

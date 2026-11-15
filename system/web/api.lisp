@@ -645,9 +645,11 @@ the way /api/type-def presents them — top and bottom excluded, case-insensitiv
             (mapcar (lambda (problem) (format nil "\"~a\"" (json-escape problem)))
                     problems))))
 
-(defun validate-canonical-graph (string)
+(defun validate-canonical-graph (string &optional label)
   "Parse STRING as a conceptual graph against the live catalog; return NIL when it
-is well-formed, else an error message. parse-cgraph reports every failure -- an
+is well-formed, else an error message. With LABEL, the type STRING is offered as
+the canonical graph of, it must also be headed by a concept of that type -- see
+CANONICAL-GRAPH-HEAD-PROBLEM. parse-cgraph reports every failure -- an
 unknown type, malformed syntax, a concept that doesn't fit its relation -- as a
 CGRAPH-PARSE-ERROR; its message alone is returned, without the copy of the string
 and the caret under it, since the person is looking at the string in the field.
@@ -656,7 +658,7 @@ the catalog is keyed :cg."
   (handler-case
       (progn (let ((*package* (find-package :conceptual-graphs)))
                (with-cg-readtable (pcg string)))
-             nil)
+             (and label (canonical-graph-head-problem label string)))
     (cgraph-parse-error (e) (parse-error-message e))
     (error (e)
       ;; Newlines KEPT. The connection errors lay out both remedies -- "either
@@ -711,7 +713,7 @@ the catalog is keyed :cg."
           ;; so a self-referential canonical — [WANT] in WANT's own graph — resolves.
           (define-concept-type :label sym :supertypes super-syms :canonical-graph "")
           (when canonical
-            (let ((verr (validate-canonical-graph canonical)))
+            (let ((verr (validate-canonical-graph canonical label)))
               (when verr
                 ;; roll back a freshly-created type; leave a pre-existing one alone.
                 (unless pre-existed (rollback-concept-type label))
@@ -808,7 +810,7 @@ the catalog is keyed :cg."
                                  canonical)))
               ;; validate before mutating — the type already exists, so a self-ref resolves.
               (when canonical
-                (let ((verr (validate-canonical-graph canonical)))
+                (let ((verr (validate-canonical-graph canonical label)))
                   (when verr (error "invalid canonical graph: ~a" verr))))
               ;; live: replace the definition (modify supertypes + canonical).
               (define-concept-type :label sym

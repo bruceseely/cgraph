@@ -62,3 +62,10 @@ Types are saved into the type set in use (see [setup](setup.md#type-sets)).
 The shipped default types are read-only: a save while they are loaded is
 refused, and the page offers to create a type set of your own, then makes the
 save there.
+
+A canonical graph is checked before it is saved. It must parse, and it must be
+headed by a concept of the type being saved: BABY's graph starts with `[BABY]`.
+A graph headed by another type describes that type, and is almost always a
+line copied from a sibling and not edited, so the save refuses it and says so.
+`(cg:check-type-lattice)` reports the same thing for graphs already in a type
+set's files.

@@ -33,7 +33,10 @@
      :canonical-graph "[CIT-KEEP-LESS]→(agnt)→[PERSON]")
     ;; a graph that doesn't build: FOOD is not animate
     (:label cit-bad        :supertypes (act)
-     :canonical-graph "[CIT-BAD]→(agnt)→[FOOD]")))
+     :canonical-graph "[CIT-BAD]→(agnt)→[FOOD]")
+    ;; a sibling's graph copied and not edited: about CIT-FEED-FULL, not this
+    (:label cit-copied     :supertypes (cit-feed)
+     :canonical-graph "[CIT-FEED-FULL]- (agnt)→[PERSON] (obj)→[FOOD]")))
 
 (defun canonical-inheritance-problems-of (label)
   (canonical-graph-inheritance-problems (get-concept-type label)))
@@ -76,5 +79,21 @@
                (and problem (search "doesn't build" problem)
                     (search "[FOOD] can't be the destination of (agnt)" problem))))
       (check "one that builds is not"
-             (null (canonical-graph-build-problem (get-concept-type 'cit-feed-full)))))
+             (null (canonical-graph-build-problem (get-concept-type 'cit-feed-full))))
+      (check "a graph headed by another type is reported"
+             (let ((problem (canonical-graph-head-problem
+                             'cit-copied
+                             (canonical-graph-string (get-concept-type 'cit-copied)))))
+               (and problem (search "CIT-COPIED is headed by [CIT-FEED-FULL]" problem))))
+      (check "the inheritance check alone can't see it"
+             (null (canonical-inheritance-problems-of 'cit-copied)))
+      (check "a graph headed by its own type is not reported"
+             (null (canonical-graph-head-problem
+                    'cit-feed-full
+                    (canonical-graph-string (get-concept-type 'cit-feed-full)))))
+      (check "the lattice check reports it"
+             (search "CIT-COPIED is headed by"
+                     (with-output-to-string (*standard-output*) (check-type-lattice))))
+      (check "no graph, no problem"
+             (null (canonical-graph-head-problem 'cit-feed-none ""))))
     ok))

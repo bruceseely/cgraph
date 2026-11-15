@@ -34,7 +34,8 @@
                 :serial t
                 :components ((:file "editor-operations-test")
                              (:file "referent-view-test")
-                             (:file "environment-serving-test"))))
+                             (:file "environment-serving-test")
+                             (:file "type-save-validation-test"))))
   :perform (test-op (o c)
              (unless (uiop:symbol-call :conceptual-graphs :editor-test t)
                (error "cgraph-editor: some test suites failed (see the report above)."))))
