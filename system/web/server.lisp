@@ -8,8 +8,8 @@
 ;;; Handlers run in Hunchentoot's worker threads, which see only the GLOBAL value
 ;;; of every special -- never a binding the REPL made. So the server captures an
 ;;; environment when it starts and binds *ENVIRONMENT* to it around every
-;;; request: the type browser shows, edits and saves that knowledge base even
-;;; while the REPL has bound another. (Editor sessions go one step further and
+;;; request (and *CONTEXT* to its root context): the type browser shows, edits
+;;; and saves that knowledge base even while the REPL has bound another. (Editor sessions go one step further and
 ;;; carry the environment they were opened in; see WITH-EDITOR-SESSION.)
 
 (defclass cgraph-acceptor (hunchentoot:easy-acceptor)
@@ -22,7 +22,7 @@
 (defmethod hunchentoot:acceptor-dispatch-request :around
     ((acceptor cgraph-acceptor) request)
   (declare (ignore request))
-  (let ((*environment* (served-environment acceptor)))
+  (with-environment ((served-environment acceptor))
     (call-next-method)))
 
 (defun web-static-dir ()

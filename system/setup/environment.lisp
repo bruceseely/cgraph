@@ -24,9 +24,15 @@
 ;;  compiled with the macros in place -- a reference compiled before the
 ;;  macro exists is a reference to the symbol's (unbound) global value.
 ;;
-;;  Not in here: *CONTEXT* (a real special, LET-bound legitimately), and the
-;;  settings that say how cgraph behaves rather than what it knows (*CONCISE*
-;;  and friends).
+;;  *CONTEXT* is not a symbol macro: it stays a real special, because binding
+;;  it to a child context is ordinary and correct (the reader does it for
+;;  every nested graph). Instead the environment holds a ROOT CONTEXT, which
+;;  RESET-CGRAPH makes and WITH-ENVIRONMENT, the web server and editor sessions
+;;  bind *CONTEXT* to. Replace it through RESET-CGRAPH, not (SETF *CONTEXT*),
+;;  or the environment goes on handing out the old one.
+;;
+;;  Not in here: the settings that say how cgraph behaves rather than what it
+;;  knows (*CONCISE* and friends), and the directories under ~/.cgraph/.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -35,10 +41,10 @@
     (intern (string-trim "*" (symbol-name variable)) :conceptual-graphs)))
 
 (defmacro define-environment (&body specs)
-  "Define the ENVIRONMENT class from SPECS, each (VARIABLE INITFORM &optional
-   DOC), and make each VARIABLE a symbol macro for its slot in *ENVIRONMENT*.
-   The slot, its :INITARG keyword and its ENV- accessor are named after
-   VARIABLE without the stars."
+  "Define the ENVIRONMENT class from SPECS, each (NAME INITFORM &optional DOC).
+   The slot, its :INITARG keyword and its ENV- accessor are named after NAME
+   without the stars. A NAME with stars, *LIKE-THIS*, is also made a symbol
+   macro for its slot in *ENVIRONMENT*; a NAME without is a plain slot."
   `(progn
      (defclass environment ()
        ,(loop for (variable initform doc) in specs
@@ -52,6 +58,7 @@
         nodes and the English that goes with its types. A fresh one is empty;
         bind *ENVIRONMENT* to it and call INITIALIZE-CGRAPH to load it."))
      ,@(loop for (variable) in specs
+             when (char= #\* (char (symbol-name variable) 0))
              collect `(define-symbol-macro ,variable
                           (,(intern (format nil "ENV-~a" (%env-slot-name variable))
                                     :conceptual-graphs)
@@ -66,6 +73,19 @@
   (*concept-type-bottom* nil)
   (*loaded-types-source* nil
    "Namestring of the type set the catalogs were loaded from, or NIL.")
+  ;; A TYPE SET is a directory holding concept-types.lisp and
+  ;; relation-types.lisp (and optionally lexicon-overrides.lisp). Types are
+  ;; read from it in place: nothing is copied or linked.
+  (*cgraph-types-directory* nil
+   "The type set the catalog is loaded from, and the one the type editor saves
+    into. NIL until setup; INITIALIZE-TYPES then falls back to default-types/.")
+  (*external-types-directory* nil
+   "The type set the user chose at setup, or NIL for the shipped defaults.")
+
+  ;; --- the graphs
+  (root-context nil
+   "The outermost context: where this environment's graphs are kept. Made by
+    RESET-CGRAPH; *CONTEXT* is bound to it by WITH-ENVIRONMENT.")
 
   ;; --- individuals
   (*individuals* (list))
@@ -109,10 +129,32 @@
     overrode one of cgraph's own registrations (:LEMMA on CITY-GOVERNMENT,
     say) gives it back rather than deleting it."))
 
-(defun make-environment (&rest initargs)
-  "A new, empty environment. Nothing is loaded into it."
-  (apply #'make-instance 'environment initargs))
+(defmacro with-environment ((environment) &body body)
+  "Evaluate BODY in ENVIRONMENT: every type lookup, graph, individual and
+   lexicon entry BODY makes or reads is that environment's, and *CONTEXT* is
+   its root context. A per-thread binding, so another thread is unaffected."
+  (let ((env (gensym "ENV")))
+    `(let* ((,env ,environment)
+            (*environment* ,env)
+            (*context* (env-root-context ,env)))
+       ,@body)))
 
+(defun make-environment (&rest initargs &key types &allow-other-keys)
+  "A new environment. With TYPES -- a type-set designator as INIT takes it, or
+   :DEFAULT for the shipped types -- that type set and its lexicon are loaded
+   into it and it gets an empty root context, ready to use with
+   WITH-ENVIRONMENT. Without, it is empty and unloaded.
+
+   ~/.cgraph/initializations.lisp is not read: the settings it holds (*CONCISE*
+   and the like) are the image's, not an environment's."
+  (let ((environment (apply #'make-instance 'environment
+                            (loop for (key value) on initargs by #'cddr
+                                  unless (eq key :types) append (list key value)))))
+    (when types
+      (load-environment environment types))
+    environment))
+
+;;; DEFVAR, so reloading this file keeps the knowledge base the image has.
 (defvar *environment* (make-environment)
   "The current environment. Every type lookup, and every graph built, uses the
    knowledge base this holds.")

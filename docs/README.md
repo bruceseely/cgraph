@@ -10,6 +10,8 @@ exported function.
   the graph operations, with examples that run as written
 - [Referents](referents.md) -- every form a concept's referent can take
 - [Individuals](individuals.md) -- how named things are represented
+- [Environments](environments.md) -- more than one knowledge base in one
+  image
 - [Errors and warnings](errors.md) -- every startup finding and error by name,
   what it means and how to fix it
 

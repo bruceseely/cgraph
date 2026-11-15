@@ -25,6 +25,10 @@
    #:create-type-set
    #:ensure-concept-types-exist #:ensure-relation-types-exist
 
+   ;; --- environments: more than one knowledge base in an image
+   #:*environment* #:make-environment #:load-environment
+   #:with-environment #:env-let
+
    ;; --- types: create / modify
    #:define-concept-type #:make-concept-type #:modify-concept-type
    #:remove-concept-type #:make-relation-type

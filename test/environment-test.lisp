@@ -72,6 +72,57 @@
                    (equal "FRI" (lexicon-prop 'friday :lemma))))
           (check "and the first environment's lexicon is untouched"
                  (and (eq outer-lexicon *lexicon-overrides*)
-                      (null (lexicon-prop 'friday :lemma))))))
+                      (null (lexicon-prop 'friday :lemma)))))
+
+        ;; --- two knowledge bases ------------------------------------------
+        ;; ANGEL is only in the test catalog, CHEVY only in the shipped one.
+        (let* ((test-dir      (asdf:system-relative-pathname "cgraph" "test/test-types/"))
+               (outer-source  *loaded-types-source*)
+               (outer-context *context*)
+               (a (make-environment :types test-dir))
+               (b (make-environment :types :default)))
+          (flet ((in-a (thunk) (with-environment (a) (funcall thunk)))
+                 (in-b (thunk) (with-environment (b) (funcall thunk))))
+            (check "make-environment :types loads that type set"
+                   (in-a (lambda () (concept-type-defined-p 'angel))))
+            (check "and the other environment has its own"
+                   (in-b (lambda () (and (concept-type-defined-p 'chevy)
+                                         (not (concept-type-defined-p 'angel))))))
+            (check "neither sees the other's types"
+                   (not (in-a (lambda () (concept-type-defined-p 'chevy)))))
+            (check "even a type both have is two objects"
+                   (not (eq (in-a (lambda () (get-concept-type 'entity)))
+                            (in-b (lambda () (get-concept-type 'entity))))))
+            (check "each has its own root context, bound by with-environment"
+                   (let ((ca (in-a (lambda () *context*)))
+                         (cb (in-b (lambda () *context*))))
+                     (and ca cb (not (eq ca cb))
+                          (not (eq ca outer-context)) (not (eq cb outer-context)))))
+            (let ((b-nodes (in-b (lambda () (hash-table-count *node-cache*)))))
+              (in-a (lambda () (make-cgraph "[ANGEL]")))
+              (check "a graph made in one is kept in its context"
+                     (= 1 (in-a (lambda () (length (graphs *context*))))))
+              (check "and not in the other's"
+                     (zerop (in-b (lambda () (length (graphs *context*))))))
+              (check "nor are its nodes in the other's cache"
+                     (= b-nodes (in-b (lambda () (hash-table-count *node-cache*))))))
+            (check "a type the environment lacks is refused there"
+                   (in-b (lambda ()
+                           (handler-case (progn (parse-cgraph "[ANGEL]") nil)
+                             (error () t)))))
+            (check "each remembers its own type set"
+                   (and (equal (namestring test-dir)
+                               (namestring (in-a (lambda () *cgraph-types-directory*))))
+                        (equal (namestring (default-types-directory))
+                               (namestring (in-b (lambda () *cgraph-types-directory*))))))
+            (check "so reloading one after loading the other reloads its own"
+                   (in-a (lambda ()
+                           (let ((*package* (find-package :conceptual-graphs)))
+                             (initialize-types))
+                           (and (concept-type-defined-p 'angel)
+                                (not (concept-type-defined-p 'chevy))))))
+            (check "and the environment the test began in is untouched"
+                   (and (equal outer-source *loaded-types-source*)
+                        (eq outer-context *context*))))))
       (format t "~&environment-test: ~:[FAILED <<<~;passed~]~%" ok)
       ok)))

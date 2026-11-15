@@ -44,27 +44,23 @@
 ;;; set by user
 (defvar *cgraph-types-repo* (format nil "~a/repo/cgraph-types/" *home*))
 
-;;; A TYPE SET is a directory holding concept-types.lisp and relation-types.lisp
-;;; (and optionally lexicon-overrides.lisp). Types are read from it in place:
-;;; nothing is copied or linked. The shipped set, default-types/, is read-only.
-(defvar *cgraph-types-directory* nil
-  "The type set the catalog is loaded from, and the one the type editor saves
-   into. NIL until setup; INITIALIZE-TYPES then falls back to default-types/.")
+;;; *CGRAPH-TYPES-DIRECTORY* and *EXTERNAL-TYPES-DIRECTORY* -- which type set is
+;;; current -- are slots of the environment; see environment.lisp. The shipped
+;;; set, default-types/, is read-only.
 (defvar *cgraph-examples-directory* nil
   "The shipped type set, default-types/ in the cgraph source tree.")
 (defvar *cgraph-data-directory* nil
   "Where generated plots go. Created when something is first written there.")
 (defvar *cgraph-log-directory* nil
   "Where the web server logs. Created when the server first logs to a file.")
-(defvar *external-types-directory* nil
-  "The type set the user chose at setup, or NIL for the shipped defaults.")
 
 ;;; *LOADED-TYPES-SOURCE* -- which type set is in memory, so callers can avoid
 ;;; redundant reloads -- is a slot of the environment; see environment.lisp.
 
 (defvar *cgraph-inits*  ())
 
-;;; holds the current conttext
+;;; The current context. Its global value, and its value inside
+;;; WITH-ENVIRONMENT, is the environment's root context (environment.lisp).
 (defvar *context* nil)
 
 ;;; show [dog] instead of [dog:*]

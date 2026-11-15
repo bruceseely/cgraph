@@ -93,6 +93,45 @@ Same as above, for relation types.
 
 ---
 
+## Environments
+
+Everything cgraph knows (types, individuals, nodes, lexicon, the root
+context) belongs to an environment, so one image can hold more than one
+knowledge base. See [docs/environments.md](docs/environments.md).
+
+### `*environment*`
+The current environment. A session that never mentions environments uses
+the one cgraph starts with.
+
+### `make-environment (&key types)` → environment
+A new environment. With `types`, a type-set designator as `init` takes it
+or `:default` for the shipped types, that type set and its lexicon are
+loaded and it gets an empty root context. Without `types` it is empty.
+`~/.cgraph/initializations.lisp` is not read.
+
+### `load-environment (environment types)` → environment
+Load `types` into `environment`, as `make-environment :types` does,
+replacing whatever it held.
+
+### `with-environment ((environment) &body body)`
+Evaluate `body` with `*environment*` bound to `environment` and `*context*`
+bound to its root context. The binding is per-thread.
+
+```lisp
+(defvar *kb* (cg:make-environment :types :default))
+(cg:with-environment (*kb*)
+  (cg:make-cgraph "[PERSON: Sue]<-(agnt)<-[DRIVE]->(obj)->[CAR]."))
+```
+
+### `env-let (bindings &body body)`
+`let` for the variable names that are slots of the environment
+(`*cgraph-types-directory*`, `*individuals*`, ...), which `let` can't
+rebind. Sets each such slot of the current environment for the extent of
+`body` and restores it on any exit; other bindings are ordinary `let`
+bindings. It changes the environment itself, not a per-thread binding.
+
+---
+
 ## Classes and Conditions
 
 The classes are exported so you can test for them and specialize methods on
@@ -934,8 +973,9 @@ Print `graph-to-text`'s sentence.
 These are defined by the `cgraph-web` and `cgraph-editor` systems, which
 are loaded separately.
 
-#### `start-web-server (&key port)`
-Start the type browser on `port`, 8080 by default.
+#### `start-web-server (&key port environment)`
+Start the type browser on `port`, 8080 by default, serving `environment`:
+by default the one current where it's called. Every request runs in it.
 
 #### `stop-web-server ()`
 Stop it.

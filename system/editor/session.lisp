@@ -102,7 +102,10 @@
   ;; a request. Same reason as OUT: a handler thread doesn't see a binding the
   ;; caller made, and the working graph's types belong to this environment.
   ;; WITH-EDITOR-SESSION binds it around every handler that touches the session.
-  (environment *environment*))
+  (environment *environment*)
+  ;; And *CONTEXT*, for the same reason: the caller may be inside a child
+  ;; context, or in another environment's root.
+  (context *context*))
 
 ;;; --- Registry --------------------------------------------------------------
 

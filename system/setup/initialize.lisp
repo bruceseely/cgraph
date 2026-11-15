@@ -161,7 +161,10 @@
   )
 
 (defun reset-cgraph ()
-  (setf *context* (make-context nil))
+  ;; The environment keeps the root, so WITH-ENVIRONMENT and the web server can
+  ;; hand it out; *CONTEXT* is where everything else looks for it.
+  (setf *context* (make-context nil)
+        (env-root-context *environment*) *context*)
   (setf *gensym-counter* 1)
   (setf *node-ref-counter* 1)
   (setf *concepts-in-graph* (list))
@@ -288,6 +291,29 @@
                 (let ((*readtable* (copy-readtable nil)))
                   (funcall orig package))))
         (setf *swank-readtable-patched* t)))))
+
+(defun load-environment (environment types)
+  "Load into ENVIRONMENT the type set TYPES names -- a designator as INIT takes
+   it, or :DEFAULT for the shipped types -- with its lexicon, and give it an
+   empty root context and fresh individuals, variables and coreference labels.
+   Reads only the type set; ~/.cgraph/initializations.lisp holds the image's
+   settings, not an environment's, so it is not read. MAKE-ENVIRONMENT :TYPES
+   calls this. Returns ENVIRONMENT."
+  (with-environment (environment)
+    (let ((*package* (find-package :conceptual-graphs))
+          (type-set (if (eq types :default)
+                        (default-types-directory)
+                        (chosen-type-set types))))
+      (setf *external-types-directory* (unless (eq types :default) type-set)
+            *cgraph-types-directory*   type-set)
+      (initialize-variables)
+      (initialize-coreferences)
+      (initialize-individuals)
+      (clear-id-cache)
+      (initialize-types)
+      (setf *context* (make-context nil)
+            (env-root-context environment) *context*)))
+  environment)
 
 (defun init (&key types web)
   "Start, or start over, a cgraph session, and return the type-set directory

@@ -33,14 +33,16 @@
    reconnects it without a dedicated handshake. The disconnect endpoint
    deliberately does NOT use this macro, for the obvious reason.
 
-   BODY runs in the session's environment, which need not be the server's: a
-   REPL that bound *ENVIRONMENT* before calling EDIT-CGRAPH edits in that one."
+   BODY runs in the session's environment and context, which need not be the
+   server's: a REPL inside WITH-ENVIRONMENT when it called EDIT-CGRAPH edits in
+   that environment."
   `(let ((,var (find-editor-session ,id)))
      (cond ((null ,var) (json-error "no such editor session"))
            ((not (eq (session-state ,var) :open))
             (json-error "editor session is already finished"))
            (t (touch-editor-session ,var)
-              (let ((*environment* (session-environment ,var)))
+              (let ((*environment* (session-environment ,var))
+                    (*context*     (session-context ,var)))
                 ,@body)))))
 
 ;;; GET /editor?session=N — the editor page itself.
