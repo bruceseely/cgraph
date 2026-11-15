@@ -85,6 +85,13 @@
     ("[PERSON: Tom]->(temp)->[TEMPERATURE]."                   . "Tom has a temperature.")
     ("[EAT]- (agnt)->[CAT] (obj)->[FOOD]->(wgt)->[MASS]."      . "A cat eats food, and it has a weight.")
     ("[DISTANCE]."                                             . "A distance.")
+    ;; A definite one is the possessive -- it was "Tom has the weight".
+    ("[PERSON: Tom]->(wgt)->[MASS: #]."                        . "Tom's weight.")
+    ("[PERSON: Tom]->(age)->[AGE: #]."                         . "Tom's age.")
+    ("[PERSON: Tom]- (hgt)->[DISTANCE: #] (wgt)->[MASS: #]."   . "Tom's weight and height.")
+    ("[PERSON: #]->(wgt)->[MASS: #]."                          . "The person's weight.")
+    ("[MOVE]- (agnt)->[PERSON: Sue] (obj)->[MASS: #]<-(wgt)<-[PERSON: Tom]." . "Sue moves Tom's weight.")
+    ("[PERSON: Tom]->(poss)->[CAT: #]."                        . "Tom has the cat.")
     ;; Quantifier inside a nested PROPOSITION referent.
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: @every]<-(agnt)<-[BARK]]."
      . "Ivan knows that every dog barks.")

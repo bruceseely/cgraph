@@ -188,8 +188,40 @@
             (push (realize-np possessed state :case :accusative) objects)))))
     (nreverse objects)))
 
+(defun definite-dimension-p (concept)
+  "True when CONCEPT is a definite bare filler of a measure relation, [MASS: #]
+   on (wgt): a particular weight, with nothing said about it."
+  (and (dimension-noun concept)
+       (eq (concept-definiteness concept) :definite)))
+
+(defun realize-dimension-possessive (possessor rels state)
+  "\"Tom's weight\" (\"Tom's weight and height\") for a POSS-only graph whose
+   possessions, RELS, are all definite dimensions. \"Tom has the weight\" is
+   grammatical and says nothing a speaker would: the definite article on a
+   thing every person has exactly one of is what the possessive says. Inside a
+   larger graph the same concept is already \"Tom's weight\", by the NP's
+   possessive prefix; this is the stand-alone graph saying it the same way."
+  (mark-uttered state possessor)
+  (dolist (rel rels) (mark-traversed state rel))
+  (let ((owner (realize-full-np possessor state))
+        (nouns (mapcar (lambda (rel)
+                         (let ((dimension (outarc rel)))
+                           (mark-uttered state dimension)
+                           (noun-form dimension)))
+                       rels)))
+    (format nil "~a's ~{~a~^ and ~}" owner nouns)))
+
 (defun realize-have-clause (possessor state)
-  "Render 'POSSESSOR has/have X (and Y ...)' for a POSS-only graph."
+  "Render 'POSSESSOR has/have X (and Y ...)' for a POSS-only graph -- or, when
+   every possession is a definite dimension, 'POSSESSOR's X'."
+  (let ((possessions (remove-if-not (lambda (rel)
+                                      (and (eq (relation-role rel) :poss)
+                                           (not (eq (outarc rel) possessor))))
+                                    (concept-relations possessor))))
+    (when (and possessions
+               (every (lambda (rel) (definite-dimension-p (outarc rel))) possessions))
+      (return-from realize-have-clause
+        (realize-dimension-possessive possessor possessions state))))
   (let ((have-form (if (eq (concept-number possessor) :plural) "have" "has"))
         ;; Before marking, as in REALIZE-COPULA-CLAUSE and for the same reason.
         ;; This was the third and last clause path that rendered its subject
