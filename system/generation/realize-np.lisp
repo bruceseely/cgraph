@@ -265,8 +265,8 @@
                      (other (other-end rel concept)))
                  (when (and prep other)
                    (mark-traversed state rel)
-                   (push (format nil "~a ~a" prep
-                                 (or (bare-measure-filler rel other state)
+                   (push (or (measure-phrase rel other state prep)
+                             (format nil "~a ~a" prep
                                      (realize-np other state :case :accusative)))
                          mods))))
               ((and (eq role :nmod) (not (traversed-p state rel)))

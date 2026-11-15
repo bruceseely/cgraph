@@ -356,6 +356,34 @@
           (mark-uttered state other)
           measure)))))
 
+(defparameter *measure-phrase-templates*
+  '((age   "~a old")
+    (hgt   "~a tall")
+    (wgt   "~a in weight")
+    (psize "~a in size")
+    (temp  "at a temperature of ~a"))
+  "How a relation says a measurement of its dimension, as a FORMAT string
+   taking the measure phrase. English puts most of these AFTER the number --
+   \"six feet tall\", \"30 years old\" -- where the relation's preposition
+   alone would put them before it: \"of height six feet\", \"aged 30 years\".
+   Each template reads the same after \"is\" and after a noun (\"Tom is six
+   feet tall\", \"a cat 30 centimeters tall\"), so one entry covers both. A
+   measure relation with no entry says its preposition and then the measure.")
+
+(defun measure-phrase (rel other state &optional (prep (relation-preposition rel)))
+  "The whole phrase for REL when OTHER is a bare measurement of REL's
+   dimension (see BARE-MEASURE-FILLER): REL's *MEASURE-PHRASE-TEMPLATES* entry
+   if it has one, else PREP and the measure. NIL, with nothing marked, when
+   OTHER is not such a measurement."
+  (let ((measure (bare-measure-filler rel other state)))
+    (when measure
+      (let ((template (second (assoc (label (relation-type rel))
+                                     *measure-phrase-templates*
+                                     :test #'string-equal))))
+        (cond (template (format nil template measure))
+              ((and prep (plusp (length prep))) (format nil "~a ~a" prep measure))
+              (t measure))))))
+
 (defun relation-preposition (rel-or-label)
   "Return the preposition string associated with a relation, or NIL."
   (third (relation-role-entry rel-or-label)))

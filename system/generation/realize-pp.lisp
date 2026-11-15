@@ -169,8 +169,7 @@
                     (temporal-adverb-form other)))
           (measure nil))
       (cond (adv (mark-uttered state other) adv)
-            ((setf measure (bare-measure-filler rel other state))
-             (if (plusp (length prep)) (format nil "~a ~a" prep measure) measure))
+            ((setf measure (measure-phrase rel other state prep)) measure)
             (t (or (and other
                         (realize-argument other state
                                           :case :accusative

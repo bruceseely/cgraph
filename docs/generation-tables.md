@@ -86,6 +86,17 @@ near the end of this document.
   uses "in" — "**the milk in the bottle**". Same relation, two different
   English prepositions depending on which concept the NP is built around.
 
+- `*measure-phrase-templates*` (`syntax-roles.lisp`)
+  Only for a relation that measures a dimension: AGE, HGT, WGT, PSIZE, TEMP.
+  Each entry is a `format` string that takes the measure, used when the
+  filler is just a measurement of the relation's own type, such as
+  `[DISTANCE: @6 feet]` on `(hgt)`.
+
+  Example: `(hgt "~a tall")` gives "Tom is **six feet tall**" and "a cat
+  **30 centimeters tall**", where the preposition alone would give "of height
+  six feet". A measure relation with no entry says its preposition, then the
+  measure.
+
 ---
 
 ## When you add a new CONCEPT type
@@ -412,8 +423,8 @@ Both are `:error`, because the consequence is identical to having no entry.
 
 ### PP support-table consistency
 
-`*pp-relation-priority*`, `*np-pp-prepositions*` and
-`*clause-level-pp-relations*` are all consulted behind a `:pp` role test. An
+`*pp-relation-priority*`, `*np-pp-prepositions*`,
+`*clause-level-pp-relations*` and `*measure-phrase-templates*` are all consulted behind a `:pp` role test. An
 entry naming a relation whose role is something else can never fire —
 `:pp-table-role-mismatch`, `:warn`. Relations that are absent from the catalog
 or unmapped are skipped here, since the checks above already report them.

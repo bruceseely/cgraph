@@ -173,16 +173,17 @@
 
 (defun %relation-tables ()
   "The generation tables keyed on relation labels, as (NAME TABLE PP-ONLY-P).
-   PP-ONLY-P marks the three whose entries are consulted only for relations
+   PP-ONLY-P marks the four whose entries are consulted only for relations
    whose role is :PP."
   ;; The first is named in prose rather than by variable, because it is now the
   ;; MERGE of *relation-syntax-table* and the registrations -- a stale entry may
   ;; have come from either, and naming one of them would send you to the wrong
-  ;; place half the time. The other three are single variables and say so.
+  ;; place half the time. The others are single variables and say so.
   (list (list "The relation syntax mapping"  (relation-syntax-entries)    nil)
         (list "*pp-relation-priority*"       *pp-relation-priority*       t)
         (list "*np-pp-prepositions*"         *np-pp-prepositions*         t)
-        (list "*clause-level-pp-relations*"  *clause-level-pp-relations*  t)))
+        (list "*clause-level-pp-relations*"  *clause-level-pp-relations*  t)
+        (list "*measure-phrase-templates*"   *measure-phrase-templates*   t)))
 
 (defun %relation-table-labels (table)
   "Labels named by TABLE, which holds either bare symbols or entries whose
@@ -212,8 +213,8 @@
     (nreverse findings)))
 
 (defun %lint-pp-table-consistency ()
-  "*PP-RELATION-PRIORITY*, *NP-PP-PREPOSITIONS* and *CLAUSE-LEVEL-PP-RELATIONS*
-   are all consulted behind a :PP role test, so an entry for a relation whose
+  "*PP-RELATION-PRIORITY*, *NP-PP-PREPOSITIONS*, *CLAUSE-LEVEL-PP-RELATIONS* and
+   *MEASURE-PHRASE-TEMPLATES* are all consulted behind a :PP role test, so an entry for a relation whose
    role is something else can never fire. Skips relations absent from the
    catalog and relations with no syntax entry -- those are already reported by
    %LINT-STALE-RELATION-ENTRIES and %LINT-RELATION-SYNTAX-COVERAGE, and saying

@@ -62,15 +62,22 @@
     ("[PERSON: Tom]->(age)->[YOUNG]."                          . "Tom is young.")
     ("[PERSON: Tom]->(poss)->[CAT]->(age)->[OLD]."             . "Tom has an old cat.")
     ("[EAT]- (agnt)->[CAT]->(age)->[ANCIENT] (obj)->[FOOD]."   . "An ancient cat eats food.")
-    ("[PERSON: Tom]->(age)->[AGE: @30 years]."                 . "Tom is aged 30 years.")
-    ("[PERSON: Tom]->(poss)->[CAT]->(age)->[AGE: @3 years]."   . "Tom has a cat aged three years.")
+    ("[PERSON: Tom]->(age)->[AGE: @30 years]."                 . "Tom is 30 years old.")
+    ("[PERSON: Tom]->(poss)->[CAT]->(age)->[AGE: @3 years]."   . "Tom has a cat three years old.")
     ;; A filler that is only the dimension says nothing to measure it by, so
     ;; the arc is possession -- it was "Tom is aged an age".
     ("[PERSON: Tom]->(age)->[AGE]."                            . "Tom has an age.")
     ("[PERSON: Tom]->(psize)->[SIZE]."                         . "Tom has a size.")
     ("[EAT]- (agnt)->[CAT] (obj)->[FOOD]->(age)->[AGE]."       . "A cat eats food, and it has an age.")
     ("[PERSON: Tom]->(age)->[OLD: #]."                         . "Tom is old.")
-    ("[PERSON: Tom]->(wgt)->[MASS: @80 kg]."                   . "Tom is of weight 80 kilograms.")
+    ;; A measurement goes before the dimension's word, as English says it --
+    ;; it was "of weight 80 kilograms", "of height six feet".
+    ("[PERSON: Tom]->(wgt)->[MASS: @80 kg]."                   . "Tom is 80 kilograms in weight.")
+    ("[PERSON: Tom]->(hgt)->[DISTANCE: @6 feet]."              . "Tom is six feet tall.")
+    ("[PERSON: Tom]->(psize)->[SIZE: @2 meters]."              . "Tom is two meters in size.")
+    ("[PERSON: Tom]->(temp)->[TEMPERATURE: @37 degrees]."      . "Tom is at a temperature of 37 degrees.")
+    ("[EAT]- (agnt)->[CAT]->(hgt)->[DISTANCE: @30 cm] (obj)->[FOOD]." . "A cat 30 centimeters tall eats food.")
+    ("[PERSON: Tom]- (hgt)->[DISTANCE: @6 feet] (wgt)->[MASS: @80 kg]." . "Tom is 80 kilograms in weight and six feet tall.")
     ;; Quantifier inside a nested PROPOSITION referent.
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: @every]<-(agnt)<-[BARK]]."
      . "Ivan knows that every dog barks.")

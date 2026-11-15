@@ -306,12 +306,12 @@
                  ;; Same filler override REALIZE-PP consults: a verbless clause
                  ;; is still a clause, and "the party is at Friday" is wrong in
                  ;; exactly the way "informs her with email" was.
-                 (push (format nil "~@[~a ~]~a"
-                               (or (filler-preposition rel other)
-                                   (relation-preposition rel))
-                               (or (bare-measure-filler rel other state)
-                                   (realize-np other state :case :accusative)))
-                       complements))))))
+                 (let ((prep (or (filler-preposition rel other)
+                                 (relation-preposition rel))))
+                   (push (or (measure-phrase rel other state prep)
+                             (format nil "~@[~a ~]~a" prep
+                                     (realize-np other state :case :accusative)))
+                         complements)))))))
     (nreverse complements)))
 
 (defun realize-copula-clause (topic state)
