@@ -361,6 +361,7 @@
             ;; transition FROM concept multi-arcs
             ((and (match '(concept standard-char)) (char-equal (second sublist) #\,))
              (when debug (format t  "~&-10 (and (match '(concept character)) (char-equal (second sublist) #\,)) :~37t~s" (subseq sublist 0 3)))
+             (check-branch-close sublist multi-arcs)
              (destructuring-bind (first second third fourth &rest ignore) sublist
                (pop multi-arcs)
                (connect (car multi-arcs) fourth third)
@@ -408,6 +409,30 @@
              (parse-failure at "~a can't follow ~a" second first))
             (t
              (parse-failure (token-position first) "~a is left over" first))))))
+
+(defun check-branch-close (sublist multi-arcs)
+  "Signal a parse error unless the comma second in SUBLIST can do what a comma
+   does: close the fork opened by the concept before it and go back to the
+   fork around that one, where a relation and an arrow carry on. So it needs
+   two forks open, and a relation and an arrow after it.
+
+   The usual mistake is a comma between arcs of ONE fork, written as a list
+   would be -- [EAT]- (agnt)→[CAT], (obj)→[FOOD] -- which left the linker
+   connecting to NIL and reporting a missing method on CONNECT."
+  (destructuring-bind (concept comma &optional relation arc &rest rest) sublist
+    (declare (ignore comma rest))
+    (let ((at (comma-position-after concept)))
+      (cond ((< (length multi-arcs) 2)
+             (parse-failure at "the comma after ~a closes a branch, but no branch is ~
+                                open. Arcs from one concept are separated by spaces, as in ~
+                                [EAT]- (agnt)→[CAT] (obj)→[FOOD]; a comma ends a branch ~
+                                opened with - inside another, and goes back to the outer one"
+                            concept))
+            ((null relation)
+             (parse-failure at "nothing follows the comma after ~a" concept))
+            ((not (and (relation-p relation) (arc-p arc)))
+             (parse-failure at "the comma after ~a must be followed by a relation and an ~
+                                arrow, as in , (obj)→[FOOD]" concept))))))
 
 (defun check-relation-arcs (tokens)
   "Signal a parse error for a relation in TOKENS left without an arc on either

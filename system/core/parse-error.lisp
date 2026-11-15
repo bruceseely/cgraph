@@ -63,6 +63,10 @@
    The linker runs after the whole string is read, so it finds the position of
    the token it can't link here.")
 
+(defvar *parse-string* nil
+  "The string PARSE-CGRAPH's stream reads, so a failure at a token that has no
+   recorded position -- a comma -- can be found in it.")
+
 (defvar *node-start* nil
   "Where the concept or relation being read began: its [ or (. An unknown
    type is reported there, rather than after the name, where the reader has
@@ -77,6 +81,21 @@
 
 (defun token-position (token)
   (and *token-positions* token (gethash token *token-positions*)))
+
+(defun comma-position-after (token)
+  "Where the comma after TOKEN is in the string being parsed, or NIL. Commas
+   are characters, so they have no recorded position of their own; scan from
+   TOKEN's start past its brackets -- which may hold commas of their own, as
+   in [DOG: {Spot, Fido}] -- to the first comma outside them."
+  (let ((start (token-position token))
+        (depth 0))
+    (when (and *parse-string* start)
+      (loop for index from start below (length *parse-string*)
+            for char = (char *parse-string* index)
+            do (case char
+                 ((#\[ #\( #\{) (incf depth))
+                 ((#\] #\) #\}) (decf depth))
+                 (#\, (when (<= depth 0) (return index))))))))
 
 (defun parse-failure (position format-control &rest arguments)
   "Signal a CGRAPH-PARSE-ERROR at POSITION in the stream being parsed (by

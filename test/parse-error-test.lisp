@@ -32,7 +32,18 @@
     ;; after the string is read, and pointed at by the concept.
     ("[CAT]←(agnt)←[MAT]"                      "[MAT] can't be the source of (agnt)" "[MAT]")
     ("[EAT]-(agnt)→[MAT] (obj)→[FOOD]"         "[MAT] can't be the destination of (agnt)" "[MAT]")
-    ("[PROPOSITION: [CAT]←(agnt)←[MAT]]"       "can't be the source of (agnt)" "[MAT]")))
+    ("[PROPOSITION: [CAT]←(agnt)←[MAT]]"       "can't be the source of (agnt)" "[MAT]")
+    ;; A comma closes a branch nested inside another and goes back to the outer
+    ;; one; anywhere else it used to surface as a missing method on CONNECT or
+    ;; a DESTRUCTURING-BIND mismatch.
+    ("[EAT]- (agnt)→[CAT], (obj)→[FOOD]"       "but no branch is open"       ", (obj)")
+    ("[EAT]→(agnt)→[CAT], (obj)→[FOOD]"        "but no branch is open"       ", (obj)")
+    ("[CAT], [DOG]"                            "but no branch is open"       ", [DOG]")
+    ("[DOG: {Spot, Fido}], (attr)→[OLD]"       "the comma after [DOG"        ", (attr)")
+    ("[EAT]- (agnt)→[CAT]- (attr)→[OLD],"      "nothing follows the comma"   ",")
+    ("[EAT]- (agnt)→[CAT]- (attr)→[OLD], [FOOD]" "followed by a relation and an arrow" ", [FOOD]")
+    ("[EAT]- (agnt)→[CAT]- (attr)→[OLD], (obj)→[FOOD], (manr)→[FAST]"
+                                               "the comma after [FOOD]"      ", (manr)")))
 
 (defun parse-error-for (string)
   "The CGRAPH-PARSE-ERROR that parsing STRING signals, or NIL."

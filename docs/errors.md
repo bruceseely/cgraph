@@ -382,7 +382,10 @@ type. Most print a message that says what went wrong.
 problem. `parse-cgraph` or `make-cgraph` was given a graph string it can't
 read. Common causes: unbalanced `[ ]` or `( )`, a missing arrow, a relation
 written as `→(rel)` where a concept with several relations needs the
-fork marker (`[EAT]- (agnt)→[DOG] (obj)→[CAKE]`). See the
+fork marker (`[EAT]- (agnt)→[DOG] (obj)→[CAKE]`), or a comma between the
+arcs of one fork. Those arcs are separated by spaces. A comma ends a fork
+nested inside another and goes back to the outer one:
+`[EAT]- (agnt)→[CAT]- (attr)→[OLD], (obj)→[FOOD]`. See the
 [tutorial](tutorial.md) for the notation.
 
 ### concept-type-lookup-failed

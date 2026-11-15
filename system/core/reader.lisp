@@ -1022,6 +1022,7 @@ Use ?~a for cross-context co-reference instead."
          (*in-graph-referent* nil)
          (stream (make-string-input-stream string))
          (*parse-stream* stream)
+         (*parse-string* string)
          (*token-positions* (make-hash-table :test #'eq))
          (tokens (read-cgraph-tokens stream))
          (linked-tokens (linkup tokens)))
