@@ -16,6 +16,13 @@ can find it, such as `~/quicklisp/local-projects/`, then:
 knowledge base (`*context*`). It writes nothing, and works the same from any
 package. Calling it again starts over with the same types.
 
+All of this happens in the current **environment**, `cg:*environment*`: the
+types, the individuals, the lexicon and the knowledge base belong to it. A
+session that never mentions environments has just the one, and can ignore
+them. To keep a second knowledge base, with the same types or different ones,
+make another environment with `(cg:make-environment :types ...)` and work in
+it with `cg:with-environment`. See [Environments](environments.md).
+
 ```lisp
 (cg:init)                          ; the shipped types, read-only
 (cg:init :types "kitchen")         ; your type set ~/.cgraph/types/kitchen/
@@ -108,7 +115,9 @@ commented-out entries. Write somewhere else and diff.
 `cg:init` is made of three functions that still work on their own:
 `setup-cgraph` points cgraph at a type set and loads it, `reset-cgraph` makes
 a fresh context and reloads, and `initialize-cgraph` clears individuals,
-variables and coreferences and reloads the types. See [API.md](../API.md).
+variables and coreferences and reloads the types. Each acts on the current
+environment only; `reset-cgraph`'s new context becomes that environment's root
+context. See [API.md](../API.md).
 
 ## Emacs
 

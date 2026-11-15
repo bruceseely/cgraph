@@ -29,8 +29,10 @@ If the relation belongs to your own type set, the easiest way to give it an
 entry is in its definition: `:role` (and `:prep` for `:pp`/`:iobj`) on its
 line in `relation-types.lisp`, e.g. `(:label benef ... :role :pp :prep "for")`.
 A relation with no role of its own also inherits its nearest `:supertypes`'
-role. From code, use `(register-relation-syntax 'label role)`. Editing
-`*relation-syntax-table*` (below) is for relations CGraph itself ships.
+role. From code, use `(register-relation-syntax 'label role)`. It applies to
+the current environment only (see [Environments](environments.md)), as the
+lexicon registrations do. Editing `*relation-syntax-table*` (below) is for
+relations CGraph itself ships, and its entries apply in every environment.
 
 Everything about relations fails the same way — the relation vanishes from the
 output and nothing is signalled — so it is worth knowing the four distinct ways

@@ -9,11 +9,11 @@ Sowa uses an individual-id to indicate the presence of an individual. The refere
 
 An individual object contains a unique *id* and a *type*, and is distinct from a concept. Different concepts may refer to the same individual eg. the individual #234 of type BOY may correctly be represented by concepts [PERSON: #234] and [BOY: #234]. 
 
-The *id* is globally unique among individuals. The *type* is a concept-type, as used to specify the type of a concept. 
+The *id* is unique among the individuals of an environment (see [Environments](environments.md)). Two environments number their individuals separately, so each can have its own #501. The *type* is a concept-type, as used to specify the type of a concept. 
 
 #### Ids
 
-Ids are integers. `make-individual` takes the next unused one, or the one you give it with `:id`; `(cg:init)` starts the numbering over.
+Ids are integers. `make-individual` takes the next unused one, or the one you give it with `:id`; `(cg:init)` starts the numbering over in the current environment.
 
 #### Properties
 

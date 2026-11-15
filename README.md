@@ -40,6 +40,7 @@ CGraph lets you represent knowledge as typed, labeled graphs and reason over the
 
 - **Building knowledge representations** using concepts, relations, and typed hierarchies
 - **Querying knowledge bases** with pattern matching and variable binding
+- **Keeping several knowledge bases in one Lisp image**, each with its own types, graphs and lexicon
 - **Combining and comparing graphs** through projection, maximal join, and formation rules
 - **Defining type hierarchies** as lattices (DAGs) with multiple inheritance
 - **Visualizing type structures** via Graphviz
@@ -115,7 +116,9 @@ same types. To change or add types, make a type set of your own:
 `(cg:create-type-set "mine")` copies the current types to
 `~/.cgraph/types/mine/` and switches to it, and next time `(cg:init :types
 "mine")` loads it. `(cg:init :web t)` also starts the web type browser and
-graph editor on http://localhost:8060/.
+graph editor on http://localhost:8060/. To hold a second knowledge base
+alongside the first, with its own types, use `cg:make-environment`: see
+[Environments](docs/environments.md).
 
 Basic usage:
 

@@ -175,6 +175,11 @@ the pattern's variables:
 `[ACT: *y]` matches `DRIVE` the same way. Calling `(cg:init)` again empties the
 context and keeps the types.
 
+One image can hold more than one knowledge base. Each lives in an
+environment with its own types, individuals and context, and
+`cg:with-environment` chooses which one the code inside it works on. See
+[Environments](environments.md).
+
 ## Operations
 
 Sowa's operations on graphs. Each takes graphs or strings.
