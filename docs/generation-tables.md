@@ -88,9 +88,11 @@ near the end of this document.
 
 - `*measure-phrase-templates*` (`syntax-roles.lisp`)
   Only for a relation that measures a dimension: AGE, HGT, WGT, PSIZE, TEMP.
-  Each entry is a `format` string that takes the measure, used when the
-  filler is just a measurement of the relation's own type, such as
-  `[DISTANCE: @6 feet]` on `(hgt)`.
+  Each entry is `(label template noun)`. The template is a `format` string
+  that takes the measure, used when the filler is just a measurement of the
+  relation's own type, such as `[DISTANCE: @6 feet]` on `(hgt)`. The noun
+  names a filler with no measurement: a bare `[DISTANCE]` on `(hgt)` is "Tom
+  has **a height**", not "of height a distance".
 
   Example: `(hgt "~a tall")` gives "Tom is **six feet tall**" and "a cat
   **30 centimeters tall**", where the preposition alone would give "of height

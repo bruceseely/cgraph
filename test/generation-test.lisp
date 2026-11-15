@@ -78,6 +78,13 @@
     ("[PERSON: Tom]->(temp)->[TEMPERATURE: @37 degrees]."      . "Tom is at a temperature of 37 degrees.")
     ("[EAT]- (agnt)->[CAT]->(hgt)->[DISTANCE: @30 cm] (obj)->[FOOD]." . "A cat 30 centimeters tall eats food.")
     ("[PERSON: Tom]- (hgt)->[DISTANCE: @6 feet] (wgt)->[MASS: @80 kg]." . "Tom is 80 kilograms in weight and six feet tall.")
+    ;; With no measurement, the filler is named by the dimension it measures,
+    ;; not its own type -- it was "of weight a mass", "of height a distance".
+    ("[PERSON: Tom]->(wgt)->[MASS]."                           . "Tom has a weight.")
+    ("[PERSON: Tom]->(hgt)->[DISTANCE]."                       . "Tom has a height.")
+    ("[PERSON: Tom]->(temp)->[TEMPERATURE]."                   . "Tom has a temperature.")
+    ("[EAT]- (agnt)->[CAT] (obj)->[FOOD]->(wgt)->[MASS]."      . "A cat eats food, and it has a weight.")
+    ("[DISTANCE]."                                             . "A distance.")
     ;; Quantifier inside a nested PROPOSITION referent.
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: @every]<-(agnt)<-[BARK]]."
      . "Ivan knows that every dog barks.")

@@ -313,17 +313,19 @@
 (defun bare-dimension-filler-p (rel)
   "True when REL's filler is just the dimension REL measures, with nothing to
    say about it: of exactly REL's destination type, with no measure and no
-   name, where that type is an ATTRIBUTE. (AGE) to a bare [AGE] says only that
-   Tom has an age, so the arc reads as possession -- \"Tom has an age\" --
-   rather than \"aged an age\". The ATTRIBUTE test keeps it to dimensions:
-   (loc) to a bare [PLACE] is \"in a place\", which is already English. A
-   type set with no ATTRIBUTE keeps the relation's own preposition."
+   name, where REL measures a dimension: its type is an ATTRIBUTE, or REL has a
+   *MEASURE-PHRASE-TEMPLATES* entry. (AGE) to a bare [AGE] says only that Tom
+   has an age, so the arc reads as possession -- \"Tom has an age\" -- rather
+   than \"aged an age\"; (hgt) to a bare [DISTANCE] is \"Tom has a height\",
+   named by DIMENSION-NOUN. The dimension test keeps it to dimensions: (loc) to
+   a bare [PLACE] is \"in a place\", which is already English."
   (let ((filler (outarc rel))
         (dest   (ignore-errors (dest-type (relation-type rel)))))
     (and filler dest
          (concept-p filler)
          (eq (concept-type filler) dest)
-         (ignore-errors (safe-subtype-p (label dest) 'attribute))
+         (or (measure-relation-entry rel)
+             (ignore-errors (safe-subtype-p (label dest) 'attribute)))
          (null (concept-measure-phrase filler))
          (not (proper-name-p filler)))))
 
@@ -357,18 +359,37 @@
           measure)))))
 
 (defparameter *measure-phrase-templates*
-  '((age   "~a old")
-    (hgt   "~a tall")
-    (wgt   "~a in weight")
-    (psize "~a in size")
-    (temp  "at a temperature of ~a"))
-  "How a relation says a measurement of its dimension, as a FORMAT string
-   taking the measure phrase. English puts most of these AFTER the number --
+  ;; (relation-label  measure-template  dimension-noun)
+  '((age   "~a old"                  "age")
+    (hgt   "~a tall"                 "height")
+    (wgt   "~a in weight"            "weight")
+    (psize "~a in size"              "size")
+    (temp  "at a temperature of ~a"  "temperature"))
+  "The relations that measure a dimension, and how each says it in English.
+
+   The template is a FORMAT string taking the measure phrase. English puts most of these AFTER the number --
    \"six feet tall\", \"30 years old\" -- where the relation's preposition
    alone would put them before it: \"of height six feet\", \"aged 30 years\".
    Each template reads the same after \"is\" and after a noun (\"Tom is six
    feet tall\", \"a cat 30 centimeters tall\"), so one entry covers both. A
-   measure relation with no entry says its preposition and then the measure.")
+   measure relation with no entry says its preposition and then the measure.
+
+   The noun names the dimension when the filler says nothing more than that
+   it exists: (hgt) to a bare [DISTANCE] is \"Tom has a height\", where the
+   filler's own type would say \"has a distance\". See DIMENSION-NOUN.")
+
+(defun measure-relation-entry (rel)
+  (assoc (label (relation-type rel)) *measure-phrase-templates*
+         :test #'string-equal))
+
+(defun dimension-noun (concept)
+  "The noun for CONCEPT when it is a bare filler of a measure relation (see
+   BARE-DIMENSION-FILLER-P): the dimension the relation measures, \"height\"
+   for [DISTANCE] on (hgt). NIL for any other concept."
+  (loop for rel in (concept-relations concept)
+        when (and (eq (outarc rel) concept)
+                  (bare-dimension-filler-p rel))
+          return (third (measure-relation-entry rel))))
 
 (defun measure-phrase (rel other state &optional (prep (relation-preposition rel)))
   "The whole phrase for REL when OTHER is a bare measurement of REL's
@@ -377,9 +398,7 @@
    OTHER is not such a measurement."
   (let ((measure (bare-measure-filler rel other state)))
     (when measure
-      (let ((template (second (assoc (label (relation-type rel))
-                                     *measure-phrase-templates*
-                                     :test #'string-equal))))
+      (let ((template (second (measure-relation-entry rel))))
         (cond (template (format nil template measure))
               ((and prep (plusp (length prep))) (format nil "~a ~a" prep measure))
               (t measure))))))

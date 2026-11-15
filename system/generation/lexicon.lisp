@@ -315,12 +315,15 @@
 ;;; --- Lemma ------------------------------------------------------------------
 
 (defun base-lemma (concept)
-  "Lower-case lemma for CONCEPT: explicit override > referent name > type label."
+  "Lower-case lemma for CONCEPT: the dimension it is the bare filler of
+   (DIMENSION-NOUN) > explicit override > referent name > type label."
   (let* ((ctype  (concept-type concept))
          (override (lexicon-prop ctype :lemma))
          (ref (referent concept))
-         (name (and ref (referent-name concept))))
-    (cond (override override)
+         (name (and ref (referent-name concept)))
+         (dimension (dimension-noun concept)))
+    (cond (dimension dimension)
+          (override override)
           ((and name (stringp name) (plusp (length name))) name)
           (t (string-downcase (label ctype))))))
 
