@@ -179,13 +179,24 @@
   "Render the 'possessed' end of each POSS relation on POSSESSOR as an
    accusative NP. Returns the strings in graph order. Caller must have
    marked these relations traversed first, so the possessor NP doesn't
-   fold them in as 's-prefixes."
+   fold them in as 's-prefixes.
+
+   A definite dimension here is said with \"a\": \"Tom has a weight and a
+   height\", not \"has the weight and a height\". This list only gets one
+   when the possessions are mixed -- all-definite ones are \"Tom's weight\",
+   by REALIZE-DIMENSION-POSSESSIVE -- and a person has exactly one weight, so
+   the article tells a reader nothing either way."
   (let ((objects '()))
     (dolist (rel (concept-relations possessor))
       (when (and (traversed-p state rel) (eq (relation-role rel) :poss))
         (let ((possessed (other-end rel possessor)))
           (when possessed
-            (push (realize-np possessed state :case :accusative) objects)))))
+            (push (if (definite-dimension-p possessed)
+                      (let ((noun (noun-form possessed)))
+                        (mark-uttered state possessed)
+                        (format nil "~a ~a" (indefinite-article noun) noun))
+                      (realize-np possessed state :case :accusative))
+                  objects)))))
     (nreverse objects)))
 
 (defun definite-dimension-p (concept)

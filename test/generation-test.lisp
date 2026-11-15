@@ -92,6 +92,10 @@
     ("[PERSON: #]->(wgt)->[MASS: #]."                          . "The person's weight.")
     ("[MOVE]- (agnt)->[PERSON: Sue] (obj)->[MASS: #]<-(wgt)<-[PERSON: Tom]." . "Sue moves Tom's weight.")
     ("[PERSON: Tom]->(poss)->[CAT: #]."                        . "Tom has the cat.")
+    ;; Mixed with something indefinite, a definite dimension takes "a" -- it
+    ;; was "Tom has the weight and a height".
+    ("[PERSON: Tom]- (hgt)->[DISTANCE] (wgt)->[MASS: #]."      . "Tom has a weight and a height.")
+    ("[PERSON: Tom]- (poss)->[CAT] (wgt)->[MASS: #]."          . "Tom has a weight and a cat.")
     ;; Quantifier inside a nested PROPOSITION referent.
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: @every]<-(agnt)<-[BARK]]."
      . "Ivan knows that every dog barks.")
