@@ -301,25 +301,45 @@
    For a RELATION (not a label), a :PP relation whose filler is a VALUE of the
    dimension it measures is :ADJ on that arc -- see DIMENSION-VALUE-FILLER-P.
    (AGE) is \"aged\" + NP for [AGE: @30 years], but [OLD] is an adjective and
-   says \"Tom is old\" and \"an old cat\", never \"aged an old\"."
+   says \"Tom is old\" and \"an old cat\", never \"aged an old\". A filler
+   that is only the dimension itself, a bare [AGE], is :POSS -- see
+   BARE-DIMENSION-FILLER-P."
   (let ((role (second (relation-role-entry rel-or-label))))
-    (if (and (eq role :pp)
-             (typep rel-or-label 'relation)
-             (dimension-value-filler-p rel-or-label))
-        :adj
-        role)))
+    (cond ((not (and (eq role :pp) (typep rel-or-label 'relation))) role)
+          ((dimension-value-filler-p rel-or-label) :adj)
+          ((bare-dimension-filler-p rel-or-label) :poss)
+          (t role))))
+
+(defun bare-dimension-filler-p (rel)
+  "True when REL's filler is just the dimension REL measures, with nothing to
+   say about it: of exactly REL's destination type, with no measure and no
+   name, where that type is an ATTRIBUTE. (AGE) to a bare [AGE] says only that
+   Tom has an age, so the arc reads as possession -- \"Tom has an age\" --
+   rather than \"aged an age\". The ATTRIBUTE test keeps it to dimensions:
+   (loc) to a bare [PLACE] is \"in a place\", which is already English. A
+   type set with no ATTRIBUTE keeps the relation's own preposition."
+  (let ((filler (outarc rel))
+        (dest   (ignore-errors (dest-type (relation-type rel)))))
+    (and filler dest
+         (concept-p filler)
+         (eq (concept-type filler) dest)
+         (ignore-errors (safe-subtype-p (label dest) 'attribute))
+         (null (concept-measure-phrase filler))
+         (not (proper-name-p filler)))))
 
 (defun dimension-value-filler-p (rel)
   "True when REL's filler is a value of the dimension REL measures rather than
-   a measurement of it: a generic concept whose type is a PROPER subtype of
-   REL's destination type, and an adjective. OLD under AGE on (age), FAT under
-   SIZE on (psize). Decided by the lattice, so a new relation of the same shape
+   a measurement of it: an unnamed, unmeasured concept whose type is a PROPER
+   subtype of REL's destination type, and an adjective -- [OLD] and [OLD: #]
+   alike, since an adjective has nothing to say the article with. OLD under
+   AGE on (age), FAT under SIZE on (psize). Decided by the lattice, so a new relation of the same shape
    needs no entry anywhere."
   (let ((filler (outarc rel))
         (dest   (ignore-errors (dest-type (relation-type rel)))))
     (and filler dest
          (concept-p filler)
-         (generic-p filler)
+         (not (proper-name-p filler))
+         (null (concept-measure-phrase filler))
          (ignore-errors (proper-subtype-p (concept-type filler) dest))
          (eq (concept-pos filler) :adj))))
 

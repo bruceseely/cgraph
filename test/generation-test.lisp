@@ -64,6 +64,12 @@
     ("[EAT]- (agnt)->[CAT]->(age)->[ANCIENT] (obj)->[FOOD]."   . "An ancient cat eats food.")
     ("[PERSON: Tom]->(age)->[AGE: @30 years]."                 . "Tom is aged 30 years.")
     ("[PERSON: Tom]->(poss)->[CAT]->(age)->[AGE: @3 years]."   . "Tom has a cat aged three years.")
+    ;; A filler that is only the dimension says nothing to measure it by, so
+    ;; the arc is possession -- it was "Tom is aged an age".
+    ("[PERSON: Tom]->(age)->[AGE]."                            . "Tom has an age.")
+    ("[PERSON: Tom]->(psize)->[SIZE]."                         . "Tom has a size.")
+    ("[EAT]- (agnt)->[CAT] (obj)->[FOOD]->(age)->[AGE]."       . "A cat eats food, and it has an age.")
+    ("[PERSON: Tom]->(age)->[OLD: #]."                         . "Tom is old.")
     ("[PERSON: Tom]->(wgt)->[MASS: @80 kg]."                   . "Tom is of weight 80 kilograms.")
     ;; Quantifier inside a nested PROPOSITION referent.
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: @every]<-(agnt)<-[BARK]]."
