@@ -54,6 +54,17 @@
     ("[GIRL]<-(agnt)<-[EAT]->(obj)->[PIE: {*}@some]."          . "A girl eats some pies.")
     ("[PERSON: @every]<-(agnt)<-[EAT]->(obj)->[PIE: @some]."   . "Every person eats a pie.")
     ("[CAT: @every]<-(obj)<-[EAT]."                            . "Every cat is eaten.")
+    ;; A measure relation whose filler is a VALUE of the dimension (OLD under
+    ;; AGE) is an adjective, as ATTR is -- it was "Tom is aged an old". One
+    ;; whose filler MEASURES it says the measure without repeating the
+    ;; dimension's name -- it was "aged the age 30 years".
+    ("[PERSON: Tom]->(age)->[OLD]."                            . "Tom is old.")
+    ("[PERSON: Tom]->(age)->[YOUNG]."                          . "Tom is young.")
+    ("[PERSON: Tom]->(poss)->[CAT]->(age)->[OLD]."             . "Tom has an old cat.")
+    ("[EAT]- (agnt)->[CAT]->(age)->[ANCIENT] (obj)->[FOOD]."   . "An ancient cat eats food.")
+    ("[PERSON: Tom]->(age)->[AGE: @30 years]."                 . "Tom is aged 30 years.")
+    ("[PERSON: Tom]->(poss)->[CAT]->(age)->[AGE: @3 years]."   . "Tom has a cat aged three years.")
+    ("[PERSON: Tom]->(wgt)->[MASS: @80 kg]."                   . "Tom is of weight 80 kilograms.")
     ;; Quantifier inside a nested PROPOSITION referent.
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [DOG: @every]<-(agnt)<-[BARK]]."
      . "Ivan knows that every dog barks.")

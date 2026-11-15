@@ -266,7 +266,8 @@
                  (when (and prep other)
                    (mark-traversed state rel)
                    (push (format nil "~a ~a" prep
-                                 (realize-np other state :case :accusative))
+                                 (or (bare-measure-filler rel other state)
+                                     (realize-np other state :case :accusative)))
                          mods))))
               ((and (eq role :nmod) (not (traversed-p state rel)))
                (let ((prep  (relation-preposition rel))

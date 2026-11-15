@@ -166,8 +166,11 @@
     ;; 'time' arc with a deictic adverb target ('yesterday', 'tomorrow', ...)
     ;; surfaces as a bare adverb instead of 'at <Name>'.
     (let ((adv (and other (string-equal rel-label "time")
-                    (temporal-adverb-form other))))
+                    (temporal-adverb-form other)))
+          (measure nil))
       (cond (adv (mark-uttered state other) adv)
+            ((setf measure (bare-measure-filler rel other state))
+             (if (plusp (length prep)) (format nil "~a ~a" prep measure) measure))
             (t (or (and other
                         (realize-argument other state
                                           :case :accusative

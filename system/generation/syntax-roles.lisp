@@ -296,8 +296,45 @@
                     when entry return entry)))))))
 
 (defun relation-role (rel-or-label)
-  "Return the syntactic role keyword for a relation, or NIL if unmapped."
-  (second (relation-role-entry rel-or-label)))
+  "Return the syntactic role keyword for a relation, or NIL if unmapped.
+
+   For a RELATION (not a label), a :PP relation whose filler is a VALUE of the
+   dimension it measures is :ADJ on that arc -- see DIMENSION-VALUE-FILLER-P.
+   (AGE) is \"aged\" + NP for [AGE: @30 years], but [OLD] is an adjective and
+   says \"Tom is old\" and \"an old cat\", never \"aged an old\"."
+  (let ((role (second (relation-role-entry rel-or-label))))
+    (if (and (eq role :pp)
+             (typep rel-or-label 'relation)
+             (dimension-value-filler-p rel-or-label))
+        :adj
+        role)))
+
+(defun dimension-value-filler-p (rel)
+  "True when REL's filler is a value of the dimension REL measures rather than
+   a measurement of it: a generic concept whose type is a PROPER subtype of
+   REL's destination type, and an adjective. OLD under AGE on (age), FAT under
+   SIZE on (psize). Decided by the lattice, so a new relation of the same shape
+   needs no entry anywhere."
+  (let ((filler (outarc rel))
+        (dest   (ignore-errors (dest-type (relation-type rel)))))
+    (and filler dest
+         (concept-p filler)
+         (generic-p filler)
+         (ignore-errors (proper-subtype-p (concept-type filler) dest))
+         (eq (concept-pos filler) :adj))))
+
+(defun bare-measure-filler (rel other state)
+  "When OTHER only measures what REL already names -- [AGE: @30 years] on
+   (age), [DISTANCE: @2 meters] on (hgt) -- the measure alone, \"30 years\",
+   so the dimension isn't said twice (\"aged the age 30 years\"). Marks OTHER
+   uttered. NIL when OTHER's type is anything but REL's destination type, or
+   it carries no measure."
+  (let ((dest (ignore-errors (dest-type (relation-type rel)))))
+    (when (and other dest (concept-p other) (eq (concept-type other) dest))
+      (let ((measure (concept-measure-phrase other)))
+        (when measure
+          (mark-uttered state other)
+          measure)))))
 
 (defun relation-preposition (rel-or-label)
   "Return the preposition string associated with a relation, or NIL."

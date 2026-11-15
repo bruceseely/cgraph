@@ -309,7 +309,8 @@
                  (push (format nil "~@[~a ~]~a"
                                (or (filler-preposition rel other)
                                    (relation-preposition rel))
-                               (realize-np other state :case :accusative))
+                               (or (bare-measure-filler rel other state)
+                                   (realize-np other state :case :accusative)))
                        complements))))))
     (nreverse complements)))
 
