@@ -2,10 +2,10 @@
 
 (in-package #:conceptual-graphs)
 
-(defvar *node-ref-counter* 1)
+;;; *NODE-REF-COUNTER* and *NODE-CACHE* live in the environment
+;;; (environment.lisp).
 
 (defun get-node-ref ()
-  (declare (special *node-ref-counter*))
   (prog1
       *node-ref-counter*
     (incf *node-ref-counter*)))
@@ -151,14 +151,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  ;;  node-cache  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defvar *node-cache* (make-hash-table :test 'eql))
-
-#+allegro
-(defvar *node-cache* (make-hash-table :test 'eql :weak-keys t))
-
-;;; gets bound to the cache in use
-;;(defvar *node-cache* )
 
 
 (defun make-node-cache ()

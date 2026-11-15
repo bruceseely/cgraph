@@ -76,22 +76,10 @@
 (defvar *debug-mode* nil)
 (defvar *include-node-ref* nil)
 
-(defvar *current-individual-number* 1)
 (defvar *dynamically-create-individuals* t)
-(defvar *node-ref-counter*)
 
-(defvar *individuals* (list))
-
-;;; store individual, indexed by id
-;;; number -> indiv
-(defvar *individual-id-table* (make-hash-table :test #'eql))
-
-;;; all individuals are entered here
-;;; cocept-type symbol -> (list of indiv)
-(defvar *individual-type-table* (make-hash-table :test #'eql))
-
-;; (cons type properties) -> indiv; for [DOG: Spot #]
-(defvar *individual-property-table* (make-hash-table :test #'equalp))
+;;; *INDIVIDUALS*, *CURRENT-INDIVIDUAL-NUMBER* and the individual tables live in
+;;; the environment (environment.lisp).
 
 (defvar *individual-id-assignment* :suitable)
 

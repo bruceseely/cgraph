@@ -159,7 +159,7 @@
 
 
 
-(defvar *id-cache* (make-hash-table :test #'equal))
+;;; *ID-CACHE* lives in the environment (environment.lisp).
 
 (defun clear-id-cache ()
   (let ((size (hash-table-count *id-cache*)))

@@ -11,7 +11,7 @@
 
 ;;; string of characters that are used as default variable names
 (defvar *variable-names* "xyzpqrstabcdefghjklmn")
-(defvar *variables* nil)
+;;; *VARIABLES* (a VARIABLE-CACHE) lives in the environment (environment.lisp).
 
 
 (defclass variable-cache ()

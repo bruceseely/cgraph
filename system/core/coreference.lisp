@@ -20,8 +20,8 @@
 ;;; Scope: a ?x bound reference may point to a *x (or ?x) in the same
 ;;; context or any enclosing parent context.
 
-;;; Maps coref-label -> concept that defines it
-(defvar *coref-labels* (make-hash-table :test 'equal))
+;;; *COREF-LABELS* (coref-label -> the concept that defines it) lives in the
+;;; environment (environment.lisp).
 
 
 (defun initialize-coreferences ()
