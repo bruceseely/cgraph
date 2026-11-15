@@ -273,7 +273,9 @@
                     (list (cons "editor-operations-test"
                                 (editor-operations-test verbose))
                           (cons "referent-view-test"
-                                (referent-view-test verbose))))))
+                                (referent-view-test verbose))
+                          (cons "environment-serving-test"
+                                (environment-serving-test verbose))))))
     (dolist (r results)
       (format t "~&-=- ~a~34t~:[failed <<<~;passed~]~%" (car r) (cdr r)))
     (every #'cdr results)))

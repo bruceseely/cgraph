@@ -4,6 +4,27 @@
 
 (defvar *web-acceptor* nil)
 
+;;; --- The server's environment -----------------------------------------------
+;;; Handlers run in Hunchentoot's worker threads, which see only the GLOBAL value
+;;; of every special -- never a binding the REPL made. So the server captures an
+;;; environment when it starts and binds *ENVIRONMENT* to it around every
+;;; request: the type browser shows, edits and saves that knowledge base even
+;;; while the REPL has bound another. (Editor sessions go one step further and
+;;; carry the environment they were opened in; see WITH-EDITOR-SESSION.)
+
+(defclass cgraph-acceptor (hunchentoot:easy-acceptor)
+  ((environment :initarg :environment
+                :reader served-environment
+                :documentation "The environment every request is handled in."))
+  (:documentation "The type browser and editor's acceptor: an easy-acceptor
+   whose requests run in one environment."))
+
+(defmethod hunchentoot:acceptor-dispatch-request :around
+    ((acceptor cgraph-acceptor) request)
+  (declare (ignore request))
+  (let ((*environment* (served-environment acceptor)))
+    (call-next-method)))
+
 (defun web-static-dir ()
   "Return the absolute path to the web/ static files directory."
   (namestring (merge-pathnames "web/" (asdf:system-source-directory "cgraph-web"))))
@@ -53,12 +74,14 @@
                            (set *web-log-destination* to :file to redirect)~%"))
     ((nil) (format stream "~&  request log:  off~%"))))
 
-(defun start-web-server (&key (port 8080))
-  "Start the Hunchentoot web server on PORT (default 8080)."
+(defun start-web-server (&key (port 8080) (environment *environment*))
+  "Start the Hunchentoot web server on PORT (default 8080), serving
+   ENVIRONMENT -- by default the one current in the calling thread."
   (when *web-acceptor*
     (stop-web-server))
   (setf *web-acceptor*
-        (make-instance 'hunchentoot:easy-acceptor
+        (make-instance 'cgraph-acceptor
+                       :environment environment
                        :port port
                        :address "127.0.0.1"
                        :access-log-destination  (web-log-destination :access)

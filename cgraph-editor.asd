@@ -29,11 +29,12 @@
 ;;; doesn't count them as cgraph suites. In a loaded image, (cg::editor-test t).
 (defsystem "cgraph-editor/tests"
   :description "Test suites for the cgraph graph editor"
-  :depends-on ("cgraph-editor" "cgraph/tests")
+  :depends-on ("cgraph-editor" "cgraph/tests" "usocket")
   :components ((:module "test/editor"
                 :serial t
                 :components ((:file "editor-operations-test")
-                             (:file "referent-view-test"))))
+                             (:file "referent-view-test")
+                             (:file "environment-serving-test"))))
   :perform (test-op (o c)
              (unless (uiop:symbol-call :conceptual-graphs :editor-test t)
                (error "cgraph-editor: some test suites failed (see the report above)."))))

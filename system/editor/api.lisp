@@ -31,13 +31,17 @@
    Touching the session here is what detects a browser coming back: any request
    at all means the page is alive, so reopening a disconnected session's URL
    reconnects it without a dedicated handshake. The disconnect endpoint
-   deliberately does NOT use this macro, for the obvious reason."
+   deliberately does NOT use this macro, for the obvious reason.
+
+   BODY runs in the session's environment, which need not be the server's: a
+   REPL that bound *ENVIRONMENT* before calling EDIT-CGRAPH edits in that one."
   `(let ((,var (find-editor-session ,id)))
      (cond ((null ,var) (json-error "no such editor session"))
            ((not (eq (session-state ,var) :open))
             (json-error "editor session is already finished"))
            (t (touch-editor-session ,var)
-              ,@body))))
+              (let ((*environment* (session-environment ,var)))
+                ,@body)))))
 
 ;;; GET /editor?session=N — the editor page itself.
 (hunchentoot:define-easy-handler (handle-editor :uri "/editor") (session)

@@ -96,7 +96,13 @@
   ;; threads inherit none of the caller's bindings, so without this there is no
   ;; way to tell the REPL that its browser went away -- and a blocked REPL that
   ;; looks identical whether you are mid-edit or long gone is the whole problem.
-  out)
+  out
+  ;; The environment the session was opened in -- the caller's *ENVIRONMENT*
+  ;; for EDIT-CGRAPH, the server's (or the parent session's) for one opened by
+  ;; a request. Same reason as OUT: a handler thread doesn't see a binding the
+  ;; caller made, and the working graph's types belong to this environment.
+  ;; WITH-EDITOR-SESSION binds it around every handler that touches the session.
+  (environment *environment*))
 
 ;;; --- Registry --------------------------------------------------------------
 
