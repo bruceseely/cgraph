@@ -79,10 +79,10 @@
               (t :neuter)))))
 
 ;;; Register the small set of gendered common nouns we ship with.
-(register-lexicon-entry 'man   :gender :masc :human-p t)
-(register-lexicon-entry 'woman :gender :fem  :human-p t)
-(register-lexicon-entry 'boy   :gender :masc :human-p t)
-(register-lexicon-entry 'girl  :gender :fem  :human-p t)
+(register-builtin-lexicon-entry 'man   :gender :masc :human-p t)
+(register-builtin-lexicon-entry 'woman :gender :fem  :human-p t)
+(register-builtin-lexicon-entry 'boy   :gender :masc :human-p t)
+(register-builtin-lexicon-entry 'girl  :gender :fem  :human-p t)
 
 ;;; And the person subtypes that carry no inherent gender, which is a fact
 ;;; about them rather than a gap in the table. Singular-they is already what
@@ -90,9 +90,9 @@
 ;;; stops asking. Deliberately not (:gender :unknown) -- GENDER-OF reads the
 ;;; lexicon before the given-name registry, so a value here would shadow the
 ;;; name and cost [CHILD: Mary] its "she".
-(register-lexicon-entry 'child  :ungendered t :human-p t)
-(register-lexicon-entry 'baby   :ungendered t :human-p t)
-(register-lexicon-entry 'adult  :ungendered t :human-p t)
+(register-builtin-lexicon-entry 'child  :ungendered t :human-p t)
+(register-builtin-lexicon-entry 'baby   :ungendered t :human-p t)
+(register-builtin-lexicon-entry 'adult  :ungendered t :human-p t)
 
 (defparameter *pronoun-table*
   ;; (gender number case -> pronoun)

@@ -45,7 +45,7 @@
                                         (stringp alternative))))))
                       *lexicon-override-keys*))
 
-        (let ((*lexicon-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*lexicon-overrides* (make-hash-table :test 'equal)))
           (register-lexicon-entry 'dog :massp t)   ; typo for :mass-p
           (let ((findings (%lint-lexicon-override-keys)))
             (check "misspelled override key is reported"
@@ -55,7 +55,7 @@
             (check "unknown-key message lists the valid keys"
                    (search ":MASS-P" (third (first findings))))))
 
-        (let ((*lexicon-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*lexicon-overrides* (make-hash-table :test 'equal)))
           (register-lexicon-entry 'eat :past "ate")
           (let ((findings (%lint-lexicon-override-keys)))
             (check "documented-but-unread key is reported separately"
@@ -66,7 +66,7 @@
             (check "unimplemented-key message names the alternative"
                    (search "*IRREGULAR-VERBS*" (third (first findings))))))
 
-        (let ((*lexicon-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*lexicon-overrides* (make-hash-table :test 'equal)))
           (register-lexicon-entry 'dog :mass-p t :lemma "dog" :gender :masc)
           (check "valid keys yield no findings"
                  (null (%lint-lexicon-override-keys))))
@@ -164,7 +164,7 @@
         (let ((*irregular-verbs* '(("eat" "ate" "eaten" "eats") ("eat" "et" "eaten" "eats"))))
           (check "lexicon-lint surfaces :duplicate-table-key"
                  (member :duplicate-table-key (lexicon-lint) :key #'second)))
-        (let ((*lexicon-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*lexicon-overrides* (make-hash-table :test 'equal)))
           (register-lexicon-entry 'eat :gerund "eating")
           (check "lexicon-lint surfaces :unimplemented-lexicon-key"
                  (member :unimplemented-lexicon-key (lexicon-lint) :key #'second)))

@@ -13,9 +13,20 @@
 ;;  callers may extend them via REGISTER-LEXICON-ENTRY at runtime.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defparameter *lexicon-overrides* (make-hash-table :test 'equal)
-  "Per-concept-type overrides on the derivational defaults. Key: upcased label
-   string. Value: a plist. See docs/lexicon-overrides.md for the full reference.
+;;; Two tables. *BUILTIN-LEXICON-OVERRIDES* holds the entries in cgraph's own
+;;; source (REGISTER-BUILTIN-LEXICON-ENTRY, below and in anaphora.lisp).
+;;; *LEXICON-OVERRIDES* is the one every reader consults; it belongs to the
+;;; current environment (setup/environment.lisp), and INITIALIZE-TYPES refills
+;;; it from the built-ins and then the domain's lexicon-overrides.lisp. So
+;;; after editing a built-in entry: reload the file, then reinitialize -- the
+;;; same as before environments, since reloading always dropped the domain's
+;;; entries until the next initialize.
+
+(defparameter *builtin-lexicon-overrides* (make-hash-table :test 'equal)
+  "cgraph's own per-concept-type overrides on the derivational defaults, copied
+   into each environment's *LEXICON-OVERRIDES* when its types are loaded. Key:
+   upcased label string. Value: a plist. See docs/lexicon-overrides.md for the
+   full reference.
    Canonical keys:
      Word form:  :lemma :plural :past :past-participle :present-3sg :gerund
                  :particle
@@ -82,10 +93,21 @@
    readers can't drift.")
 
 (defun register-lexicon-entry (type-label &rest plist)
-  "Add or replace a lexicon override for TYPE-LABEL. Keys are not validated
-   here -- see *LEXICON-OVERRIDE-KEYS* and the lint check that reads it."
+  "Add or replace a lexicon override for TYPE-LABEL in the current environment.
+   Keys are not validated here -- see *LEXICON-OVERRIDE-KEYS* and the lint
+   check that reads it. Lasts until the environment's types are next loaded;
+   an entry meant to stay belongs in the domain's lexicon-overrides.lisp."
   (let ((key (string-upcase (string type-label))))
     (setf (gethash key *lexicon-overrides*) plist)))
+
+(defun register-builtin-lexicon-entry (type-label &rest plist)
+  "Add or replace one of cgraph's own lexicon entries: in
+   *BUILTIN-LEXICON-OVERRIDES*, for every environment loaded from now on, and
+   in the current environment, so it applies at once. For cgraph's source
+   files; anything else wants REGISTER-LEXICON-ENTRY or a domain file."
+  (setf (gethash (string-upcase (string type-label)) *builtin-lexicon-overrides*)
+        plist)
+  (apply #'register-lexicon-entry type-label plist))
 
 (defun lexicon-entry (type-or-label)
   (let ((key (cond ((symbolp type-or-label) (string-upcase (string type-or-label)))
@@ -122,17 +144,8 @@
   "Filename a domain uses for its generation overrides, alongside its
    concept-types.lisp and relation-types.lisp.")
 
-(defvar *domain-lexicon-file* nil
-  "The domain override file loaded this session, or NIL when the mounted domain
-   ships none.")
-
-(defvar *domain-lexicon-undo* nil
-  "Alist of (KEY . PREVIOUS) for every entry the current domain file registered.
-   PREVIOUS is the plist that was registered before it, or :NONE when nothing
-   was. Mounting a second domain rewinds through this first, so one domain's
-   English cannot leak into the next -- and a domain that overrode one of
-   cgraph's own registrations (:LEMMA on CITY-GOVERNMENT, say) gives it back
-   rather than deleting it.")
+;;; *DOMAIN-LEXICON-FILE* and *DOMAIN-LEXICON-UNDO* live in the environment
+;;; (setup/environment.lisp), beside the *LEXICON-OVERRIDES* they describe.
 
 (defun clear-domain-lexicon-overrides ()
   "Undo every override the last domain file registered, restoring what stood
@@ -188,7 +201,25 @@
 ;;; Setup declares the hole (*DOMAIN-LEXICON-LOADER*) and generation fills it,
 ;;; the way *MASS-TYPE-P* is filled below -- generation depends on setup, never
 ;;; the other way about.
-(setf *domain-lexicon-loader* #'load-domain-lexicon-overrides)
+(defun reset-lexicon-overrides ()
+  "Put the current environment's lexicon back to cgraph's built-in entries
+   alone, forgetting any domain file and any REGISTER-LEXICON-ENTRY call."
+  (let ((table (make-hash-table :test 'equal)))
+    (maphash (lambda (key plist) (setf (gethash key table) plist))
+             *builtin-lexicon-overrides*)
+    (setf *lexicon-overrides*   table
+          *domain-lexicon-undo* nil
+          *domain-lexicon-file* nil))
+  (values))
+
+(defun mount-domain-lexicon (directory)
+  "The built-in entries, then DIRECTORY's lexicon-overrides.lisp, as the current
+   environment's lexicon. What INITIALIZE-TYPES calls, so that loading a type
+   set always yields the same English whatever was registered before."
+  (reset-lexicon-overrides)
+  (load-domain-lexicon-overrides directory))
+
+(setf *domain-lexicon-loader* #'mount-domain-lexicon)
 
 ;;; --- Part-of-speech classification ------------------------------------------
 
@@ -547,7 +578,7 @@
              money gold silver oil gas air
              furniture equipment luggage clothing software
              substance))
-  (register-lexicon-entry m :mass-p t))
+  (register-builtin-lexicon-entry m :mass-p t))
 
 ;;; Teach the reader which types are mass nouns. Core declares *MASS-TYPE-P*
 ;;; and leaves it NIL; filling it here keeps the dependency pointing the way
@@ -563,8 +594,8 @@
 ;;; Pluralization appends to the whole string, so "text messages" comes out
 ;;; right.
 
-(register-lexicon-entry 'text-message  :lemma "text message")
-(register-lexicon-entry 'email-message :lemma "email" :synonym-ok t)
+(register-builtin-lexicon-entry 'text-message  :lemma "text message")
+(register-builtin-lexicon-entry 'email-message :lemma "email" :synonym-ok t)
 
 ;;; Compound labels whose hyphen is ontology, not English. A hyphenated label
 ;;; surfaces with its hyphen ("a body-part"), and these are types you would
@@ -574,16 +605,16 @@
 ;;; STATE-the-situation. Only the English needs saying. (Purely structural
 ;;; types -- ABSTRACT-OBJECT, the *-ATTRIBUTEs, the *-EXTENTs -- are left
 ;;; alone: they read no better, but nothing puts them in a graph.)
-(register-lexicon-entry 'body-part            :lemma "body part")
-(register-lexicon-entry 'food-item            :lemma "food item")
-(register-lexicon-entry 'city-government      :lemma "city government")
-(register-lexicon-entry 'office-building      :lemma "office building")
+(register-builtin-lexicon-entry 'body-part            :lemma "body part")
+(register-builtin-lexicon-entry 'food-item            :lemma "food item")
+(register-builtin-lexicon-entry 'city-government      :lemma "city government")
+(register-builtin-lexicon-entry 'office-building      :lemma "office building")
 
 ;;; A noun that names an event. Everything under EVENT realizes as a verb by
 ;;; default -- without this PARTY comes out "Is partied in a library" -- and
 ;;; unlike DINNER-EVENT, which never surfaces because its parts carry the
 ;;; clause, a party is usually the subject of its own sentence.
-(register-lexicon-entry 'party :pos :noun)
+(register-builtin-lexicon-entry 'party :pos :noun)
 
 ;;; --- Days of the week ------------------------------------------------------
 ;;; Proper nouns, so no article and a capital: "on Friday", not "at a friday".
@@ -593,20 +624,20 @@
 ;;; ate a pie yesterday", which is what English does with them.
 
 (dolist (day '(monday tuesday wednesday thursday friday saturday sunday))
-  (register-lexicon-entry day :proper-p t :time-prep "on"))
-(register-lexicon-entry 'geological-landform  :lemma "landform")
+  (register-builtin-lexicon-entry day :proper-p t :time-prep "on"))
+(register-builtin-lexicon-entry 'geological-landform  :lemma "landform")
 ;; English says "state" for both the land and the polity; the split that
 ;; matters here is one the ontology makes and the word does not.
-(register-lexicon-entry 'geographical-state   :lemma "state")
-(register-lexicon-entry 'geopolitical-state   :lemma "state")
+(register-builtin-lexicon-entry 'geographical-state   :lemma "state")
+(register-builtin-lexicon-entry 'geopolitical-state   :lemma "state")
 
 ;;; Marques. The -VEHICLE suffix distinguishes the car from the company that
 ;;; makes it, a distinction English drops entirely -- you say "a Chevy". Not
 ;;; :proper-p, which means no article and would give "Dave has Chevy": a marque
 ;;; used for the car is an ordinary count noun that happens to be capitalized.
-(register-lexicon-entry 'chevy-vehicle :lemma "Chevy")
-(register-lexicon-entry 'ford-vehicle  :lemma "Ford")
-(register-lexicon-entry 'tesla-vehicle :lemma "Tesla")
+(register-builtin-lexicon-entry 'chevy-vehicle :lemma "Chevy")
+(register-builtin-lexicon-entry 'ford-vehicle  :lemma "Ford")
+(register-builtin-lexicon-entry 'tesla-vehicle :lemma "Tesla")
 
 ;;; --- Communication media ---------------------------------------------------
 ;;; A medium is mass ("she told him by email"); the countable thing is the
@@ -615,16 +646,16 @@
 ;;; telephone but WITH a telephone, which is the TELEPHONY/TELEPHONE split
 ;;; stated in prepositions.
 
-(register-lexicon-entry 'email     :mass-p t :inst-prep "by")
-(register-lexicon-entry 'post      :mass-p t :inst-prep "by")
-(register-lexicon-entry 'telephony :mass-p t :inst-prep "by" :lemma "telephone" :synonym-ok t)
+(register-builtin-lexicon-entry 'email     :mass-p t :inst-prep "by")
+(register-builtin-lexicon-entry 'post      :mass-p t :inst-prep "by")
+(register-builtin-lexicon-entry 'telephony :mass-p t :inst-prep "by" :lemma "telephone" :synonym-ok t)
 
 ;;; --- Adverb-form overrides -------------------------------------------------
 ;;; Some types are abstract category labels rather than specific adjectives,
 ;;; so suffix-derivation produces nonsense (MANNER -> "mannerly"). Provide
 ;;; an :adv-form override that realize-adv consults first.
 
-(register-lexicon-entry 'manner :adv-form "somehow")
+(register-builtin-lexicon-entry 'manner :adv-form "somehow")
 ;; keyed on the TIME-PERIOD concept, not the `time' relation (which is not a
 ;; concept type) -- completes the somehow/sometime/somewhere trio.
 ;; NO :lemma here, though "a time-period" reads as badly as the rest. BASE-LEMMA
@@ -633,8 +664,8 @@
 ;; shadows that, TEMPORAL-ADVERB-FORM stops recognising the deictic, and
 ;; "A girl ate a pie yesterday" becomes "A girl eats a pie at Time period".
 ;; Four generation-test cases catch it; this comment is so it is not re-added.
-(register-lexicon-entry 'time-period :adv-form "sometime")
-(register-lexicon-entry 'place  :adv-form "somewhere")
+(register-builtin-lexicon-entry 'time-period :adv-form "sometime")
+(register-builtin-lexicon-entry 'place  :adv-form "somewhere")
 
 ;;; --- Verb-form overrides for state-noun types ------------------------------
 ;;; When a state-noun type is used as the main predicate of a clause, we need
@@ -646,17 +677,17 @@
 ;;; the particle is appended after the main verb form. Register particle
 ;;; verbs here (or via register-lexicon-entry from user code).
 
-(register-lexicon-entry 'pick-up   :lemma "pick"  :particle "up")
-(register-lexicon-entry 'carry-out :lemma "carry" :particle "out")
-(register-lexicon-entry 'turn-off  :lemma "turn"  :particle "off")
-(register-lexicon-entry 'turn-on   :lemma "turn"  :particle "on")
+(register-builtin-lexicon-entry 'pick-up   :lemma "pick"  :particle "up")
+(register-builtin-lexicon-entry 'carry-out :lemma "carry" :particle "out")
+(register-builtin-lexicon-entry 'turn-off  :lemma "turn"  :particle "off")
+(register-builtin-lexicon-entry 'turn-on   :lemma "turn"  :particle "on")
 
-(register-lexicon-entry 'belief    :lemma "believe" :raising t)
-(register-lexicon-entry 'intention :lemma "intend")
-(register-lexicon-entry 'thought   :lemma "think")
-(register-lexicon-entry 'hope      :lemma "hope")
-(register-lexicon-entry 'fear      :lemma "fear")
-(register-lexicon-entry 'wish      :lemma "wish")
+(register-builtin-lexicon-entry 'belief    :lemma "believe" :raising t)
+(register-builtin-lexicon-entry 'intention :lemma "intend")
+(register-builtin-lexicon-entry 'thought   :lemma "think")
+(register-builtin-lexicon-entry 'hope      :lemma "hope")
+(register-builtin-lexicon-entry 'fear      :lemma "fear")
+(register-builtin-lexicon-entry 'wish      :lemma "wish")
 
 ;;; --- Raising verbs (Sowa Rule 4 second half) ------------------------------
 ;;; Cognitive verbs that, when their AGNT/EXPR is absent (passive use),
@@ -665,24 +696,24 @@
 ;;; 'Ivan is known to be in a place' rather than 'A know.' or
 ;;; 'It is known that Ivan is in a place'.
 
-(register-lexicon-entry 'know :raising t)
+(register-builtin-lexicon-entry 'know :raising t)
 
 ;;; --- Argument-frame overrides for communication verbs ---------------------
 ;;; By default the CG :dobj surfaces as direct object and :rcpt as 'to X'.
 ;;; Communication verbs flip this: the recipient is unmarked, the info is a
 ;;; PP. ':rcpt-direct t' triggers the swap; ':obj-prep' picks the preposition.
 
-(register-lexicon-entry 'inform :rcpt-direct t :obj-prep "about")
-(register-lexicon-entry 'notify :rcpt-direct t :obj-prep "about")
-(register-lexicon-entry 'advise :rcpt-direct t :obj-prep "about")
-(register-lexicon-entry 'remind :rcpt-direct t :obj-prep "of")
-(register-lexicon-entry 'warn   :rcpt-direct t :obj-prep "about")
-(register-lexicon-entry 'ask    :rcpt-direct t :obj-prep "about")
+(register-builtin-lexicon-entry 'inform :rcpt-direct t :obj-prep "about")
+(register-builtin-lexicon-entry 'notify :rcpt-direct t :obj-prep "about")
+(register-builtin-lexicon-entry 'advise :rcpt-direct t :obj-prep "about")
+(register-builtin-lexicon-entry 'remind :rcpt-direct t :obj-prep "of")
+(register-builtin-lexicon-entry 'warn   :rcpt-direct t :obj-prep "about")
+(register-builtin-lexicon-entry 'ask    :rcpt-direct t :obj-prep "about")
 ;; Same frame, plus a lemma: the verb is "call", not the label "phone-call".
 ;; As an NP the same lemma reads "a call", which is what English says too.
-(register-lexicon-entry 'phone-call :lemma "call" :rcpt-direct t :obj-prep "about")
+(register-builtin-lexicon-entry 'phone-call :lemma "call" :rcpt-direct t :obj-prep "about")
 ;; Double-object verbs: the info NP follows the recipient with no preposition
 ;; ("tell her the news", "teach the kids math").
-(register-lexicon-entry 'tell   :rcpt-direct t :obj-prep nil)
-(register-lexicon-entry 'teach  :rcpt-direct t :obj-prep nil)
-(register-lexicon-entry 'show   :rcpt-direct t :obj-prep nil)
+(register-builtin-lexicon-entry 'tell   :rcpt-direct t :obj-prep nil)
+(register-builtin-lexicon-entry 'teach  :rcpt-direct t :obj-prep nil)
+(register-builtin-lexicon-entry 'show   :rcpt-direct t :obj-prep nil)

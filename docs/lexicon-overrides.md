@@ -11,11 +11,19 @@ concept's surface form from the type lattice and the label:
 
 **Lexicon overrides** are the escape hatch for the exceptions. Each override is a
 per-concept-type plist, keyed by the upcased label, stored in
-`*lexicon-overrides*` (`system/generation/lexicon.lisp`). Register one with:
+`*lexicon-overrides*`, which belongs to the current environment. Register one with:
 
 ```lisp
 (register-lexicon-entry 'pick-up :lemma "pick" :particle "up")
 ```
+
+Loading a type set (`initialize-types`) rebuilds that table in three layers:
+cgraph's own entries (`*builtin-lexicon-overrides*`, registered in
+`system/generation/lexicon.lisp` and `anaphora.lisp` with
+`register-builtin-lexicon-entry`), then the domain's `lexicon-overrides.lisp`
+(below). A `register-lexicon-entry` call at the REPL lasts until the next
+load; an entry you want to keep belongs in the domain file. After editing a
+built-in entry, reload the file and reinitialize.
 
 Overrides may be registered for a type that doesn't exist yet — they simply sit
 unused until a matching concept type is defined (the startup lexicon lint reports

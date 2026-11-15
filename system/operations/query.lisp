@@ -26,23 +26,20 @@
   (let* ((pattern-head (car (parse-cgraph pattern)))
          (saved-variables *variables*)
          (results (list)))
-    ;; *VARIABLES* is an environment slot, not a special, so it can't be
-    ;; LET-bound: put the pattern's variables back before each projection (a
-    ;; parse inside one replaces them) and on the way out.
-    (unwind-protect
-         (dolist (graph (graphs context))
-           (let* ((graph-nodes (nodes graph))
-                  (target-head (find-if (lambda (node) (typep node 'concept)) graph-nodes))
-                  (mappings (when target-head
-                              (setf *variables* saved-variables)
-                              (project pattern-head target-head :all-solutions t))))
-             (dolist (mapping mappings)
-               (push (list :graph target-head
-                           :bindings (extract-bindings mapping saved-variables))
-                     results))
-             (when (and first-only mappings)
-               (return))))
-      (setf *variables* saved-variables))
+    (dolist (graph (graphs context))
+      (let* ((graph-nodes (nodes graph))
+             (target-head (find-if (lambda (node) (typep node 'concept)) graph-nodes))
+             (mappings (when target-head
+                         ;; ENV-LET, not LET: *VARIABLES* lives in the
+                         ;; environment (setup/environment.lisp).
+                         (env-let ((*variables* saved-variables))
+                           (project pattern-head target-head :all-solutions t)))))
+        (dolist (mapping mappings)
+          (push (list :graph target-head
+                      :bindings (extract-bindings mapping saved-variables))
+                results))
+        (when (and first-only mappings)
+          (return))))
     (nreverse results)))
 
 

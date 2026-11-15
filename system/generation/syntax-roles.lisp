@@ -73,17 +73,17 @@
 ;;; hierarchy, §4(b) -- but it makes a custom ontology correctable, which it
 ;;; was not.
 
-(defparameter *relation-syntax-overrides* (make-hash-table :test 'equal)
-  "Per-relation syntax registrations, consulted by RELATION-ROLE-ENTRY ahead of
-   *RELATION-SYNTAX-TABLE*. Key: upcased label string. Value: an entry of the
-   same (LABEL ROLE &optional PREPOSITION) shape the table holds, so that
-   everything downstream -- the accessors and all four lint checks -- reads the
-   two sources identically.
-
-   A DEFPARAMETER, like *LEXICON-OVERRIDES*, so reloading this file clears
-   registrations back to the built-in table. Registrations therefore belong in
-   a file that gets loaded, not in a one-off REPL call you would have to
-   remember to repeat after every ASDF:LOAD-SYSTEM :FORCE T.")
+;;; *RELATION-SYNTAX-OVERRIDES* -- per-relation syntax registrations, consulted
+;;; by RELATION-ROLE-ENTRY ahead of *RELATION-SYNTAX-TABLE* -- lives in the
+;;; environment (setup/environment.lisp), because it is a projection of that
+;;; environment's relation catalog. Key: upcased label string. Value: an entry
+;;; of the same (LABEL ROLE &optional PREPOSITION) shape the table holds, so
+;;; that everything downstream -- the accessors and all four lint checks --
+;;; reads the two sources identically.
+;;;
+;;; It is cleared with the relation catalog and rebuilt from :ROLE as the
+;;; relation types load, so registrations belong in relation-types.lisp, not in
+;;; a one-off REPL call that the next INITIALIZE-TYPES would forget.
 
 (defun register-relation-syntax (label role &optional preposition)
   "Map LABEL to ROLE (and PREPOSITION, which only :PP and :IOBJ read),
@@ -124,9 +124,9 @@
 ;;; With these set, a relation definition carrying :ROLE registers itself as it
 ;;; loads, which is what gives REGISTER-RELATION-SYNTAX somewhere to be called
 ;;; from. The registrations then become a projection of the ontology file
-;;; rather than hand-managed state -- which is also what makes
-;;; *RELATION-SYNTAX-OVERRIDES* being a DEFPARAMETER correct rather than merely
-;;; tolerable: cleared on reload, rebuilt by INITIALIZE-TYPES.
+;;; rather than hand-managed state -- which is also why
+;;; *RELATION-SYNTAX-OVERRIDES* belongs to the environment along with the
+;;; catalog: cleared with it, rebuilt by INITIALIZE-TYPES.
 (setf *relation-syntax-hook* #'register-relation-syntax)
 (setf *relation-syntax-reset-hook* #'clear-relation-syntax-registrations)
 

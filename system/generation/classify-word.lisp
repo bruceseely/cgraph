@@ -416,7 +416,7 @@
       (apply #'register-lexicon-entry label
              (cw-merge-plist (lexicon-entry label) plist))
       (let ((*print-case* :downcase))
-        (format nil "(register-lexicon-entry '~(~A~)~{ ~S~})"
+        (format nil "(register-builtin-lexicon-entry '~(~A~)~{ ~S~})"
                 label (cw-merge-plist (lexicon-entry label) plist))))))
 
 ;;; --- the REPL front end ---------------------------------------------------
@@ -475,7 +475,9 @@
            (cond
              ((cw-ask-yes-no stream "Keep this?" :default (null (getf preview :breaks)))
               (let ((line (commit-classification label answers)))
-                (format stream "~&~%Registered for this session. To keep it, add this to~
-                                ~& system/generation/lexicon.lisp:~&~%~&~A~%" line))
+                (format stream "~&~%Registered until the types are next loaded. To keep ~
+                                it, add this to~& system/generation/lexicon.lisp (or ~
+                                the same keys, as (:label ...), to~& your domain's ~
+                                lexicon-overrides.lisp):~&~%~&~A~%" line))
               plist)
              (t (format stream "~&~%Left alone.~%") nil))))))))

@@ -59,8 +59,8 @@
     ;; *RELATION-SYNTAX-TABLE* and expect the effective mapping to be exactly
     ;; what they put there -- a registration left over in the image, or made by
     ;; a user's ontology file, would silently falsify that.
-    (let ((ok t)
-          (*relation-syntax-overrides* (make-hash-table :test 'equal)))
+    (env-let ((ok t)
+              (*relation-syntax-overrides* (make-hash-table :test 'equal)))
       (flet ((check (label pass)
                (setf ok (and ok (and pass t)))
                (when (or verbose (not pass))
@@ -224,7 +224,7 @@
 
         ;; The headline case: a relation in the catalog that nothing maps is an
         ;; :error, and a registration -- not an edit to this repo -- clears it.
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
               (*relation-syntax-table* '((agnt :subject) (obj :dobj))))
           (check "an unmapped catalog relation is reported"
                  (member 'loc (%contexts-named :relation-not-mapped
@@ -240,7 +240,7 @@
                  (equal "in" (relation-preposition 'loc))))
 
         ;; A registration shadows a built-in rather than sitting beside it.
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
           (check "the built-in applies before any registration"
                  (eq :dobj (relation-role 'obj)))
           (register-relation-syntax 'obj :pp "regarding")
@@ -259,7 +259,7 @@
         ;; A registration counts as coverage exactly as a built-in does --
         ;; %LIVE-RELATION-SYNTAX-ENTRIES has to see it, or an ontology that
         ;; supplies its own agentive relation still reads as having no subject.
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
               (*relation-syntax-table* '((obj :dobj) (loc :pp "in"))))
           (check ":subject is uncovered with no agentive relation mapped"
                  (member :subject (%contexts-named :syntax-role-uncovered
@@ -273,13 +273,13 @@
         ;; REGISTER-RELATION-SYNTAX validates nothing, on purpose: the lint is
         ;; what catches a bad role, and it must therefore walk registrations
         ;; and not just the table.
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
               (*relation-syntax-table* '((agnt :subject) (obj :dobj))))
           (register-relation-syntax 'loc :not-a-role)
           (check "a registered unknown role is linted like a table entry"
                  (member 'loc (%contexts-named :unknown-syntax-role
                                                (%lint-unrealizable-syntax-roles)))))
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
               (*relation-syntax-table* '((agnt :subject) (obj :dobj))))
           (register-relation-syntax 'loc :pred-cmp)
           (check "a registered unimplemented role is linted too"
@@ -289,7 +289,7 @@
         ;; A string label and a symbol label name the same registration; the
         ;; entry carries a :CG symbol either way, because the lint hands it to
         ;; GET-RELATION-TYPE and that catalog is keyed by :CG symbols.
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
           (register-relation-syntax "loc" :adv)
           (check "a string label registers under the same key"
                  (eq :adv (relation-role 'loc)))
@@ -301,7 +301,7 @@
         ;; what LOAD-RELATION-TYPES calls per form, so these exercise the same
         ;; code a user's relation-types.lisp does.
 
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
           (%with-relation-def '(:label test-benef :source-types act
                                 :dest-type animate :role :pp :prep "for")
             (lambda (label)
@@ -318,7 +318,7 @@
                                          :relation-not-mapped
                                          (%lint-relation-syntax-coverage))))))))
 
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
           (%with-relation-def '(:label test-benef :source-types act
                                 :dest-type animate :role :dobj)
             (lambda (label)
@@ -329,7 +329,7 @@
         ;; A definition with no :role is the pre-existing shape, and must go on
         ;; behaving exactly as it did -- registering nothing, and reported by
         ;; the coverage check as the unmapped relation it is.
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
           (%with-relation-def '(:label test-benef :source-types act
                                 :dest-type animate)
             (lambda (label)
@@ -343,7 +343,7 @@
         ;; Clearing the catalog clears the syntax with it. Without this, a
         ;; :role deleted from an ontology would outlive the reload meant to
         ;; remove it.
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal)))
           (register-relation-syntax 'test-ghost :pp "beside")
           (check "a registration survives until the catalog is cleared"
                  (eq :pp (relation-role 'test-ghost)))
@@ -355,7 +355,7 @@
 
         ;; Core must not require generation: with the hook unset, a :role key
         ;; is read and ignored rather than signalling.
-        (let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
+        (env-let ((*relation-syntax-overrides* (make-hash-table :test 'equal))
               (*relation-syntax-hook* nil))
           (%with-relation-def '(:label test-benef :source-types act
                                 :dest-type animate :role :pp :prep "for")
