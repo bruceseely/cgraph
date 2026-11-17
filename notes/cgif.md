@@ -78,12 +78,12 @@ For each of these the choice is to refuse, approximate, or extend:
 | cgraph | Problem | Recommendation |
 |---|---|---|
 | `#123` (individual id) | CGIF has no individual markers. | Write it as a quoted name, `"#123"`. Another tool reads that as an ordinary constant, which is the right meaning (one particular individual). cgraph reads it back as an id. |
-| `[CAT: Felix #7]` (name and id) | A concept can hold several references, but the summary doesn't say what that means. | Write the name only, as the LF formatter already does. Keep the id only in lossless mode (below). |
+| `[CAT: Felix #7]` (name and id) | A concept can hold several references, but the summary doesn't say what that means. | Write the name only, in every mode, as the LF formatter does. *(Changed in step 4: a named individual always has an id, the image's own numbering, which another image wouldn't share, so there is no id worth keeping beside a name.)* |
 | `#` (definite, unidentified) | Not in ISO CGIF; Sowa calls it an indexical extension. | Portable: drop it, so the concept becomes generic, and warn. Lossless: keep `#`. |
 | `{Fido, Spot}`, `{*} @ 5` (sets, cardinality) | Not in ISO CGIF; only a proposed extension. | Portable: refuse with an error that names the concept. Lossless: write Sowa's proposed syntax. |
 | `@ 5 ft.` (measure) | No CGIF form. | Portable: refuse. Lossless: keep it as cgraph writes it. |
 | `@past`, `@progressive`, `@passive` | Hints for generating English, with no logical meaning. | Portable: drop them and warn. Lossless: keep them. |
-| `@some` | It is the default meaning of a concept anyway. | Drop it everywhere; nothing is lost. |
+| `@some` | It is the default meaning of a concept anyway. | Drop it quietly in portable mode; nothing is lost. *(Changed in step 4: lossless keeps it, so the round trip is exact, and strict refuses it, as it refuses everything portable drops.)* |
 | `@most` and other quantifiers | Not in ISO CGIF. | Portable: refuse. Lossless: keep. |
 
 ### Modes
@@ -206,8 +206,21 @@ Small commits, each with its tests:
      exports as exactly that, and unwrapping it on import would lose the
      concept. Whether a text-level wrapper should be recognized belongs with
      `read-cgif-graphs` (step 5).
-4. `@every`, and the three modes, covering every row of the "No standard
-   CGIF form" table.
+4. ~~`@every`, and the three modes, covering every row of the "No standard
+   CGIF form" table.~~ Done 2026-11-17. `format-cgif` takes `:mode`
+   (`:portable`, `:strict`, `:lossless`). Portable warns `cgif-dropped`
+   for what it leaves out, and `cgif-unsupported` is the refusal.
+   - `@every` is written `[PERSON: @every *x1]`: standard CGIF puts a
+     defining label after it, so a concept without one gets a fresh one.
+   - An id is written `"#12"` wherever the linear form writes an id, which
+     is never beside a name.
+   - Lossless writes cgraph's own text for sets (`{Fido, Spot}`,
+     `{*}@5`), measures (`@80 kg`), `#`, and the `@` words. Import reads all
+     of it in any mode, and reads a quoted `"#12"` as the id.
+   - The round trip in the tests now runs in lossless over the export
+     cases, the referent catalog of docs/referents.md and the
+     generation-test corpus (213 graphs), and in portable over the 100 that
+     portable leaves nothing out of.
 5. `read-cgif-graphs` and `write-cgif-graphs`.
 6. Docs: `docs/cgif.md`, `API.md`, a line in the README, and fix
    `docs/generation.md:8`, which calls a linear-form string a "CGIF string".

@@ -61,18 +61,48 @@
     ("~[Proposition: [Dog: *x]<-(agnt)<-[Bark] ~[Proposition: [Dog: ?x]->(attr)->[Noisy]]]"
      . "~[PROPOSITION: [DOG: *x] [BARK: *x1] ~[PROPOSITION: [DOG: ?x *x2] [NOISY: *x3] (attr ?x2 ?x3)] (agnt ?x1 ?x)]")))
 
+(defparameter *cgif-mode-cases*
+  ;; (linear form  portable  strict  lossless). Each is the CGIF expected, or
+  ;; (:refused words) for a CGIF-UNSUPPORTED whose message has WORDS, or
+  ;; (:dropped CGIF words) for that CGIF written with a CGIF-DROPPED warning
+  ;; whose message has WORDS. The rows of notes/cgif.md's "No standard CGIF
+  ;; form" table.
+  ;; Ids are high so that no individual made earlier in the run has them.
+  '(;; Standard in every mode.
+    ("[DOG: @every]."  "[DOG: @every *x1]" "[DOG: @every *x1]" "[DOG: @every *x1]")
+    ("[PERSON: @every]<-(agnt)<-[EAT]."
+     "[PERSON: @every *x1] [EAT: *x2] (agnt ?x2 ?x1)"
+     "[PERSON: @every *x1] [EAT: *x2] (agnt ?x2 ?x1)"
+     "[PERSON: @every *x1] [EAT: *x2] (agnt ?x2 ?x1)")
+    ("[CAT: #9012]."   "[CAT: \"#9012\"]" "[CAT: \"#9012\"]" "[CAT: \"#9012\"]")
+    ;; A named individual is written by name alone, as the linear form does.
+    ("[CAT: Felix #9007]." "[CAT: Felix]" "[CAT: Felix]" "[CAT: Felix]")
+    ;; No logical meaning: dropped with a warning, refused by :strict.
+    ("[CAT: #]."       (:dropped "[CAT]" "the individual marker #")
+                       (:refused "the individual marker # has no standard CGIF form")
+                       "[CAT: #]")
+    ("[EAT: @past]."   (:dropped "[EAT]" "the annotation @past")
+                       (:refused "the annotation @past")
+                       "[EAT: @past]")
+    ("[EAT: *e @past-progressive @passive]."
+                       (:dropped "[EAT: *e]" "the annotation @passive")
+                       (:refused "the annotation @past-progressive")
+                       "[EAT: @past-progressive @passive *e]")
+    ;; @some is what a concept means anyway: dropped without a word.
+    ("[CAT: @some]."   "[CAT]" (:refused "@some") "[CAT: @some]")
+    ;; Can't be said: refused unless :lossless.
+    ("[DOG: {Fido, Spot}]."  (:refused "a set has no standard CGIF form")
+                             (:refused "a set") "[DOG: {Fido, Spot}]")
+    ("[DOG: {Fido, Spot, *} @ 4]." (:refused "a set") (:refused "a set")
+                                   "[DOG: {Fido, Spot, *}@4]")
+    ("[PERSON: Tom]->(wgt)->[MASS: @80 kg]."
+     (:refused "a measure") (:refused "a measure")
+     "[PERSON: Tom] [MASS: @80 kg *x1] (wgt Tom ?x1)")
+    ("[CAT: @most]."   (:refused "the quantifier @most") (:refused "@most") "[CAT: @most]")))
+
 (defparameter *cgif-refused-cases*
-  ;; (linear form . words the refusal must contain). Each gets its CGIF form
-  ;; in a later step; until then it is refused, never silently dropped.
-  '(("[CAT: #12]."                       . "an individual id without a name")
-    ("[CAT: #]."                         . "the individual marker #")
-    ("[DOG: {Fido, Spot}]."              . "a set")
-    ("[DOG: @every]."                    . "the quantifier @every")
-    ("[EAT: @past]."                     . "the annotation @past")
-    ("[PERSON: Tom]->(wgt)->[MASS: @80 kg]." . "a measure")
-    ("~[CAT]."                           . "a negated concept with no graph inside")
-    ;; Inside a context too.
-    ("[[CAT: #12]]."                     . "an individual id without a name")))
+  ;; (linear form . words the refusal must contain), in every mode.
+  '(("~[CAT]."                           . "a negated concept with no graph inside")))
 
 (defparameter *cgif-import-cases*
   ;; (CGIF . linear form it reads as). CGIF written by others, not by
@@ -89,6 +119,10 @@
     ("[EAT *e] (agnt ?e Fido)"            . "[EAT]→(agnt)→[ANIMATE: Fido].")
     ;; The first concept is the head.
     ("[FOOD *f] [EAT *e] (obj ?e ?f)"     . "[FOOD]←(obj)←[EAT].")
+    ;; @every is the universal quantifier; its label is wiring like any other.
+    ("[Cat: @every *x] [Mat *y] (On ?x ?y)" . "[CAT: @every]→(on)→[MAT].")
+    ;; An id written as a constant is the id.
+    ("[Cat: \"#12\"]"                     . "[CAT: #12].")
     ;; Contexts. One with no type is a PROPOSITION, as [[...]] is.
     ("~[[Cat *x] [Mat *y] (On ?x ?y)]"    . "~[PROPOSITION: [CAT]→(on)→[MAT]].")
     ("[Proposition: [Cat]]"               . "[PROPOSITION: [CAT]].")
@@ -139,7 +173,8 @@
     ("[Equiv: [Iff: [CAT]] [Iff: [DOG]]]" "Equiv isn't supported"    "[Equiv")
     ("[PROPOSITION: Tom [CAT]]"     "also has a name"                "[PROPOSITION")
     ("[*x]"                         "no type (core CGIF)"            "[*x")
-    ("[CAT: @every *x]"             "@every"                         "@every")
+    ("[CAT: @]"                     "@ needs a word or a number"     "]")
+    ("[DOG: {Fido, Spot]"           "this set has no closing }"      "{Fido")
     ("[CAT *x] (Add ?x 7 | [*u])"   "An actor"                       "| [")))
 
 (defun cgif-normal-lf (thing)
@@ -164,22 +199,43 @@
                          (setf i end))
                        (progn (write-char c out) (incf i)))))))))
 
-(defun cgif-round-trips-p (graph)
-  "True when GRAPH, written as CGIF and read back, is the same graph."
+(defun cgif-round-trips-p (graph &optional (mode :portable))
+  "True when GRAPH, written as CGIF in MODE and read back, is the same graph."
   (string= (cgif-normal-lf graph)
-           (cgif-normal-lf (parse-cgif (format-cgif graph)))))
+           (cgif-normal-lf (parse-cgif (format-cgif graph :mode mode)))))
+
+(defparameter *cgif-referent-catalog*
+  ;; The examples of docs/referents.md, each in a concept.
+  ;; (#9123 for the catalog's #123: an id made earlier in the run would clash.)
+  '("[DOG]." "[DOG: *]." "[DOG: *x]." "[DOG: ?x]." "[DOG: #9123]." "[DOG: #]." "[DOG: Fido]."
+    "[DOG: {*}]." "[DOG: {}]." "[DOG: {Fido, Spot}]." "[DOG: {Fido, #9123, *}]."
+    "[DOG: {*} @ 5]." "[DOG: {Fido, Spot, *} @ 4]."
+    "[MASS: @ 5 ft.]." "[MASS: @25.4 cm]."
+    "[EAT: @past]." "[EAT: @future]." "[EAT: @present]." "[EAT: @progressive]."
+    "[EAT: @perfect-progressive]." "[EAT: @past-progressive]." "[EAT: @future-perfect]."
+    "[EAT: @passive]." "[EAT: @active]."
+    "[DOG: @every]." "[DOG: @all]." "[DOG: @some]." "[DOG: @most]."
+    "[CAT: Felix #9007]." "[EAT: *e @past-progressive @passive]." "[PERSON: ?x @every]."
+    "~[[PERSON: *x]->(attr)->[OLD]]."))
+
+(defun cgif-lone-label-p (graph)
+  "True when GRAPH has a label nothing else shares, [CAT: ?c] or [EAT: *x1]:
+   it means nothing in CGIF, and import doesn't keep it."
+  (some (lambda (node)
+          (and (concept-p node)
+               (or (concept-coref-label node) (coref-bound-label node)
+                   (node-variable node))
+               (null (coreference node))))
+        ;; nested contexts too
+        (cgif-all-nodes (remove-if-not #'concept-p (nodes graph)) nil)))
 
 (defun cgif-drops-something-p (graph)
-  "True when exporting GRAPH and reading it back leaves out something, on
-   purpose: @some, and an individual's id when it also has a name, which
-   portable mode drops; and a label nothing else shares, [CAT: ?c] or
-   [EAT: *x1], which means nothing in CGIF and is not read back."
+  "True when exporting GRAPH in :PORTABLE leaves out something, on purpose,
+   without a warning: @some, and an individual's id beside its name. (What
+   it drops with a warning is caught by the caller.)"
   (some (lambda (node)
           (and (concept-p node)
                (or (eq (concept-quantifier node) :existential)
-                   (and (or (concept-coref-label node) (coref-bound-label node)
-                            (node-variable node))
-                        (null (coreference node)))
                    (let ((content (and (referent node) (content (referent node)))))
                      (and (typep content 'individual)
                           (cgif-concept-name node)
@@ -242,21 +298,61 @@
                                  (error (c) (format nil "<error: ~a>" c)))
                                expected)))
 
-      ;; The round trip, over the export cases and over GENERATION-TEST's graphs.
-      (let ((tried 0) (failed '()))
+      ;; The modes.
+      (loop for (lf . expectations) in *cgif-mode-cases*
+            do (loop for mode in '(:portable :strict :lossless)
+                     for expected in expectations
+                     for name = (format nil "~s as ~(~a~): ~s" lf mode expected)
+                     do (let ((warning nil) (refusal nil) (text nil))
+                          (handler-case
+                              (handler-bind ((cgif-dropped
+                                               (lambda (w)
+                                                 (setf warning (princ-to-string w))
+                                                 (muffle-warning w))))
+                                (setf text (format-cgif (make-cgraph lf) :mode mode)))
+                            (cgif-unsupported (c) (setf refusal (princ-to-string c)))
+                            (error (c) (setf text (format nil "<error: ~a>" c))))
+                          (check name
+                                 (cond ((stringp expected)
+                                        (and (equal text expected) (null warning)))
+                                       ((eq (first expected) :refused)
+                                        (and refusal (search (second expected) refusal)))
+                                       ((eq (first expected) :dropped)
+                                        (and (equal text (second expected))
+                                             warning (search (third expected) warning))))))))
+
+      ;; The round trip: every graph of the export cases, the referent
+      ;; catalog (docs/referents.md) and GENERATION-TEST, in :LOSSLESS, which
+      ;; promises it; and in :PORTABLE, the ones it drops nothing from.
+      (let ((lossless 0) (portable 0) (failed '()))
         (dolist (lf (append (mapcar #'car *cgif-export-cases*)
+                            (mapcar #'car *cgif-mode-cases*)
+                            *cgif-referent-catalog*
                             (mapcar #'car *generation-test-cases*)))
           (let ((graph (ignore-errors (make-cgraph lf))))
-            (when (and graph
-                       (not (cgif-drops-something-p graph))
-                       (handler-case (progn (format-cgif graph) t)
-                         (cgif-unsupported () nil)))
-              (incf tried)
-              (unless (ignore-errors (cgif-round-trips-p graph))
-                (push lf failed)))))
-        (check (format nil "~d graphs come back from CGIF as they went~@[; not ~s~]"
-                       tried failed)
-               (and (null failed) (> tried 50))))
+            (when (and graph (not (cgif-lone-label-p graph)))
+              (when (handler-case (progn (format-cgif graph :mode :lossless) t)
+                      (cgif-unsupported () nil))
+                (incf lossless)
+                (unless (ignore-errors (cgif-round-trips-p graph :lossless))
+                  (push (list :lossless lf) failed)))
+              ;; A fresh graph: reading the CGIF back replaced the variable
+              ;; table, which clears the *x labels of every graph made before
+              ;; (notes/known-issues.md), this one included.
+              (setf graph (make-cgraph lf))
+              (when (and (not (cgif-drops-something-p graph))
+                         (handler-case
+                             (handler-bind ((cgif-dropped (lambda (w) (declare (ignore w))
+                                                            (error 'cgif-unsupported))))
+                               (progn (format-cgif graph) t))
+                           (cgif-unsupported () nil)))
+                (incf portable)
+                (unless (ignore-errors (cgif-round-trips-p graph))
+                  (push (list :portable lf) failed))))))
+        (check (format nil "~d graphs come back from lossless CGIF as they went, ~
+                            and ~d from portable~@[; not ~s~]"
+                       lossless portable failed)
+               (and (null failed) (> lossless 150) (> portable 50))))
 
       (let ((graph (make-cgraph "[FOOD]<-(obj)<-[EAT]->(agnt)->[CAT].")))
         (check "the graph's head is written first"

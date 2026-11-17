@@ -43,10 +43,15 @@
 ;;
 ;;  The first concept becomes the head: FORMAT-CGIF writes the head first.
 ;;
-;;  Not yet read, and refused with a CGRAPH-PARSE-ERROR saying so: @every and
-;;  @-words (step 4), concepts without a type (core CGIF), Equiv/Iff, actors,
-;;  and a text that is more than one connected graph (READ-CGIF-GRAPHS, step
-;;  5, will read those).
+;;  @every comes in as the universal quantifier. What :LOSSLESS export writes
+;;  in cgraph's own notation -- @past and the other @ words, measures, sets,
+;;  the indexical # -- goes to the concept reader as written, and an id
+;;  written as the constant "#12" comes in as the id #12. Import reads all of
+;;  it whatever mode wrote it.
+;;
+;;  Not yet read, and refused with a CGRAPH-PARSE-ERROR saying so: concepts
+;;  without a type (core CGIF), Equiv/Iff, actors, and a text that is more
+;;  than one connected graph (READ-CGIF-GRAPHS, step 5, will read those).
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (export '(parse-cgif) :conceptual-graphs)
@@ -57,6 +62,9 @@
   start          ; where its [ (or ~) is
   type           ; the type label, as a string
   names          ; constants in it, as written ("Tom", "\"St. Louis\"")
+  ids            ; individual ids in it, written as constants: "\"#12\""
+  extras         ; linear-form text for the rest: "@every", "@past", "#",
+                 ; a measure "@80 kg", a set "{Fido, Spot}"
   defines        ; the label it defines (*x), lower case, or NIL
   binds          ; the label it refers back to (?x), lower case, or NIL
   negated        ; true for ~[...], If, Then, Either, Or
@@ -204,7 +212,20 @@
               ((char= c #\?)
                (funcall s :next)
                (setf (cgif-concept-binds concept) (cgif-read-label s)))
-              ((char= c #\@) (cgif-not-yet position "@every, or another @ word,"))
+              ((char= c #\@)
+               (setf (cgif-concept-extras concept)
+                     (append (cgif-concept-extras concept) (list (cgif-read-at s)))))
+              ((char= c #\{)
+               (setf (cgif-concept-extras concept)
+                     (append (cgif-concept-extras concept) (list (cgif-read-set s)))))
+              ((char= c #\#)
+               ;; the indexical #, as :lossless writes it (and #12 bare)
+               (setf (cgif-concept-extras concept)
+                     (append (cgif-concept-extras concept)
+                             (list (with-output-to-string (out)
+                                     (write-char (funcall s :next) out)
+                                     (loop while (and (funcall s :peek) (digit-char-p (funcall s :peek)))
+                                           do (write-char (funcall s :next) out)))))))
               ((cgif-start-of-graph-p c)
                ;; The rest of the concept is the graph it holds.
                (cgif-read-inner s concept)
@@ -213,12 +234,59 @@
                    (unless name
                      (cgif-fail position "~a can't be in a concept: a concept holds its type, ~
                                           then names and *x or ?x labels, then any graph" c))
-                   (setf (cgif-concept-names concept)
-                         (append (cgif-concept-names concept) (list name))))))))
+                   ;; "#12" is how an individual's id is written as a constant.
+                   (if (cgif-id-name-p name)
+                       (setf (cgif-concept-ids concept)
+                             (append (cgif-concept-ids concept) (list name)))
+                       (setf (cgif-concept-names concept)
+                             (append (cgif-concept-names concept) (list name)))))))))
     (when (and (cgif-concept-negated concept) (not (cgif-concept-context concept)))
       (cgif-fail start "a negation holds a graph, as in ~~[[Cat]] or [If: [Cat] [Then: ...]]: ~
                         not ~~[Cat], and not an empty one"))
     concept))
+
+(defun cgif-id-name-p (name)
+  "True for a quoted name that is an individual id, \"#12\"."
+  (let ((inner (cgif-unquote name)))
+    (and (char= (char name 0) #\")
+         (> (length inner) 1)
+         (char= (char inner 0) #\#)
+         (every #'digit-char-p (subseq inner 1)))))
+
+(defun cgif-read-at (s)
+  "An @ word or measure, the scanner at its @, as linear-form text: @every,
+   @past-progressive, @80 kg, @5."
+  (with-output-to-string (out)
+    (write-char (funcall s :next) out)  ; @
+    (loop while (eql (funcall s :peek) #\Space) do (funcall s :next))
+    (let ((c (funcall s :peek)))
+      (cond ((and c (alpha-char-p c))
+             (loop while (and (funcall s :peek)
+                              (or (alphanumericp (funcall s :peek)) (char= (funcall s :peek) #\-)))
+                   do (write-char (funcall s :next) out)))
+            ((and c (digit-char-p c))
+             (loop while (and (funcall s :peek)
+                              (or (digit-char-p (funcall s :peek)) (char= (funcall s :peek) #\.)))
+                   do (write-char (funcall s :next) out))
+             ;; a unit, if one follows: 80 kg, 5 ft.
+             (let ((after (funcall s :position)))
+               (declare (ignore after))
+               (loop while (eql (funcall s :peek) #\Space) do (funcall s :next))
+               (when (and (funcall s :peek) (alpha-char-p (funcall s :peek)))
+                 (write-char #\Space out)
+                 (loop while (and (funcall s :peek)
+                                  (or (alphanumericp (funcall s :peek)) (char= (funcall s :peek) #\.)))
+                       do (write-char (funcall s :next) out)))))
+            (t (cgif-fail (funcall s :position) "@ needs a word or a number after it"))))))
+
+(defun cgif-read-set (s)
+  "A set referent, the scanner at its {, as linear-form text up to the }."
+  (let ((start (funcall s :position)))
+    (with-output-to-string (out)
+      (loop (let ((c (funcall s :next)))
+              (cond ((null c) (cgif-fail start "this set has no closing }"))
+                    (t (write-char c out)
+                       (when (char= c #\}) (return)))))))))
 
 (defun cgif-read-inner (s concept)
   "The graph CONCEPT holds, up to and including the ] that closes CONCEPT."
@@ -372,6 +440,8 @@
   "CONCEPT, a plain one, as a linear-form concept token: its type, its names,
    and the labels in KEEP-LABELS."
   (let ((parts (append (cgif-concept-names concept)
+                       (mapcar #'cgif-unquote (cgif-concept-ids concept))
+                       (cgif-concept-extras concept)
                        (let ((d (cgif-concept-defines concept)))
                          (and d (member d keep-labels :test #'string=)
                               (list (format nil "*~a" d))))
@@ -450,7 +520,8 @@
                                         position))))
                       (:constant
                        (let ((c (find-if (lambda (c)
-                                           (member text (cgif-concept-names c) :test #'string=))
+                                           (or (member text (cgif-concept-names c) :test #'string=)
+                                               (member text (cgif-concept-ids c) :test #'string=)))
                                          concepts)))
                          (if c
                              (cgif-concept-node c)

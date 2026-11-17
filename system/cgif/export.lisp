@@ -28,15 +28,56 @@
 ;;  form" table, or one of its contexts, and gets its CGIF form in a later step.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(export '(format-cgif cgif-unsupported) :conceptual-graphs)
+(export '(format-cgif cgif-unsupported cgif-dropped) :conceptual-graphs)
+
+;;; --- Modes -----------------------------------------------------------------
+;;;
+;;; Some of what a cgraph concept says has no standard CGIF form
+;;; (notes/cgif.md, "No standard CGIF form"). FORMAT-CGIF's :MODE decides
+;;; what becomes of it:
+;;;
+;;;   :portable  standard extended CGIF any tool can read (the default). What
+;;;              has no logical meaning is dropped -- @some quietly, the
+;;;              indexical # and @past and the like with a CGIF-DROPPED
+;;;              warning -- and what can't be said is refused: sets,
+;;;              measures, quantifiers other than @every and @some.
+;;;   :strict    refuses whatever :portable would drop, too.
+;;;   :lossless  cgraph's own notation in the referent field for all of it,
+;;;              so a graph comes back from CGIF exactly as it went out.
+;;;              Another tool may misread those parts, which is why it is
+;;;              not the default.
+;;;
+;;; Every mode writes @every (standard), and an individual's id as the
+;;; quoted name "#12" (a constant, which is what an id is) wherever the linear
+;;; form writes an id. A named individual is written by its name alone, as
+;;; the linear form writes it.
+
+(defvar *cgif-mode* :portable
+  "The mode FORMAT-CGIF is writing in: :PORTABLE, :STRICT or :LOSSLESS.")
 
 (define-condition cgif-unsupported (error)
   ((concept :initarg :concept :reader cgif-unsupported-concept)
-   (feature :initarg :feature :reader cgif-unsupported-feature))
+   (feature :initarg :feature :reader cgif-unsupported-feature)
+   (mode    :initarg :mode    :initform nil :reader cgif-unsupported-mode))
   (:report (lambda (condition stream)
-             (format stream "Can't write ~a as CGIF: ~a isn't supported yet"
-                     (format-node (cgif-unsupported-concept condition))
-                     (cgif-unsupported-feature condition)))))
+             (let ((mode (cgif-unsupported-mode condition)))
+               (format stream "Can't write ~a as ~@[~(~a~) ~]CGIF: ~a ~
+                               ~:[has no CGIF form~;has no standard CGIF form~@[; ~
+                               :mode :lossless writes it in cgraph's notation~]~]"
+                       (format-node (cgif-unsupported-concept condition))
+                       mode
+                       (cgif-unsupported-feature condition)
+                       mode
+                       (and mode (not (eq mode :lossless)) t))))))
+
+(define-condition cgif-dropped (warning)
+  ((concept :initarg :concept :reader cgif-dropped-concept)
+   (feature :initarg :feature :reader cgif-dropped-feature))
+  (:report (lambda (condition stream)
+             (format stream "Writing ~a as CGIF left out ~a, which standard CGIF ~
+                             can't say; :mode :lossless keeps it"
+                     (format-node (cgif-dropped-concept condition))
+                     (cgif-dropped-feature condition)))))
 
 ;;; --- Names ---------------------------------------------------------------
 
@@ -77,33 +118,74 @@
   (let ((name (ignore-errors (referent-name concept))))
     (and (stringp name) (plusp (length name)) name)))
 
-(defun cgif-check-supported (concept)
-  "Signal CGIF-UNSUPPORTED for anything about CONCEPT this step can't write."
-  (flet ((refuse (feature)
-           (error 'cgif-unsupported :concept concept :feature feature)))
-    (let* ((referent (referent concept))
-           (content  (and referent (content referent))))
+(defun cgif-universal-p (concept)
+  (eq (concept-quantifier concept) :universal))
+
+(defun cgif-extras-for (concept)
+  "What goes in CONCEPT's referent field besides its name and labels, as a
+   list of strings, for *CGIF-MODE*. Signals CGIF-UNSUPPORTED for what the
+   mode can't write and warns CGIF-DROPPED for what :PORTABLE leaves out."
+  (let* ((mode *cgif-mode*)
+         (lossless (eq mode :lossless))
+         (referent (referent concept))
+         (content  (and referent (content referent)))
+         (extras '())
+         (*concise* nil))
+    (labels ((refuse (feature &optional (in-mode mode))
+               (error 'cgif-unsupported :concept concept :feature feature :mode in-mode))
+             (keep (text) (push text extras))
+             ;; Something with no logical meaning: :lossless keeps TEXT,
+             ;; :strict refuses, :portable leaves it out (and says so unless
+             ;; QUIETLY).
+             (meaningless (feature text &optional quietly)
+               (case mode
+                 (:lossless (keep text))
+                 (:strict (refuse feature))
+                 (t (unless quietly
+                      (warn 'cgif-dropped :concept concept :feature feature)))))
+             ;; Something CGIF can't say: kept by :lossless, refused otherwise.
+             (unsayable (feature text)
+               (if lossless (keep text) (refuse feature))))
       ;; CGIF negates a context, ~[ ... ]. cgraph can also mark a concept
-      ;; holding no graph, ~[CAT], which has no CGIF form.
+      ;; holding no graph, ~[CAT], which has no CGIF form in any mode.
       (when (and (negated concept) (not (graph-referent concept)))
-        (refuse "a negated concept with no graph inside"))
-      (when (set-p content)          (refuse "a set"))
-      (when (or (getf (properties concept) :measure)
-                (and referent (measure-property referent)))
-        (refuse "a measure"))
-      (when (and (typep content 'individual) (not (cgif-concept-name concept)))
-        (refuse (if (eql (id content) t)
-                    "the individual marker #"
-                    "an individual id without a name")))
-      ;; @some is what a concept means anyway, so it is dropped, not refused.
+        (refuse "a negated concept with no graph inside" nil))
+      (cond ((set-p content)
+             ;; Braces and any count, as cgraph writes them: {Fido, Spot}, {}@5.
+             (unsayable "a set" (string-trim " " (format-referent referent))))
+            ((typep content 'individual)
+             ;; An id is written where the linear form writes one -- ID-TEXT
+             ;; decides -- which is never beside a name: a named individual is
+             ;; known by its name, and its id is the image's own numbering,
+             ;; which another image would not share.
+             (let ((id-text (id-text concept)))
+               (cond ((string= id-text "#")
+                      (meaningless "the individual marker #" "#"))
+                     ((plusp (length id-text))
+                      (keep (format nil "\"~a\"" id-text)))))))
+      ;; A set's count is in its braces' text already.
+      (unless (set-p content)
+        (let ((measure (or (getf (properties concept) :measure)
+                           (and referent (measure-property referent)))))
+          (when measure (unsayable "a measure" (format-measure measure)))))
       (let ((quantifier (concept-quantifier concept)))
-        (when (and quantifier (not (eq quantifier :existential)))
-          (refuse (format nil "the quantifier @~(~a~)"
-                          (if (eq quantifier :universal) "every" quantifier)))))
-      (dolist (word (list (concept-tense concept)
-                          (concept-aspect concept)
-                          (concept-voice concept)))
-        (when word (refuse (format nil "the annotation @~(~a~)" word)))))))
+        (case quantifier
+          ((nil :universal))            ; @every is written with its label
+          (:existential (meaningless "@some" "@some" t))
+          (t (unsayable (format nil "the quantifier @~(~a~)" quantifier)
+                        (format nil "@~(~a~)" quantifier)))))
+      (let ((tense (concept-tense concept))
+            (aspect (concept-aspect concept))
+            (voice (concept-voice concept)))
+        (when (or tense aspect)
+          (let ((word (cond ((and tense aspect) (format nil "@~(~a-~a~)" tense aspect))
+                            (tense (format nil "@~(~a~)" tense))
+                            (t (format nil "@~(~a~)" aspect)))))
+            (meaningless (format nil "the annotation ~a" word) word)))
+        (when voice
+          (let ((word (format nil "@~(~a~)" voice)))
+            (meaningless (format nil "the annotation ~a" word) word)))))
+    (nreverse extras)))
 
 (defun cgif-defining-label (concept)
   "The label CONCEPT defines (*x), as a lower-case string, or NIL."
@@ -208,7 +290,15 @@
           (let ((role (gethash c roles))
                 (name (cgif-concept-name c)))
             (setf (gethash c table)
-                  (cond ((eq (car role) :define)
+                  (cond ;; @every quantifies a defining label: [PERSON: @every *x].
+                        ((and (cgif-universal-p c) (eq (car role) :define))
+                         (cons (format nil "@every *~a" (cdr role)) (format nil "?~a" (cdr role))))
+                        ((cgif-universal-p c)
+                         (let ((label (fresh)))
+                           (cons (format nil "~@[?~a ~]@every *~a"
+                                         (and (eq (car role) :bind) (cdr role)) label)
+                                 (format nil "?~a" label))))
+                        ((eq (car role) :define)
                          (cons (format nil "*~a" (cdr role)) (format nil "?~a" (cdr role))))
                         ;; [PERSON: ?x] is a concept of its own, coreferent with
                         ;; the *x one. A relation that said ?x would mean the *x
@@ -268,10 +358,16 @@
                      (setf agenda (append agenda (list (cons inner-cs inner-rs)))))))))
     (values all-concepts all-relations)))
 
+(defvar *cgif-extras* nil
+  "While FORMAT-CGIF writes: a hash table from each concept to the strings
+   CGIF-EXTRAS-FOR gave it.")
+
 (defun cgif-concept-text (concept labels)
   (let* ((name  (cgif-concept-name concept))
          (label (car (gethash concept labels)))
-         (parts (remove nil (list (and name (cgif-name name)) label))))
+         (parts (remove nil (append (list (and name (cgif-name name)))
+                                    (and *cgif-extras* (gethash concept *cgif-extras*))
+                                    (list label)))))
     (if (graph-referent concept)
         (multiple-value-bind (concepts relations) (cgif-inner-nodes concept)
           (format nil "~:[~;~~~][~a: ~{~a ~}~a]"
@@ -294,21 +390,27 @@
                           (cgif-name (or (cgif-concept-name c) "?"))))
                     arguments))))
 
-(defun format-cgif (thing &key stream)
+(defun format-cgif (thing &key stream (mode :portable))
   "THING as extended CGIF: concepts first, head first, then relations.
    THING is a graph, a node list or a linear-form string. Returns the string,
    or writes it to STREAM and returns NIL.
 
-   Signals CGIF-UNSUPPORTED for what this version can't write yet -- sets,
-   measures, unnamed individuals, @-words, a negated concept holding no
-   graph. See notes/cgif.md."
+   MODE is :PORTABLE (standard CGIF; drops what has no logical meaning, with
+   a CGIF-DROPPED warning, and refuses what can't be said), :STRICT (refuses
+   what :PORTABLE would drop) or :LOSSLESS (keeps all of it in cgraph's
+   notation, so the graph comes back exactly). CGIF-UNSUPPORTED is the
+   refusal. See notes/cgif.md."
+  (check-type mode (member :portable :strict :lossless))
   (multiple-value-bind (concepts relations) (cgif-nodes thing)
     (multiple-value-bind (all-concepts all-relations) (cgif-all-nodes concepts relations)
-      (mapc #'cgif-check-supported all-concepts)
+     (let ((*cgif-mode* mode)
+           (*cgif-extras* (make-hash-table :test 'eq)))
+      (dolist (c all-concepts)
+        (setf (gethash c *cgif-extras*) (cgif-extras-for c)))
       ;; Labels over the whole text, nested contexts too, so they are unique
       ;; in it and coreference across contexts finds its partners.
       (let* ((labels (cgif-assign-labels all-concepts all-relations))
              (text (cgif-text concepts relations labels)))
         (if stream
             (progn (write-string text stream) nil)
-            text)))))
+            text))))))
