@@ -164,8 +164,11 @@ loads, so after `(ql:quickload "cgraph/cgif")`:
 
 Small commits, each with its tests:
 
-1. System skeleton and export of the direct mappings: typed concepts,
-   names, labels, binary relations, head first.
+1. ~~System skeleton and export of the direct mappings: typed concepts,
+   names, labels, binary relations, head first.~~ Done 2026-11-17:
+   `system/cgif/export.lisp`, `test/cgif-test.lisp`. Type and relation
+   names with a hyphen are written quoted (`"CHEVY-VEHICLE"`, `"life-stage"`),
+   since a hyphen isn't allowed in a CGIF identifier.
 2. Import of the same, with errors in the `cgraph-parse-error` style.
 3. Contexts: graph referents, negation, anonymous contexts; If/Then and
    Either/Or on import.

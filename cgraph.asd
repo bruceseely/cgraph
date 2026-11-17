@@ -215,7 +215,7 @@
 (defsystem "cgraph/tests"
   :description "Test suites for cgraph"
   :author "Bruce Seely <bruce@bseely.com>"
-  :depends-on ("cgraph")
+  :depends-on ("cgraph" "cgraph/cgif")
   :components ((:module "test"
                 :serial t
                 :components ((:file "cgraph-tests")
@@ -259,10 +259,24 @@
                              (:file "relation-hierarchy-test")
                              (:file "relation-join-test")
                              (:file "morphology-tables-lint-test")
-                             (:file "lint-report-test"))))
+                             (:file "lint-report-test")
+                             (:file "cgif-test"))))
   :perform (test-op (o c)
              (unless (uiop:symbol-call :conceptual-graphs :test-all t)
                (error "cgraph: some test suites failed (see the report above)."))))
+
+
+;;; CGIF, the Conceptual Graph Interchange Format of ISO/IEC 24707: reading and
+;;; writing it. A secondary system so the engine doesn't carry an interchange
+;;; format it may never be asked for. Its functions are in :cg and exported from
+;;; it when this loads, so after (asdf:load-system "cgraph/cgif") they are
+;;; cg:format-cgif and so on. The design is notes/cgif.md.
+(defsystem "cgraph/cgif"
+  :description "CGIF (ISO/IEC 24707 Annex B) import and export for cgraph"
+  :author "Bruce Seely <bruce@bseely.com>"
+  :depends-on ("cgraph")
+  :components ((:module "system/cgif"
+                :components ((:file "export")))))
 
 
 ;;; REPL and debugging tools -- SUP:RAPROPOS and friends, in package

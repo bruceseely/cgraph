@@ -83,7 +83,9 @@
     generation-roots-lint-test
     relation-tables-lint-test
     morphology-tables-lint-test
-    lint-report-test)
+    lint-report-test
+    ;; CGIF, from the cgraph/cgif system.
+    cgif-test)
   "The suites TEST-ALL runs, in order. Some files hold more than one suite, so
    this is a list rather than a directory listing -- but a list can be left
    behind when a file is added, so TEST-ALL also fails when a test/*-test.lisp
