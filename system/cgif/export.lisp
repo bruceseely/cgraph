@@ -28,7 +28,7 @@
 ;;  form" table, or one of its contexts, and gets its CGIF form in a later step.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(export '(format-cgif cgif-unsupported cgif-dropped) :conceptual-graphs)
+(export '(format-cgif write-cgif-graphs cgif-unsupported cgif-dropped) :conceptual-graphs)
 
 ;;; --- Modes -----------------------------------------------------------------
 ;;;
@@ -231,7 +231,17 @@
    else FRESH's -- defined by the concept that had it as *x, or by the first.
    A concept whose partners are all outside CONCEPTS keeps its own label."
   (let ((roles (make-hash-table :test 'eq))
-        (members (make-hash-table :test 'eq)))
+        (members (make-hash-table :test 'eq))
+        (taken (make-hash-table :test 'equal)))
+   ;; A label defined once in the text. Two graphs written together can each
+   ;; have their own *x; the second becomes a fresh one, or reading the text
+   ;; back would join them.
+   (flet ((claim (label)
+            (if (or (null label) (gethash label taken))
+                (let ((new (funcall fresh)))
+                  (setf (gethash new taken) t)
+                  new)
+                (setf (gethash label taken) label))))
     (dolist (c concepts) (setf (gethash c members) t))
     (dolist (c concepts)
       (unless (gethash c roles)
@@ -249,16 +259,16 @@
                               (when (gethash q members) (push q agenda))))))
                (setf set (remove-if-not (lambda (x) (member x set)) concepts))
                (let* ((definer (or (find-if #'cgif-defining-label set) (first set)))
-                      (label   (or (cgif-defining-label definer)
-                                   (some #'cgif-bound-label set)
-                                   (funcall fresh))))
+                      (label   (claim (or (cgif-defining-label definer)
+                                          (some #'cgif-bound-label set)))))
                  (dolist (m set)
                    (setf (gethash m roles)
                          (cons (if (eq m definer) :define :bind) label))))))
             ((cgif-defining-label c)
-             (setf (gethash c roles) (cons :define (cgif-defining-label c))))
+             (setf (gethash c roles) (cons :define (claim (cgif-defining-label c)))))
+            ;; Its *x is outside the text: the name has to stay as it is.
             ((cgif-bound-label c)
-             (setf (gethash c roles) (cons :bind (cgif-bound-label c))))))))
+             (setf (gethash c roles) (cons :bind (cgif-bound-label c)))))))))
     roles))
 
 (defun cgif-assign-labels (concepts relations)
@@ -390,6 +400,29 @@
                           (cgif-name (or (cgif-concept-name c) "?"))))
                     arguments))))
 
+(defun cgif-texts (things mode)
+  "THINGS written as CGIF in MODE, one string each, with one assignment of
+   labels over all of them: unique in the whole text, and shared where a
+   concept in one is coreferent with a concept in another."
+  (check-type mode (member :portable :strict :lossless))
+  (let* ((parts (mapcar (lambda (thing)
+                          (multiple-value-call #'cons (cgif-nodes thing)))
+                        things))
+         (all-concepts '())
+         (all-relations '()))
+    (dolist (part parts)
+      (multiple-value-bind (cs rs) (cgif-all-nodes (car part) (cdr part))
+        (setf all-concepts (append all-concepts cs)
+              all-relations (append all-relations rs))))
+    (let ((*cgif-mode* mode)
+          (*cgif-extras* (make-hash-table :test 'eq)))
+      (dolist (c all-concepts)
+        (setf (gethash c *cgif-extras*) (cgif-extras-for c)))
+      ;; Labels over the whole text, nested contexts too, so they are unique
+      ;; in it and coreference across contexts finds its partners.
+      (let ((labels (cgif-assign-labels all-concepts all-relations)))
+        (mapcar (lambda (part) (cgif-text (car part) (cdr part) labels)) parts)))))
+
 (defun format-cgif (thing &key stream (mode :portable))
   "THING as extended CGIF: concepts first, head first, then relations.
    THING is a graph, a node list or a linear-form string. Returns the string,
@@ -400,17 +433,24 @@
    what :PORTABLE would drop) or :LOSSLESS (keeps all of it in cgraph's
    notation, so the graph comes back exactly). CGIF-UNSUPPORTED is the
    refusal. See notes/cgif.md."
-  (check-type mode (member :portable :strict :lossless))
-  (multiple-value-bind (concepts relations) (cgif-nodes thing)
-    (multiple-value-bind (all-concepts all-relations) (cgif-all-nodes concepts relations)
-     (let ((*cgif-mode* mode)
-           (*cgif-extras* (make-hash-table :test 'eq)))
-      (dolist (c all-concepts)
-        (setf (gethash c *cgif-extras*) (cgif-extras-for c)))
-      ;; Labels over the whole text, nested contexts too, so they are unique
-      ;; in it and coreference across contexts finds its partners.
-      (let* ((labels (cgif-assign-labels all-concepts all-relations))
-             (text (cgif-text concepts relations labels)))
-        (if stream
-            (progn (write-string text stream) nil)
-            text))))))
+  (let ((text (first (cgif-texts (list thing) mode))))
+    (if stream
+        (progn (write-string text stream) nil)
+        text)))
+
+(defun write-cgif-graphs (graphs destination &key (mode :portable))
+  "Write GRAPHS as one CGIF text, a graph to a line, for READ-CGIF-GRAPHS or
+   another tool. Labels are unique across the whole text, so the graphs stay
+   apart when read back, and a concept coreferent with one in another graph
+   keeps the link. DESTINATION is a stream, a pathname (the file is
+   replaced), or NIL to return the text as a string. MODE is as for
+   FORMAT-CGIF."
+  (let ((text (format nil "~{~a~%~}" (cgif-texts graphs mode))))
+    (etypecase destination
+      (null text)
+      (stream (write-string text destination) nil)
+      ((or pathname string)
+       (with-open-file (out destination :direction :output :if-exists :supersede
+                                        :external-format :utf-8)
+         (write-string text out))
+       (pathname destination)))))

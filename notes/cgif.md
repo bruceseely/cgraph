@@ -121,13 +121,20 @@ A CGIF text is one graph: nodes written side by side are joined by "and",
 and the whole text may be wrapped in `[Proposition: …]`. cgraph keeps many
 graphs in a context. So:
 
-- `parse-cgif` reads a text as one graph, as the standard says, and
-  accepts the optional `[Proposition: …]` wrapper.
+- `parse-cgif` reads a text that is one connected graph, and refuses one
+  that isn't.
 - `read-cgif-graphs` reads a text and splits it into connected components,
-  one cgraph graph each. That's what reading a file of several exported
-  graphs needs. Export gives each graph its own labels, so graphs don't
-  join by accident.
-- `write-cgif-graphs` writes several graphs, one per line.
+  one cgraph graph each, added to the context. That's what reading a file
+  of several exported graphs needs, and another tool's text with parts side
+  by side. Parts linked only by coreference stay separate graphs and keep
+  the link.
+- `write-cgif-graphs` writes several graphs, one per line, with one
+  assignment of labels over the whole text, so graphs that each use `*x`
+  don't join when read back, and coreference between graphs is kept.
+- **The `[Proposition: …]` wrapper** (decided in step 5): not unwrapped
+  unless asked, with `read-cgif-graphs`'s `:unwrap t`. cgraph's own
+  `[PROPOSITION: G]` graphs export as exactly that text, so unwrapping by
+  default would read them back as `G` and lose the concept.
 
 ## API
 
@@ -138,8 +145,8 @@ loads, so after `(ql:quickload "cgraph/cgif")`:
 (cg:format-cgif graph &key (mode :portable) stream)   ; → string, or to STREAM
 (cg:parse-cgif string)                                ; → node list, like parse-cgraph
 (cg:make-cgraph (cg:parse-cgif string))               ; → a graph in *context*
-(cg:read-cgif-graphs string-or-pathname)              ; → list of graphs
-(cg:write-cgif-graphs graphs destination &key mode)
+(cg:read-cgif-graphs string-or-pathname &key unwrap context)  ; → list of graphs
+(cg:write-cgif-graphs graphs destination &key mode)   ; DESTINATION: stream, pathname, or NIL for a string
 ```
 
 `parse-cgif` returns what `parse-cgraph` returns, so everything downstream
@@ -221,7 +228,10 @@ Small commits, each with its tests:
      cases, the referent catalog of docs/referents.md and the
      generation-test corpus (213 graphs), and in portable over the 100 that
      portable leaves nothing out of.
-5. `read-cgif-graphs` and `write-cgif-graphs`.
+5. ~~`read-cgif-graphs` and `write-cgif-graphs`.~~ Done 2026-11-17; see
+   "One graph per text" above. Labels are now made unique across everything
+   written together: a second graph's own `*x` is renamed rather than
+   defined twice.
 6. Docs: `docs/cgif.md`, `API.md`, a line in the README, and fix
    `docs/generation.md:8`, which calls a linear-form string a "CGIF string".
 

@@ -354,6 +354,93 @@
                        lossless portable failed)
                (and (null failed) (> lossless 150) (> portable 50))))
 
+      ;; Several graphs to a text: WRITE-CGIF-GRAPHS and READ-CGIF-GRAPHS.
+      (let* ((sources '("[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD]."
+                        "[EAT]- (agnt)→[PERSON: *x] (obj)→[FOOD] (rcpt)→[PERSON: ?x]."
+                        "[EAT]- (agnt)→[PERSON: *x] (obj)→[FOOD] (rcpt)→[PERSON: ?x]."
+                        "~[Proposition: [Dog: *x]<-(agnt)<-[Bark] ~[Proposition: [Dog: ?x]->(attr)->[Noisy]]]"
+                        "[DOG: {Fido, Spot}]."))
+             ;; Each made and printed right away: parsing the next one clears
+             ;; this one's *x labels (notes/known-issues.md).
+             (expected '())
+             (graphs (mapcar (lambda (lf)
+                               (let ((g (make-cgraph lf)))
+                                 (push (cgif-normal-lf g) expected)
+                                 g))
+                             sources))
+             (expected (nreverse expected))
+             (text (write-cgif-graphs graphs nil :mode :lossless))
+             (back (let ((*context* (make-context nil)))
+                     (read-cgif-graphs text))))
+        (check "write-cgif-graphs writes a graph to a line"
+               (= (length sources) (count #\Newline text)))
+        (check "and read-cgif-graphs reads them back, the same graphs"
+               (equal (mapcar #'cgif-normal-lf back) expected))
+        (check "two graphs using the same label stay two graphs, not coreferent"
+               (flet ((people (graph)
+                        (remove-if-not (lambda (n) (and (concept-p n)
+                                                        (string-equal (label (concept-type n)) "PERSON")))
+                                       (nodes graph))))
+                 (and (= 5 (length back))
+                      (notany (lambda (p)
+                                (intersection (coreference p) (people (third back))))
+                              (people (second back))))))
+        (check "a label defined in one line is not defined again in another"
+               (let ((labels '()) (ok t))
+                 (loop for i from 0 below (length text)
+                       when (and (char= (char text i) #\*)
+                                 (< (1+ i) (length text))
+                                 (alpha-char-p (char text (1+ i))))
+                         do (let* ((end (or (position-if-not #'alphanumericp text :start (1+ i))
+                                            (length text)))
+                                   (label (subseq text (1+ i) end)))
+                              (when (member label labels :test #'string=) (setf ok nil))
+                              (push label labels)))
+                 ok))
+        (check "the graphs go into the context"
+               (let ((*context* (make-context nil)))
+                 (read-cgif-graphs text)
+                 (= 5 (length (graphs *context*))))))
+      (let ((path (merge-pathnames (format nil "cgif-test-~d.cgif" (random 1000000))
+                                   (uiop:temporary-directory))))
+        (unwind-protect
+             (let ((graphs (list (make-cgraph "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
+                                 (make-cgraph "[DOG]<-(agnt)<-[BARK]."))))
+               (write-cgif-graphs graphs path)
+               (check "through a file too"
+                      (equal (mapcar #'cgif-normal-lf
+                                     (let ((*context* (make-context nil)))
+                                       (read-cgif-graphs path)))
+                             (mapcar #'cgif-normal-lf graphs))))
+          (when (probe-file path) (delete-file path))))
+      ;; Another tool's text: parts side by side, linked only by ?p.
+      (let ((back (let ((*context* (make-context nil)))
+                    (read-cgif-graphs
+                     "[Person: *p] [Eat *e] (Agnt ?e ?p) ~[ (Attr ?p ?o) [Old *o] ]"))))
+        (check "a text of several parts reads as a graph for each"
+               (equal (mapcar #'cgif-normal-lf back)
+                      '("[PERSON:*v0]←(agnt)←[EAT]." "~[PROPOSITION:[OLD]←(attr)←[PERSON:?v0]].")))
+        (check "and the coreference between them is kept"
+               (let* ((person (head (first back)))
+                      (inner (graph-referent (head (second back))))
+                      (other (find-if (lambda (n) (and (concept-p n)
+                                                       (string-equal (label (concept-type n)) "PERSON")))
+                                      (nodes inner))))
+                 (and other (member other (coreference person)) t))))
+      (check "parse-cgif still reads only one connected graph"
+             (handler-case (progn (parse-cgif "[CAT] [DOG]") nil)
+               (cgraph-parse-error () t)))
+      ;; The ISO text form, [Proposition: ...] around everything.
+      (let ((iso "[Proposition: [Cat *x] [Mat *y] (On ?x ?y)]"))
+        (check "a [Proposition: ...] text is a PROPOSITION graph by default"
+               (equal (mapcar #'cgif-normal-lf (let ((*context* (make-context nil)))
+                                                 (read-cgif-graphs iso)))
+                      '("[PROPOSITION:[CAT]→(on)→[MAT]].")))
+        (check ":unwrap reads what is inside"
+               (equal (mapcar #'cgif-normal-lf (let ((*context* (make-context nil)))
+                                                 (read-cgif-graphs iso :unwrap t)))
+                      '("[CAT]→(on)→[MAT]."))))
+
       (let ((graph (make-cgraph "[FOOD]<-(obj)<-[EAT]->(agnt)->[CAT].")))
         (check "the graph's head is written first"
                (eql 0 (search "[FOOD" (format-cgif graph)))))

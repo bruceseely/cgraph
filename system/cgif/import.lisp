@@ -49,12 +49,14 @@
 ;;  written as the constant "#12" comes in as the id #12. Import reads all of
 ;;  it whatever mode wrote it.
 ;;
+;;  PARSE-CGIF reads a text that is one connected graph; READ-CGIF-GRAPHS
+;;  reads one that is several, as a graph each.
+;;
 ;;  Not yet read, and refused with a CGRAPH-PARSE-ERROR saying so: concepts
-;;  without a type (core CGIF), Equiv/Iff, actors, and a text that is more
-;;  than one connected graph (READ-CGIF-GRAPHS, step 5, will read those).
+;;  without a type (core CGIF), Equiv/Iff, and actors.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(export '(parse-cgif) :conceptual-graphs)
+(export '(parse-cgif read-cgif-graphs) :conceptual-graphs)
 
 ;;; --- Reading the text ------------------------------------------------------
 
@@ -479,9 +481,11 @@
         (setf (negated concept) t))
       concept)))
 
-(defun cgif-build-level (concepts relations session &key inner)
+(defun cgif-build-level (concepts relations session &key inner apart)
   "Make the nodes of one context: CONCEPTS and RELATIONS, the head first.
-   INNER for a context's contents, where nested contexts may stand apart."
+   INNER for a context's contents, where nested contexts may stand apart.
+   APART for a top level whose concepts need not be connected at all
+   (READ-CGIF-GRAPHS splits them into graphs)."
   (let ((made '())
         (relation-nodes '())
         (keep (cgif-session-keep session))
@@ -539,7 +543,8 @@
                      (error (e) (cgif-fail (cgif-relation-start r) "~a" (parse-cause-message e)))))
           (push node relation-nodes))))
     (let ((concept-nodes (append (mapcar #'cgif-concept-node concepts) (reverse made))))
-      (cgif-check-connected concept-nodes concepts inner)
+      (unless apart
+        (cgif-check-connected concept-nodes concepts inner))
       (append concept-nodes (nreverse relation-nodes)))))
 
 (defun cgif-check-connected (concept-nodes concepts inner)
@@ -568,20 +573,27 @@
                         inside a context, only another context may stand apart~]"
                        (format-node stray) (format-node (first concept-nodes)) inner)))))))
 
-;;; --- Entry point -----------------------------------------------------------
+;;; --- Entry points -----------------------------------------------------------
 
-(defun parse-cgif (text)
-  "Read TEXT, extended CGIF, and return its nodes, the head (its first
-   concept) first -- what PARSE-CGRAPH returns for linear form, so
-   (make-cgraph (parse-cgif text)) makes a graph of it. Signals
-   CGRAPH-PARSE-ERROR, pointing into TEXT, on anything it can't read. See
-   notes/cgif.md."
+(defun cgif-parse-nodes (text &key apart unwrap)
+  "TEXT's nodes, concepts first in the order written, then relations. APART
+   and UNWRAP as for READ-CGIF-GRAPHS."
   (let ((*cgif-text* text)
         (frame (make-cgif-frame)))
     (multiple-value-bind (concepts relations)
         (cgif-read-items (cgif-scanner text) frame nil)
       (unless concepts
         (cgif-fail 0 "there is no concept in it"))
+      ;; An ISO text: one [Proposition: ...] around everything.
+      (when (and unwrap
+                 (null relations)
+                 (= 1 (length concepts))
+                 (cgif-concept-context (first concepts))
+                 (not (cgif-concept-negated (first concepts)))
+                 (string-equal (cgif-concept-type (first concepts)) "PROPOSITION"))
+        (let ((wrapper (first concepts)))
+          (setf concepts (cgif-concept-concepts wrapper)
+                relations (cgif-concept-relations wrapper))))
       (multiple-value-bind (definitions keep all) (cgif-check-labels concepts relations)
         ;; One reading session for the whole text, as CGRAPH-TOKENS makes one
         ;; for a linear-form string, so a ?x finds the *x of an earlier concept.
@@ -594,4 +606,59 @@
               (*token-positions* (make-hash-table :test #'eq))
               (*package* (find-package :conceptual-graphs)))
           (cgif-build-level concepts relations
-                            (make-cgif-session :definitions definitions :keep keep :all all)))))))
+                            (make-cgif-session :definitions definitions :keep keep :all all)
+                            :apart apart))))))
+
+(defun parse-cgif (text)
+  "Read TEXT, extended CGIF, and return its nodes, the head (its first
+   concept) first -- what PARSE-CGRAPH returns for linear form, so
+   (make-cgraph (parse-cgif text)) makes a graph of it. TEXT must be one
+   connected graph; READ-CGIF-GRAPHS reads one that is several. Signals
+   CGRAPH-PARSE-ERROR, pointing into TEXT, on anything it can't read. See
+   notes/cgif.md."
+  (cgif-parse-nodes text))
+
+(defun cgif-components (nodes)
+  "NODES split into connected graphs, each a node list with its first concept
+   (in the order written) first."
+  (let ((concepts (remove-if-not #'concept-p nodes))
+        (seen (make-hash-table :test 'eq))
+        (components '()))
+    (dolist (start concepts)
+      (unless (gethash start seen)
+        (let ((members '()) (agenda (list start)))
+          (loop while agenda
+                do (let ((n (pop agenda)))
+                     (unless (gethash n seen)
+                       (setf (gethash n seen) t)
+                       (push n members)
+                       (dolist (other (arcs n)) (push other agenda)))))
+          ;; In the order written, head first.
+          (push (remove-if-not (lambda (n) (gethash n seen))
+                               (remove-if-not (lambda (n) (member n members)) nodes))
+                components))))
+    (nreverse components)))
+
+(defun read-cgif-graphs (source &key unwrap (context *context*))
+  "Read SOURCE, a CGIF text, as graphs, one for each connected part of it, and
+   add them to CONTEXT; return them in the order written. SOURCE is a string
+   of CGIF or a pathname of a file holding it -- what WRITE-CGIF-GRAPHS
+   writes, or another tool's.
+
+   A CGIF text is one graph in the standard's terms: its parts side by side
+   mean \"and\". cgraph keeps each connected part as a graph of its own, with
+   its first concept as head; parts linked only by coreference (?x) stay
+   separate graphs, and keep the link.
+
+   UNWRAP reads a text that is one [Proposition: ...] around everything -- the
+   ISO form of a text -- as what is inside. It is off by default because a
+   graph that is a PROPOSITION, as cgraph writes [PROPOSITION: G], looks the
+   same."
+  (let* ((text (etypecase source
+                 (string source)
+                 (pathname (with-open-file (in source :external-format :utf-8)
+                             (let ((out (make-string (file-length in))))
+                               (subseq out 0 (read-sequence out in)))))))
+         (nodes (cgif-parse-nodes text :apart t :unwrap unwrap)))
+    (mapcar (lambda (component) (make-cgraph component context))
+            (cgif-components nodes))))
