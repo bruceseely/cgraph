@@ -17,7 +17,8 @@
 ;;
 ;;  A relation names its arguments by coreference label or by constant, so a
 ;;  concept with relations needs one or the other. A named concept is referred
-;;  to by its name. A concept that already has a label keeps it -- *x defining,
+;;  to by its name, if no other concept has that name. A concept that already
+;;  has a label keeps it -- *x defining,
 ;;  ?x bound, as cgraph writes them. Any other concept with relations gets a
 ;;  fresh *x1, *x2, ..., skipping labels the graph already uses.
 ;;
@@ -117,11 +118,16 @@
 (defun cgif-nodes (thing)
   "THING's concepts, head first, and its relations, as two values. THING is a
    graph, a node list as PARSE-CGRAPH returns it, or a linear-form string."
-  (let* ((nodes (remove-if-not #'graph-node-p
-                               (etypecase thing
-                                 (graph  (nodes thing))
-                                 (list   thing)
-                                 (string (parse-cgraph thing)))))
+  (let* ((nodes (remove-duplicates
+                 (remove-if-not #'graph-node-p
+                                (etypecase thing
+                                  (graph  (nodes thing))
+                                  (list   thing)
+                                  (string (parse-cgraph thing))))
+                 ;; A node met twice -- [BOY: *z] ... [BOY: *z] is one concept
+                 ;; on a cycle -- is listed twice. Keep its first place, so the
+                 ;; head stays first.
+                 :from-end t))
          (concepts  (remove-if-not #'concept-p nodes))
          (relations (remove-if-not #'relation-p nodes))
          (head      (and (typep thing 'graph) (head thing))))
@@ -129,13 +135,63 @@
       (setf concepts (cons head (remove head concepts))))
     (values concepts relations)))
 
+(defun cgif-coreference-roles (concepts fresh)
+  "A hash table from each concept in CONCEPTS that takes part in coreference
+   to (ROLE . LABEL): ROLE :DEFINE for the one that writes *LABEL, :BIND for
+   the ones that write ?LABEL.
+
+   Worked out from the coreference links, not from the labels the concepts
+   carry, because those can't be trusted: FORMAT-CGRAPH clears a concept's *x
+   as it prints, leaving its partner's ?x pointing at nothing. Each set of
+   coreferent concepts here gets one label -- one of theirs if any is left,
+   else FRESH's -- defined by the concept that had it as *x, or by the first.
+   A concept whose partners are all outside CONCEPTS keeps its own label."
+  (let ((roles (make-hash-table :test 'eq))
+        (members (make-hash-table :test 'eq)))
+    (dolist (c concepts) (setf (gethash c members) t))
+    (dolist (c concepts)
+      (unless (gethash c roles)
+        (let ((partners (remove-if-not (lambda (p) (gethash p members))
+                                       (ignore-errors (coreference c)))))
+          (cond
+            (partners
+             ;; The coreference set, within CONCEPTS, in their order.
+             (let ((set (list c)) (agenda (copy-list partners)))
+               (loop while agenda
+                     do (let ((p (pop agenda)))
+                          (unless (member p set)
+                            (push p set)
+                            (dolist (q (ignore-errors (coreference p)))
+                              (when (gethash q members) (push q agenda))))))
+               (setf set (remove-if-not (lambda (x) (member x set)) concepts))
+               (let* ((definer (or (find-if #'cgif-defining-label set) (first set)))
+                      (label   (or (cgif-defining-label definer)
+                                   (some #'cgif-bound-label set)
+                                   (funcall fresh))))
+                 (dolist (m set)
+                   (setf (gethash m roles)
+                         (cons (if (eq m definer) :define :bind) label))))))
+            ((cgif-defining-label c)
+             (setf (gethash c roles) (cons :define (cgif-defining-label c))))
+            ((cgif-bound-label c)
+             (setf (gethash c roles) (cons :bind (cgif-bound-label c))))))))
+    roles))
+
 (defun cgif-assign-labels (concepts relations)
   "A hash table from each concept to (TEXT . REFERENCE): what goes in its
    referent field after any name, and what its relations call it."
   (let ((used (make-hash-table :test 'equal))
         (table (make-hash-table :test 'eq))
         (connected (make-hash-table :test 'eq))
+        (names (make-hash-table :test 'equal))
         (counter 0))
+    ;; A name is a relation's way to refer to a concept only when one concept
+    ;; has it. [PERSON: Sue] twice is two concepts of one individual; naming
+    ;; both "Sue" in their relations would leave an import unable to tell
+    ;; which relation went to which, so those get labels instead.
+    (dolist (c concepts)
+      (let ((name (cgif-concept-name c)))
+        (when name (incf (gethash name names 0)))))
     (dolist (c concepts)
       (dolist (label (list (cgif-defining-label c) (cgif-bound-label c)))
         (when label (setf (gethash label used) t))))
@@ -145,18 +201,28 @@
              (loop for label = (format nil "x~d" (incf counter))
                    unless (gethash label used)
                      return (progn (setf (gethash label used) t) label))))
-      (dolist (c concepts)
-        (let ((defining (cgif-defining-label c))
-              (bound    (cgif-bound-label c))
-              (name     (cgif-concept-name c)))
-          (setf (gethash c table)
-                (cond (defining (cons (format nil "*~a" defining) (format nil "?~a" defining)))
-                      (bound    (cons (format nil "?~a" bound) (format nil "?~a" bound)))
-                      (name     (cons nil (cgif-name name)))
-                      ((gethash c connected)
-                       (let ((label (fresh)))
-                         (cons (format nil "*~a" label) (format nil "?~a" label))))
-                      (t (cons nil nil)))))))
+      (let ((roles (cgif-coreference-roles concepts #'fresh)))
+        (dolist (c concepts)
+          (let ((role (gethash c roles))
+                (name (cgif-concept-name c)))
+            (setf (gethash c table)
+                  (cond ((eq (car role) :define)
+                         (cons (format nil "*~a" (cdr role)) (format nil "?~a" (cdr role))))
+                        ;; [PERSON: ?x] is a concept of its own, coreferent with
+                        ;; the *x one. A relation that said ?x would mean the *x
+                        ;; concept, so a connected one also gets a label of its
+                        ;; own for its relations: [PERSON: ?x *x3].
+                        ((and (eq (car role) :bind) (gethash c connected))
+                         (let ((label (fresh)))
+                           (cons (format nil "?~a *~a" (cdr role) label) (format nil "?~a" label))))
+                        ((eq (car role) :bind)
+                         (cons (format nil "?~a" (cdr role)) (format nil "?~a" (cdr role))))
+                        ((and name (= 1 (gethash name names)))
+                         (cons nil (cgif-name name)))
+                        ((gethash c connected)
+                         (let ((label (fresh)))
+                           (cons (format nil "*~a" label) (format nil "?~a" label))))
+                        (t (cons nil nil))))))))
     table))
 
 (defun cgif-concept-text (concept labels)

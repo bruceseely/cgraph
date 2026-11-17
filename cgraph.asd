@@ -276,7 +276,9 @@
   :author "Bruce Seely <bruce@bseely.com>"
   :depends-on ("cgraph")
   :components ((:module "system/cgif"
-                :components ((:file "export")))))
+                :serial t
+                :components ((:file "export")
+                             (:file "import")))))
 
 
 ;;; REPL and debugging tools -- SUP:RAPROPOS and friends, in package

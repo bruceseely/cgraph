@@ -364,3 +364,31 @@ Why it is not simply fixed:
 So the present behaviour -- report per focus, refuse nothing -- is sound as far
 as it goes, and the honest statement of the limit is that a green pane means
 "conforms as seen from here", not "conforms".
+
+## `format-cgraph` clears a concept's `*x` as it prints
+
+Found 2026-11-17 while building CGIF import (notes/cgif.md, step 2).
+**Outstanding.**
+
+Printing a graph changes it. After `(format-cgraph g)`, a concept that was
+read as `[PERSON: *x]` has no variable any more: `node-variable` is NIL. The
+formatter works out its own labels for the concepts it meets twice, and it
+clears what was there to do it. So:
+
+- `[DOG: *x]` prints as `[DOG]`. That looks like a formatting choice, but it is
+  this.
+- In `[EAT]- (agnt)→[PERSON: *x] … (rcpt)→[PERSON: ?x]` the `?x` concept
+  still carries its label after printing, and the `*x` one has lost its own. A
+  reader of the graph's labels finds a `?x` bound to nothing.
+
+The CGIF exporter met the second case: it read the labels, and wrote CGIF
+whose `?x` had no `*x`. It now works coreference out from the links between
+concepts (`cgif-coreference-roles`), which printing doesn't touch. Anything
+else that reads `node-variable` after a graph has been printed sees the same
+gap. A query pattern is the case to worry about, because its variables are
+what it returns.
+
+The fix is for the formatter to keep its own labels to itself, in a table for
+the one call, rather than writing them onto the concepts. Not done yet,
+because the formatter's segment code reads `node-variable` in several places
+(formatter.lisp:260 and after) and needs reading before it is changed.

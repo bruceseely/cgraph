@@ -169,7 +169,22 @@ Small commits, each with its tests:
    `system/cgif/export.lisp`, `test/cgif-test.lisp`. Type and relation
    names with a hyphen are written quoted (`"CHEVY-VEHICLE"`, `"life-stage"`),
    since a hyphen isn't allowed in a CGIF identifier.
-2. Import of the same, with errors in the `cgraph-parse-error` style.
+2. ~~Import of the same, with errors in the `cgraph-parse-error` style.~~
+   Done 2026-11-17: `system/cgif/import.lisp`. Rules decided on the way:
+   - A label that only relation arguments refer to is wiring, and import
+     drops it: `[Drive *x] (Agnt ?x Bob)` comes in as `[DRIVE]→(agnt)→…`.
+     A label another concept refers to (`[Person: ?x]`) is coreference,
+     and is kept.
+   - A constant that no concept names, `(Agnt ?x Bob)` with no
+     `[Person: Bob]`, gets a concept of the type the relation allows there.
+   - On export, two concepts with the same name are told apart by labels,
+     and a connected `?x` concept gets a label of its own,
+     `[PERSON: ?x *x3]`, so a relation can tell it from the `*x` one.
+   - Export works out coreference from the links between concepts, not from
+     their stored labels, which `format-cgraph` clears (see
+     known-issues.md).
+   - A text that is more than one connected graph is an error until
+     `read-cgif-graphs` (step 5).
 3. Contexts: graph referents, negation, anonymous contexts; If/Then and
    Either/Or on import.
 4. `@every`, and the three modes, covering every row of the "No standard
