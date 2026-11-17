@@ -185,8 +185,27 @@ Small commits, each with its tests:
      known-issues.md).
    - A text that is more than one connected graph is an error until
      `read-cgif-graphs` (step 5).
-3. Contexts: graph referents, negation, anonymous contexts; If/Then and
-   Either/Or on import.
+3. ~~Contexts: graph referents, negation, anonymous contexts; If/Then and
+   Either/Or on import.~~ Done 2026-11-17. Rules decided on the way:
+   - A concept holding a graph is written with the graph inside it, and `~`
+     in front when negated: `~[PROPOSITION: [CAT: *x1] …]`. A context with no
+     type, `[ … ]` or `~[ … ]`, reads as a PROPOSITION, as `[[…]]` does.
+   - If, Then, Either and Or read as negated PROPOSITIONs, by the
+     standard's definition. Equiv and Iff are refused for now.
+   - Inside a context, cgraph keeps one connected graph from its first
+     concept. Nested contexts may stand beside it unconnected, which is how
+     cgraph holds `~[A ~[B]]`. Export writes those too, finding them among
+     the context's child contexts. Any other unconnected concept is refused.
+   - A relation inside a context that names, with `?x`, a concept outside
+     it gets a coreferent `[TYPE: ?x]` concept in the context, since cgraph
+     can't connect a relation across contexts.
+   - A negated concept holding no graph, `~[CAT]`, has no CGIF form and is
+     refused on export.
+   - **Departure from the design:** the outermost `[Proposition: …]` is
+     *not* unwrapped as the text's wrapper. cgraph's own `[PROPOSITION: G]`
+     exports as exactly that, and unwrapping it on import would lose the
+     concept. Whether a text-level wrapper should be recognized belongs with
+     `read-cgif-graphs` (step 5).
 4. `@every`, and the three modes, covering every row of the "No standard
    CGIF form" table.
 5. `read-cgif-graphs` and `write-cgif-graphs`.

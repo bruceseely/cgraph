@@ -83,8 +83,10 @@
            (error 'cgif-unsupported :concept concept :feature feature)))
     (let* ((referent (referent concept))
            (content  (and referent (content referent))))
-      (when (graph-referent concept) (refuse "a nested graph"))
-      (when (negated concept)        (refuse "negation"))
+      ;; CGIF negates a context, ~[ ... ]. cgraph can also mark a concept
+      ;; holding no graph, ~[CAT], which has no CGIF form.
+      (when (and (negated concept) (not (graph-referent concept)))
+        (refuse "a negated concept with no graph inside"))
       (when (set-p content)          (refuse "a set"))
       (when (or (getf (properties concept) :measure)
                 (and referent (measure-property referent)))
@@ -225,11 +227,85 @@
                         (t (cons nil nil))))))))
     table))
 
+;;; --- Contexts -------------------------------------------------------------
+;;;
+;;; A concept holding a graph is written with the graph inside it:
+;;; [PROPOSITION: [CAT: *x1] [MAT: *x2] (on ?x1 ?x2)], and ~[...] when it is
+;;; negated. Its contents are its graph's nodes, head first, and any context
+;;; standing beside that graph unconnected: cgraph holds ~[A ~[B]] (an
+;;; if-then) as a graph A whose context also has the negation ~[B], which is
+;;; not part of the graph. The reader puts each context's own concept in a
+;;; child context of the one it is read in, so those are found there.
+
+(defun cgif-context-owner (context)
+  "The concept CONTEXT was made for. The reader creates a concept holding a
+   graph in that graph's own context, and a context nested deeper has its own,
+   so it is the one concept in CONTEXT that holds a graph."
+  (find-if (lambda (n) (and (concept-p n) (graph-referent n)))
+           (nodes context)))
+
+(defun cgif-own-context (concept)
+  "The context CONCEPT's graph was read into, or NIL when that can't be told.
+   The reader makes CONCEPT there, so it is CONCEPT's own context -- as long as
+   that context holds the graph's head, or the head's own context is a child
+   of it (a head that is itself a context). A graph referent made some other
+   way may not have one; then nothing beside its graph is looked for."
+  (let* ((context (ignore-errors (context concept)))
+         (head (ignore-errors (head (graph-referent concept)))))
+    (and context head
+         (or (member head (nodes context))
+             (eq (ignore-errors (parent-context (context head))) context))
+         context)))
+
+(defun cgif-inner-nodes (concept)
+  "What CONCEPT's graph holds, as two values: its concepts, head first, then
+   the contexts beside it; and its relations."
+  (let* ((graph (graph-referent concept))
+         (nodes (remove-duplicates (remove-if-not #'graph-node-p (nodes graph))
+                                   :from-end t))
+         (concepts (remove-if-not #'concept-p nodes))
+         (relations (remove-if-not #'relation-p nodes))
+         (head (head graph))
+         (context (cgif-own-context concept)))
+    (when (and head (member head concepts))
+      (setf concepts (cons head (remove head concepts))))
+    (when context
+      (dolist (child (reverse (child-contexts context)))
+        (let ((owner (cgif-context-owner child)))
+          (when (and owner (not (member owner concepts)) (not (eq owner concept)))
+            (setf concepts (append concepts (list owner)))))))
+    (values concepts relations)))
+
+(defun cgif-all-nodes (concepts relations)
+  "Every concept and relation in CONCEPTS and RELATIONS and the contexts they
+   hold, outer first, as two values."
+  (let ((all-concepts '()) (all-relations '())
+        (agenda (list (cons concepts relations))))
+    (loop while agenda
+          do (destructuring-bind (cs . rs) (pop agenda)
+               (setf all-concepts (append all-concepts cs)
+                     all-relations (append all-relations rs))
+               (dolist (c cs)
+                 (when (graph-referent c)
+                   (multiple-value-bind (inner-cs inner-rs) (cgif-inner-nodes c)
+                     (setf agenda (append agenda (list (cons inner-cs inner-rs)))))))))
+    (values all-concepts all-relations)))
+
 (defun cgif-concept-text (concept labels)
   (let* ((name  (cgif-concept-name concept))
          (label (car (gethash concept labels)))
          (parts (remove nil (list (and name (cgif-name name)) label))))
-    (format nil "[~a~@[: ~{~a~^ ~}~]]" (cgif-type-name concept) parts)))
+    (if (graph-referent concept)
+        (multiple-value-bind (concepts relations) (cgif-inner-nodes concept)
+          (format nil "~:[~;~~~][~a: ~{~a ~}~a]"
+                  (negated concept) (cgif-type-name concept) parts
+                  (cgif-text concepts relations labels)))
+        (format nil "[~a~@[: ~{~a~^ ~}~]]" (cgif-type-name concept) parts))))
+
+(defun cgif-text (concepts relations labels)
+  (format nil "~{~a~^ ~}"
+          (append (mapcar (lambda (c) (cgif-concept-text c labels)) concepts)
+                  (mapcar (lambda (r) (cgif-relation-text r labels)) relations))))
 
 (defun cgif-relation-text (relation labels)
   (let ((arguments (append (inarcs relation) (list (outarc relation)))))
@@ -246,15 +322,16 @@
    THING is a graph, a node list or a linear-form string. Returns the string,
    or writes it to STREAM and returns NIL.
 
-   Signals CGIF-UNSUPPORTED for what this version can't write yet -- nested
-   graphs, negation, sets, measures, unnamed individuals, @-words. See
-   notes/cgif.md."
+   Signals CGIF-UNSUPPORTED for what this version can't write yet -- sets,
+   measures, unnamed individuals, @-words, a negated concept holding no
+   graph. See notes/cgif.md."
   (multiple-value-bind (concepts relations) (cgif-nodes thing)
-    (mapc #'cgif-check-supported concepts)
-    (let* ((labels (cgif-assign-labels concepts relations))
-           (text (format nil "~{~a~^ ~}"
-                         (append (mapcar (lambda (c) (cgif-concept-text c labels)) concepts)
-                                 (mapcar (lambda (r) (cgif-relation-text r labels)) relations)))))
-      (if stream
-          (progn (write-string text stream) nil)
-          text))))
+    (multiple-value-bind (all-concepts all-relations) (cgif-all-nodes concepts relations)
+      (mapc #'cgif-check-supported all-concepts)
+      ;; Labels over the whole text, nested contexts too, so they are unique
+      ;; in it and coreference across contexts finds its partners.
+      (let* ((labels (cgif-assign-labels all-concepts all-relations))
+             (text (cgif-text concepts relations labels)))
+        (if stream
+            (progn (write-string text stream) nil)
+            text)))))

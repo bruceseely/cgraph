@@ -405,3 +405,33 @@ second graph clears the first one's `*x` labels. That is how parsing has
 always worked, and the query code expects it, since it saves the table after
 parsing its pattern. It's worth knowing before relying on `node-variable` for a
 graph that wasn't the last one parsed.
+
+## The linear-form formatter drops the inner negation of an if-then
+
+Found 2026-11-17 while building CGIF contexts (notes/cgif.md, step 3).
+**Outstanding.**
+
+`~[Proposition: [Dog: *x]<-(agnt)<-[Bark] ~[Proposition: [Dog: ?x]->(attr)->[Noisy]]]`
+reads correctly -- the inner negation is there, in a child context of the
+outer one -- but prints as
+
+    ~[PROPOSITION:[DOG:*x]←(agnt)←[BARK]].
+
+The "then" half is gone from the text. A graph referent is a GRAPH, which is
+what can be reached from its head along relations, and the inner negation is
+connected to nothing: it lives only in the context. The formatter prints the
+graph. So any if-then written in linear form prints without its consequent,
+and anything that copies a graph by printing and reparsing it (the graph
+editor's working copy is made that way) loses it.
+
+CGIF export writes it, because it looks among the context's child contexts
+for the concepts that own them (`cgif-inner-nodes`, system/cgif/export.lisp).
+The formatter could do the same: after the graph, the contexts standing beside
+it, juxtaposed as the reader accepts them.
+
+Related, and worth fixing with it: `test-neg-nested` in
+`negative-context-test` looks for "a negated concept in the inner context" to
+show the inner negation was read. The negated concept it finds is the OUTER
+one -- the reader creates a context's own concept inside that context -- so
+the check passes whether or not the inner negation exists.
+

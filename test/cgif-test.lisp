@@ -47,7 +47,19 @@
     ("[PERSON: Tom]->(life-stage)->[CHILDHOOD]."
      . "[PERSON: Tom] [CHILDHOOD: *x1] (\"life-stage\" Tom ?x1)")
     ;; @some is what a concept means anyway: dropped, not refused.
-    ("[CAT: @some]."                . "[CAT]")))
+    ("[CAT: @some]."                . "[CAT]")
+    ;; Contexts: the graph inside the concept, ~ for a negation.
+    ("~[[CAT]]."                    . "~[PROPOSITION: [CAT]]")
+    ("[[CAT]->(on)->[MAT]]."        . "[PROPOSITION: [CAT: *x1] [MAT: *x2] (on ?x1 ?x2)]")
+    ("[BELIEF]->(stat)->[PROPOSITION: [PERSON: ivan]->(loc)->[PLACE]]."
+     . "[BELIEF: *x1] [PROPOSITION: *x2 [PERSON: ivan] [PLACE: *x3] (loc ivan ?x3)] (stat ?x1 ?x2)")
+    ;; Coreference into a context.
+    ("[PERSON: mary *x]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [PERSON: ?x]->(loc)->[PLACE]]."
+     . "[PERSON: mary *x] [BELIEF: *x1] [PROPOSITION: *x2 [PERSON: ?x *x3] [PLACE: *x4] (loc ?x3 ?x4)] (expr ?x1 ?x) (stat ?x1 ?x2)")
+    ;; An if-then: the inner negation stands beside the graph, unconnected,
+    ;; and is written -- which the linear form doesn't do.
+    ("~[Proposition: [Dog: *x]<-(agnt)<-[Bark] ~[Proposition: [Dog: ?x]->(attr)->[Noisy]]]"
+     . "~[PROPOSITION: [DOG: *x] [BARK: *x1] ~[PROPOSITION: [DOG: ?x *x2] [NOISY: *x3] (attr ?x2 ?x3)] (agnt ?x1 ?x)]")))
 
 (defparameter *cgif-refused-cases*
   ;; (linear form . words the refusal must contain). Each gets its CGIF form
@@ -58,8 +70,9 @@
     ("[DOG: @every]."                    . "the quantifier @every")
     ("[EAT: @past]."                     . "the annotation @past")
     ("[PERSON: Tom]->(wgt)->[MASS: @80 kg]." . "a measure")
-    ("~[[CAT]]."                         . "a nested graph")
-    ("[PROPOSITION: [CAT]->(on)->[MAT]]." . "a nested graph")))
+    ("~[CAT]."                           . "a negated concept with no graph inside")
+    ;; Inside a context too.
+    ("[[CAT: #12]]."                     . "an individual id without a name")))
 
 (defparameter *cgif-import-cases*
   ;; (CGIF . linear form it reads as). CGIF written by others, not by
@@ -75,7 +88,28 @@
     ;; allows there.
     ("[EAT *e] (agnt ?e Fido)"            . "[EAT]→(agnt)→[ANIMATE: Fido].")
     ;; The first concept is the head.
-    ("[FOOD *f] [EAT *e] (obj ?e ?f)"     . "[FOOD]←(obj)←[EAT].")))
+    ("[FOOD *f] [EAT *e] (obj ?e ?f)"     . "[FOOD]←(obj)←[EAT].")
+    ;; Contexts. One with no type is a PROPOSITION, as [[...]] is.
+    ("~[[Cat *x] [Mat *y] (On ?x ?y)]"    . "~[PROPOSITION: [CAT]→(on)→[MAT]].")
+    ("[Proposition: [Cat]]"               . "[PROPOSITION: [CAT]].")
+    ("[Belief *b] [Proposition *p [Person: ivan] [Place *l] (Loc ivan ?l)] (Stat ?b ?p)"
+     . "[BELIEF]→(stat)→[PROPOSITION: [PERSON: ivan]→(loc)→[PLACE]].")
+    ;; If/Then is ~[A ~[B]]. The linear form shows the graph A only; the
+    ;; whole of it is checked in *CGIF-IDEMPOTENT-CASES*.
+    ("[If: [Cat *x] [Mat *y] (On ?x ?y) [Then: [Cat: ?x] [Old *z] (Attr ?x ?z)]]"
+     . "~[PROPOSITION: [CAT: *x]→(on)→[MAT]].")))
+
+(defparameter *cgif-idempotent-cases*
+  ;; (CGIF . CGIF it comes back as, read and written again). For what the
+  ;; linear form can't show: a context's contents beside its graph.
+  '(("[If: [Cat *x] [Mat *y] (On ?x ?y) [Then: [Cat: ?x] [Old *z] (Attr ?x ?z)]]"
+     . "~[PROPOSITION: [CAT: *x] [MAT: *x1] ~[PROPOSITION: [CAT: ?x *x2] [OLD: *x3] (attr ?x2 ?x3)] (on ?x ?x1)]")
+    ("[Either: [Or: [Cat]] [Or: [Dog]]]"
+     . "~[PROPOSITION: ~[PROPOSITION: [CAT]] ~[PROPOSITION: [DOG]]]")
+    ;; A relation in a context naming a concept outside it: the context gets
+    ;; a coreferent concept of its own, [CAT: ?x].
+    ("[If: [Cat *x] [Then: [Old *z] (Attr ?x ?z)]]"
+     . "~[PROPOSITION: [CAT: *x] ~[PROPOSITION: [OLD: *x1] [CAT: ?x *x2] (attr ?x2 ?x1)]]")))
 
 (defparameter *cgif-parse-error-cases*
   ;; (CGIF  words-the-message-must-contain  where-the-caret-goes), as in
@@ -94,10 +128,17 @@
     ("/* never closed [CAT]"        "has no closing */"              "/*")
     ("[CAT] junk"                   "expected a concept"             "junk")
     (""                             "there is no concept"            :end)
+    ;; Contexts.
+    ("~[CAT]"                       "a negation holds a graph"       "~")
+    ("~ CAT"                        "~ negates a context"            "~")
+    ("[If: [CAT] [MAT]]"            "only another context may stand apart" "[MAT]")
+    ("[If:]"                        "a negation holds a graph"       "[If")
+    ("~[If: [CAT]]"                 "a negation twice over"          "~")
+    ("[PROPOSITION: [CAT]"          "a context has no closing ]"     :end)
+    ("[CAT *x] [PROPOSITION: (stat ?x ?x)]" "holds no concept"       "[PROPOSITION")
     ;; What later steps will read, refused until then.
-    ("~[[CAT]]"                     "Negation isn't supported"       "~")
-    ("[If: [CAT]]"                  "If isn't supported"             "[If")
-    ("[PROPOSITION: [CAT]]"         "A graph inside a concept"       "[CAT]]")
+    ("[Equiv: [Iff: [CAT]] [Iff: [DOG]]]" "Equiv isn't supported"    "[Equiv")
+    ("[PROPOSITION: Tom [CAT]]"     "also has a name"                "[PROPOSITION")
     ("[*x]"                         "no type (core CGIF)"            "[*x")
     ("[CAT: @every *x]"             "@every"                         "@every")
     ("[CAT *x] (Add ?x 7 | [*u])"   "An actor"                       "| [")))
@@ -189,6 +230,18 @@
                                (and p (or (position-if-not (lambda (c) (member c '(#\Space #\Tab #\Newline)))
                                                            text :start p)
                                           p)))))))
+
+      (loop for (cgif . expected) in *cgif-idempotent-cases*
+            for actual = (handler-case (format-cgif (parse-cgif cgif))
+                           (error (c) (format nil "<error: ~a>" c)))
+            do (check (format nil "~s comes back as ~s~@[ (got ~s)~]" cgif expected
+                              (and (string/= actual expected) actual))
+                      (string= actual expected))
+               ;; and that is a fixed point
+               (check (format nil "~s is written the same once read again" expected)
+                      (string= (handler-case (format-cgif (parse-cgif expected))
+                                 (error (c) (format nil "<error: ~a>" c)))
+                               expected)))
 
       ;; The round trip, over the export cases and over GENERATION-TEST's graphs.
       (let ((tried 0) (failed '()))
