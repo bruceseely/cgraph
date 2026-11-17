@@ -234,28 +234,8 @@
 ;;; negated. Its contents are its graph's nodes, head first, and any context
 ;;; standing beside that graph unconnected: cgraph holds ~[A ~[B]] (an
 ;;; if-then) as a graph A whose context also has the negation ~[B], which is
-;;; not part of the graph. The reader puts each context's own concept in a
-;;; child context of the one it is read in, so those are found there.
-
-(defun cgif-context-owner (context)
-  "The concept CONTEXT was made for. The reader creates a concept holding a
-   graph in that graph's own context, and a context nested deeper has its own,
-   so it is the one concept in CONTEXT that holds a graph."
-  (find-if (lambda (n) (and (concept-p n) (graph-referent n)))
-           (nodes context)))
-
-(defun cgif-own-context (concept)
-  "The context CONCEPT's graph was read into, or NIL when that can't be told.
-   The reader makes CONCEPT there, so it is CONCEPT's own context -- as long as
-   that context holds the graph's head, or the head's own context is a child
-   of it (a head that is itself a context). A graph referent made some other
-   way may not have one; then nothing beside its graph is looked for."
-  (let* ((context (ignore-errors (context concept)))
-         (head (ignore-errors (head (graph-referent concept)))))
-    (and context head
-         (or (member head (nodes context))
-             (eq (ignore-errors (parent-context (context head))) context))
-         context)))
+;;; not part of the graph. GRAPH-SIDE-CONTEXTS (graph.lisp) finds those, for
+;;; the linear-form printer and for this.
 
 (defun cgif-inner-nodes (concept)
   "What CONCEPT's graph holds, as two values: its concepts, head first, then
@@ -265,15 +245,12 @@
                                    :from-end t))
          (concepts (remove-if-not #'concept-p nodes))
          (relations (remove-if-not #'relation-p nodes))
-         (head (head graph))
-         (context (cgif-own-context concept)))
+         (head (head graph)))
     (when (and head (member head concepts))
       (setf concepts (cons head (remove head concepts))))
-    (when context
-      (dolist (child (reverse (child-contexts context)))
-        (let ((owner (cgif-context-owner child)))
-          (when (and owner (not (member owner concepts)) (not (eq owner concept)))
-            (setf concepts (append concepts (list owner)))))))
+    (dolist (owner (graph-side-contexts graph))
+      (unless (member owner concepts)
+        (setf concepts (append concepts (list owner)))))
     (values concepts relations)))
 
 (defun cgif-all-nodes (concepts relations)

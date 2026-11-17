@@ -104,10 +104,62 @@
 
 
 
+;;; --- Contexts beside a graph ----------------------------------------------
+;;;
+;;; A graph referent is a GRAPH: what can be reached from its head along
+;;; relations. A context can hold more than that. The reader accepts concepts
+;;; side by side inside one, and an if-then is written exactly so:
+;;;
+;;;   ~[PROPOSITION: [DOG: *x]<-(agnt)<-[BARK] ~[PROPOSITION: [DOG: ?x]->(attr)->[NOISY]]]
+;;;
+;;; The inner negation is connected to nothing, so it is not in the graph; it
+;;; is only in the context. The reader makes a context's own concept inside
+;;; that context (READ-GRAPH-REFERENT-CONCEPT), so a context standing beside a
+;;; graph is found as the one concept holding a graph in a child context of
+;;; the graph's own context. Printing used to leave these out, which dropped
+;;; the "then" from every if-then written in linear form -- and from anything
+;;; copied by printing and reading back.
+
+(defun graph-own-context (graph)
+  "The context GRAPH was read into, or NIL when that can't be told: the
+   context of a concept holding GRAPH, since the reader makes that concept
+   there -- provided the context holds GRAPH's head, or the head's own context
+   is a child of it (a head that is itself a context)."
+  (let ((head (head graph)))
+    (when head
+      (dolist (holder (holders graph))
+        (let ((context (ignore-errors (context holder))))
+          (when (and context
+                     (or (member head (nodes context))
+                         (eq (ignore-errors (parent-context (context head))) context)))
+            (return context)))))))
+
+(defun context-owner (context)
+  "The concept CONTEXT was made for: the one concept in it holding a graph.
+   A context nested deeper has a context of its own."
+  (find-if (lambda (n) (and (concept-p n) (graph-referent n)))
+           (nodes context)))
+
+(defun graph-side-contexts (graph)
+  "The concepts holding the contexts that stand beside GRAPH in its context,
+   unconnected to it -- the ~[...] of an if-then -- in the order they were
+   made."
+  (let ((context (graph-own-context graph))
+        (in-graph (nodes graph)))
+    (when context
+      (loop for child in (reverse (child-contexts context))
+            for owner = (context-owner child)
+            when (and owner
+                      (not (member owner in-graph))
+                      (not (member owner (holders graph))))
+              collect owner))))
+
 (defmethod format-object ((object graph) &rest keys &key &allow-other-keys)
   ;; Use cgraph-text (no trailing period) — the period belongs only at the outermost level
   (declare (ignore keys))
-  (let ((inner (cgraph-text (head object))))
+  (let ((inner (format nil "~a~{ ~a~}"
+                       (cgraph-text (head object))
+                       (mapcar #'format-concept (graph-side-contexts object)))))
     (cond (*indent-graph-referents*
            (let* ((pad (make-string *graph-referent-indent* :initial-element #\space))
                   (newline-pad (concatenate 'string (string #\newline) pad))

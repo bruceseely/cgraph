@@ -57,19 +57,19 @@
 
     (assert (negated head-concept) nil "Outer proposition should be negated")
 
-    ;; Find the inner negated proposition in the context
-    ;; The inner ~[Proposition] is a standalone concept cached in the child context,
-    ;; not part of the linked graph structure
+    ;; Find the inner negated proposition. It stands beside the outer graph,
+    ;; connected to nothing, so it is not in the graph; GRAPH-SIDE-CONTEXTS
+    ;; finds it. This used to look for "a negated concept in the inner
+    ;; context", and the one it found was the OUTER proposition -- the reader
+    ;; makes a context's own concept inside that context -- so it passed
+    ;; whether or not the inner negation was there.
     (let* ((inner-graph (graph-referent head-concept))
            (inner-nodes (when inner-graph (nodes inner-graph))))
       (assert (not (null inner-graph)) nil "Outer proposition should have a graph referent")
-      ;; Get the context that inner concepts belong to
-      (let* ((inner-concept (find-if #'concept-p inner-nodes))
-             (inner-context (context inner-concept))
-             (inner-neg (find-if (lambda (n)
-                                   (and (concept-p n) (negated n)))
-                                 (nodes inner-context))))
-        (assert (not (null inner-neg)) nil "Should find a negated concept in the inner context")
+      (let ((inner-neg (first (graph-side-contexts inner-graph))))
+        (assert (not (null inner-neg)) nil "Should find the inner negation beside the outer graph")
+        (assert (not (eq inner-neg head-concept)) nil "The inner negation is not the outer one")
+        (assert (negated inner-neg) nil "The inner proposition should be negated")
         ;; The negated concept should be a Proposition
         (assert (types-equal (concept-type inner-neg)
                              (get-concept-type 'proposition))
@@ -191,6 +191,41 @@
   t)
 
 
+(defun test-neg-if-then-prints (&optional verbose)
+  "An if-then prints with its consequent, and reads back the same.
+
+   The inner negation of ~[A ~[B]] is connected to nothing, so it is not in
+   the outer graph, which is what the printer printed: the \"then\" was gone
+   from the text, and from anything copied by printing and reading back. And
+   a *x whose ?x partner was only in that inner negation printed without its
+   label, so even once the negation was printed the coreference was lost."
+  (initialize-variables)
+  (initialize-coreferences)
+  (initialize-context *context*)
+  (let* ((source "~[Proposition: [Dog: *x]<-(agnt)<-[Bark] ~[Proposition: [Dog: ?x]->(attr)->[Noisy]]]")
+         (once (format-cgraph (pcg source)))
+         (twice (format-cgraph (pcg once))))
+    (assert (search "NOISY" once) nil
+            (format nil "The consequent should be printed, got: ~a" once))
+    (assert (string= once twice) nil
+            (format nil "Printing should be a fixed point:~%~a~%~a" once twice)))
+  (let* ((source "~[[EAT]- (agnt)->[CAT: *c] (obj)->[FOOD] ~[[CAT: ?c]->(attr)->[OLD]]]")
+         (back (pcg (format-cgraph (pcg source))))
+         (inner (graph-referent (head back)))
+         (cat-of (lambda (graph)
+                   (find-if (lambda (n) (and (concept-p n)
+                                             (string-equal (label (concept-type n)) "CAT")))
+                            (nodes graph))))
+         (cat (funcall cat-of inner))
+         (other-cat (let ((side (first (graph-side-contexts inner))))
+                      (and side (funcall cat-of (graph-referent side))))))
+    (assert (and cat other-cat (member other-cat (coreference cat))) nil
+            "The two cats should still be coreferent after printing and reading back"))
+  (when verbose
+    (format t "~&test-neg-if-then-prints passed~%"))
+  t)
+
+
 (defun negative-context-test (&optional verbose)
   "Run all negative context tests"
   (with-test-types
@@ -200,6 +235,7 @@
      (test-neg-parse-basic verbose)
      (test-neg-format-roundtrip verbose)
      (test-neg-nested verbose)
+     (test-neg-if-then-prints verbose)
      (test-neg-context-flag verbose)
      (test-neg-anon-context verbose)
      (test-neg-anon-negated verbose)

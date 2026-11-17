@@ -257,7 +257,12 @@
                ;;; account for current-segment
                (1+ (length connected-segments)))
           (set-variable (segment-last-node current-segment))
-          (when (node-variable (segment-last-node current-segment))
+          ;; A label not needed to show a cycle is left out -- unless another
+          ;; concept refers to it. [CAT: *c] with a [CAT: ?c] elsewhere (in a
+          ;; context beside this graph, say) printed as [CAT], and read back
+          ;; the ?c had nothing to point at: the coreference was lost.
+          (when (and (node-variable (segment-last-node current-segment))
+                     (null (ignore-errors (coreference (segment-last-node current-segment)))))
             (unset-variable (segment-last-node current-segment))))
 
         (let* ((branching-factor (- (length (arcs (segment-last-node current-segment)))

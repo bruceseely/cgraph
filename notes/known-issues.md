@@ -406,32 +406,41 @@ always worked, and the query code expects it, since it saves the table after
 parsing its pattern. It's worth knowing before relying on `node-variable` for a
 graph that wasn't the last one parsed.
 
-## The linear-form formatter drops the inner negation of an if-then
+## ~~The linear-form formatter drops the inner negation of an if-then~~ — fixed
 
-Found 2026-11-17 while building CGIF contexts (notes/cgif.md, step 3).
-**Outstanding.**
+Found 2026-11-17 while building CGIF contexts (notes/cgif.md, step 3), and
+fixed the same day.
 
 `~[Proposition: [Dog: *x]<-(agnt)<-[Bark] ~[Proposition: [Dog: ?x]->(attr)->[Noisy]]]`
-reads correctly -- the inner negation is there, in a child context of the
-outer one -- but prints as
+read correctly -- the inner negation is there, in a child context of the
+outer one -- but printed as
 
     ~[PROPOSITION:[DOG:*x]←(agnt)←[BARK]].
 
-The "then" half is gone from the text. A graph referent is a GRAPH, which is
-what can be reached from its head along relations, and the inner negation is
-connected to nothing: it lives only in the context. The formatter prints the
-graph. So any if-then written in linear form prints without its consequent,
-and anything that copies a graph by printing and reparsing it (the graph
-editor's working copy is made that way) loses it.
+A graph referent is a GRAPH, which is what can be reached from its head along
+relations, and the inner negation is connected to nothing: it lives only in
+the context. The printer printed the graph. So every if-then written in linear
+form printed without its consequent, and anything that copies a graph by
+printing and reading it back (the graph editor's working copy is made that
+way) lost it.
 
-CGIF export writes it, because it looks among the context's child contexts
-for the concepts that own them (`cgif-inner-nodes`, system/cgif/export.lisp).
-The formatter could do the same: after the graph, the contexts standing beside
-it, juxtaposed as the reader accepts them.
+There was a second loss behind it. A `*x` whose `?x` partner was only in that
+inner negation printed without its label, `[CAT: *c]` as `[CAT]`, because the
+formatter leaves out any label it doesn't need to show a cycle. Read back, the
+`?c` pointed at nothing.
 
-Related, and worth fixing with it: `test-neg-nested` in
-`negative-context-test` looks for "a negated concept in the inner context" to
-show the inner negation was read. The negated concept it finds is the OUTER
-one -- the reader creates a context's own concept inside that context -- so
-the check passes whether or not the inner negation exists.
+**Fix:** `graph-side-contexts` (graph.lisp) finds the contexts standing beside
+a graph: the concepts that own child contexts of the context the graph was read
+into, and aren't part of the graph. The reader makes a context's own concept
+inside that context, which is how they are found. The graph's printer
+(`format-object` on a graph) writes them after it, side by side, as the reader
+accepts them. The formatter keeps a label when the concept has coreference
+partners (formatter.lisp, in `format-segments`). The CGIF exporter now uses
+the same `graph-side-contexts`. `test-neg-if-then-prints` checks that the
+consequent is printed, that printing is a fixed point, and that the
+coreference survives a reprint. It fails with the fix taken out.
 
+`test-neg-nested` looked for "a negated concept in the inner context" to show
+the inner negation was read. The one it found was the OUTER proposition, so it
+passed whether or not the inner negation existed. It now finds it with
+`graph-side-contexts` and checks it is not the outer one.

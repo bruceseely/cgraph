@@ -94,14 +94,13 @@
     ("[Proposition: [Cat]]"               . "[PROPOSITION: [CAT]].")
     ("[Belief *b] [Proposition *p [Person: ivan] [Place *l] (Loc ivan ?l)] (Stat ?b ?p)"
      . "[BELIEF]→(stat)→[PROPOSITION: [PERSON: ivan]→(loc)→[PLACE]].")
-    ;; If/Then is ~[A ~[B]]. The linear form shows the graph A only; the
-    ;; whole of it is checked in *CGIF-IDEMPOTENT-CASES*.
+    ;; If/Then is ~[A ~[B]]: the inner negation stands beside the graph A.
     ("[If: [Cat *x] [Mat *y] (On ?x ?y) [Then: [Cat: ?x] [Old *z] (Attr ?x ?z)]]"
-     . "~[PROPOSITION: [CAT: *x]→(on)→[MAT]].")))
+     . "~[PROPOSITION: [CAT: *x]→(on)→[MAT] ~[PROPOSITION: [CAT: ?x]→(attr)→[OLD]]].")))
 
 (defparameter *cgif-idempotent-cases*
-  ;; (CGIF . CGIF it comes back as, read and written again). For what the
-  ;; linear form can't show: a context's contents beside its graph.
+  ;; (CGIF . CGIF it comes back as, read and written again): the CGIF itself
+  ;; checked, for a context's contents beside its graph.
   '(("[If: [Cat *x] [Mat *y] (On ?x ?y) [Then: [Cat: ?x] [Old *z] (Attr ?x ?z)]]"
      . "~[PROPOSITION: [CAT: *x] [MAT: *x1] ~[PROPOSITION: [CAT: ?x *x2] [OLD: *x3] (attr ?x2 ?x3)] (on ?x ?x1)]")
     ("[Either: [Or: [Cat]] [Or: [Dog]]]"
