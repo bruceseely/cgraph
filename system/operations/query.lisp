@@ -67,8 +67,11 @@
 (defmethod query ((pattern graph-node) (context context) &key first-only)
   "Query context using an already-parsed pattern graph node."
   (let ((results (list)))
-    (dolist (node-list (graphs context))
-      (let* ((target-head (find-if (lambda (node) (typep node 'concept)) node-list))
+    ;; The context holds graphs, not node lists: this called FIND-IF on a
+    ;; GRAPH and signalled on the first one, so a pattern passed already
+    ;; parsed had never been run. The string method above had it right.
+    (dolist (graph (graphs context))
+      (let* ((target-head (find-if (lambda (node) (typep node 'concept)) (nodes graph)))
              (mappings (when target-head
                          (project pattern target-head :all-solutions t))))
         (dolist (mapping mappings)

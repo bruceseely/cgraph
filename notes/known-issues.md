@@ -365,30 +365,43 @@ So the present behaviour -- report per focus, refuse nothing -- is sound as far
 as it goes, and the honest statement of the limit is that a green pane means
 "conforms as seen from here", not "conforms".
 
-## `format-cgraph` clears a concept's `*x` as it prints
+## ~~`format-cgraph` clears a concept's `*x` as it prints~~ — fixed
 
-Found 2026-11-17 while building CGIF import (notes/cgif.md, step 2).
-**Outstanding.**
+Found 2026-11-17 while building CGIF import (notes/cgif.md, step 2), and fixed
+the same day.
 
-Printing a graph changes it. After `(format-cgraph g)`, a concept that was
-read as `[PERSON: *x]` has no variable any more: `node-variable` is NIL. The
-formatter works out its own labels for the concepts it meets twice, and it
-clears what was there to do it. So:
+Printing a graph changed it. After `(format-cgraph g)`, a concept that was read
+as `[PERSON: *x]` had no variable any more: `node-variable` was NIL. A
+concept's `*x` isn't stored on the concept. It lives in the environment's
+variable table, `*variables*`, and the formatter used that same table to
+record the labels it decides to show where a graph meets itself. Where it
+didn't need a label for display, it unset the one that was there
+(formatter.lisp, in `format-segments`). Where it did, the label it made up
+stayed on the concept afterwards. So:
 
-- `[DOG: *x]` prints as `[DOG]`. That looks like a formatting choice, but it is
-  this.
-- In `[EAT]- (agnt)→[PERSON: *x] … (rcpt)→[PERSON: ?x]` the `?x` concept
-  still carries its label after printing, and the `*x` one has lost its own. A
-  reader of the graph's labels finds a `?x` bound to nothing.
+- In `[EAT]- (agnt)→[PERSON: *x] … (rcpt)→[PERSON: ?x]`, the `*x` concept
+  lost its label and the `?x` concept was left pointing at nothing. The CGIF
+  exporter wrote exactly that, a `?x` with no `*x`, until it was changed to
+  work out coreference from the links between concepts instead.
+- A query pattern printed before it was run, as the editor or a log would
+  print it, lost the variables it was meant to bind.
 
-The CGIF exporter met the second case: it read the labels, and wrote CGIF
-whose `?x` had no `*x`. It now works coreference out from the links between
-concepts (`cgif-coreference-roles`), which printing doesn't touch. Anything
-else that reads `node-variable` after a graph has been printed sees the same
-gap. A query pattern is the case to worry about, because its variables are
-what it returns.
+**Fix:** `cgraph-text`, which every way of printing goes through, binds
+`*variable-overlay*` to a copy of the table, and every function in
+`variable.lisp` reads and writes `(variable-cache)`, which is the copy while
+one is bound. What the formatter does to labels stays in the copy. It's a
+special variable bound with `let`, so two threads printing at once each have
+their own. The printed text is unchanged; only the graph is no longer touched.
+`printing-keeps-variables-test` (in `variable-test`) checks the three cases
+above, and fails on the old formatter.
 
-The fix is for the formatter to keep its own labels to itself, in a table for
-the one call, rather than writing them onto the concepts. Not done yet,
-because the formatter's segment code reads `node-variable` in several places
-(formatter.lisp:260 and after) and needs reading before it is changed.
+**Found on the way:** `query` with a pattern passed already parsed, rather
+than as a string, had never worked. It treated each graph in the context as a
+node list and signalled on the first. Fixed in the same commit.
+
+**Still true, and not this bug:** the variable table is replaced each time a
+graph is parsed (`cgraph-tokens` calls `initialize-variables`), so parsing a
+second graph clears the first one's `*x` labels. That is how parsing has
+always worked, and the query code expects it, since it saves the table after
+parsing its pattern. It's worth knowing before relying on `node-variable` for a
+graph that wasn't the last one parsed.

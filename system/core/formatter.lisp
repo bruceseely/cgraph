@@ -365,6 +365,12 @@
     (format-segments first-segment initial-indent indent-delta :initial t)))
 
 (defmethod cgraph-text ((node graph-node) &key (initial-indent 0) (indent-delta 3))
+  ;; On a copy of the variable table: the labels this decides on are for the
+  ;; text, not the graph. See *VARIABLE-OVERLAY* (variable.lisp).
+  (let ((*variable-overlay* (copy-variable-cache (variable-cache))))
+    (cgraph-text-1 node initial-indent indent-delta)))
+
+(defun cgraph-text-1 (node initial-indent indent-delta)
   (let* ((segments (make-graph-segments node))
          (start-segments (segments-starting-with node segments))
          (first-segment (car (sort (copy-list start-segments) #'< :key (lambda (seg) (length (path seg))))))
