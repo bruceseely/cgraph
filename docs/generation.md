@@ -5,7 +5,7 @@ worked example for every feature. Examples are taken from
 `test/generation-test.lisp`, so each line is a regression-tested
 input/output pair.
 
-The basic call is `(graph-to-text (make-cgraph "<CGIF string>"))`. The
+The basic call is `(graph-to-text (make-cgraph "<linear-form string>"))`. The
 graph carries its head (the bracketed concept the parser entered first),
 which matters for the head-driven passive transformation in §5.
 

@@ -690,6 +690,54 @@ Convert ASCII arrows (`->`, `<-`) to Unicode (→, ←).
 
 ---
 
+## CGIF
+
+Reading and writing CGIF, the Conceptual Graph Interchange Format of ISO/IEC
+24707. A separate system: load it with `(ql:quickload "cgraph/cgif")`, and
+its functions are in `cg`. See [docs/cgif.md](docs/cgif.md).
+
+### `format-cgif (thing &key mode stream)` → string, or NIL with a stream
+`thing` (a graph, a node list or a linear-form string) as extended CGIF:
+concepts first, the head first among them, then relations. `mode` is
+`:portable` (the default: standard CGIF, leaving out what has no logical
+meaning with a `cgif-dropped` warning and refusing what CGIF can't say),
+`:strict` (refusing what `:portable` would leave out) or `:lossless` (keeping
+everything in cgraph's notation, so the graph reads back exactly).
+
+```lisp
+(cg:format-cgif "[CAT: Tom]←(agnt)←[EAT]→(obj)→[FOOD].")
+; → "[CAT: Tom] [EAT: *x1] [FOOD: *x2] (agnt ?x1 Tom) (obj ?x1 ?x2)"
+```
+
+### `parse-cgif (string)` → node list
+Read one connected graph of CGIF. Returns what `parse-cgraph` returns, the
+head (the first concept) first, so `(cg:make-cgraph (cg:parse-cgif s))`
+makes a graph. Signals `cgraph-parse-error` on what it can't read, and on a
+text that is more than one connected graph.
+
+### `write-cgif-graphs (graphs destination &key mode)`
+Write `graphs` as one CGIF text, a graph to a line, with labels unique
+across all of them. `destination` is a stream, a pathname (the file is
+replaced) or NIL to return the text as a string. `mode` as for
+`format-cgif`.
+
+### `read-cgif-graphs (source &key unwrap context)` → list of graphs
+Read a CGIF text, a string or a pathname, as a graph for each connected part
+of it, added to `context` (default `*context*`). Parts linked only by
+coreference stay separate graphs and keep the link. `:unwrap t` reads a text
+that is one `[Proposition: …]` around everything as what is inside.
+
+### `cgif-unsupported` (condition)
+`format-cgif` can't write something in the mode asked: a set or measure
+outside `:lossless`, something `:strict` would have to leave out, or a
+negated concept holding no graph.
+
+### `cgif-dropped` (warning)
+`format-cgif` in `:portable` left something out -- the marker `#`, or `@past`
+and the other annotations.
+
+---
+
 ## Graph Operations
 
 ### Formation Rules

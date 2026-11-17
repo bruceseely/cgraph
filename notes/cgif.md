@@ -1,6 +1,7 @@
 # CGIF import and export: design
 
-Status: **approved 2026-11-15.** CGIF goes in a separate ASDF system,
+Status: **built, 2026-11-17** (approved 2026-11-15). User documentation is
+[docs/cgif.md](../docs/cgif.md); this note is the design and its record. CGIF goes in a separate ASDF system,
 `cgraph/cgif`, in this repo, the way `cgraph/support` does. The decisions
 are recorded at the end.
 
@@ -232,8 +233,12 @@ Small commits, each with its tests:
    "One graph per text" above. Labels are now made unique across everything
    written together: a second graph's own `*x` is renamed rather than
    defined twice.
-6. Docs: `docs/cgif.md`, `API.md`, a line in the README, and fix
-   `docs/generation.md:8`, which calls a linear-form string a "CGIF string".
+6. ~~Docs: `docs/cgif.md`, `API.md`, a line in the README, and fix
+   `docs/generation.md:8`, which calls a linear-form string a "CGIF string".~~
+   Done 2026-11-17: `docs/cgif.md` (examples checked against a fresh
+   `cg:init` with an empty home directory), a CGIF section in `API.md`,
+   `cgif-unsupported` and `cgif-dropped` in `docs/errors.md`, entries in the
+   README and `docs/README.md`.
 
 ## Decisions
 

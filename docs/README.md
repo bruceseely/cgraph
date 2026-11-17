@@ -14,6 +14,8 @@ exported function.
   image
 - [Errors and warnings](errors.md) -- every startup finding and error by name,
   what it means and how to fix it
+- [CGIF](cgif.md) -- reading and writing graphs in the interchange format of
+  ISO/IEC 24707, to and from other CG tools
 
 ## Generating English
 

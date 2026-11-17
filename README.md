@@ -82,6 +82,7 @@ CGraph implements Sowa's core operations:
 - **Graph Combination** — high-level merging using formation rules with automatic correspondence finding
 - **Queries** — search a knowledge base (context) for graphs matching a pattern, with variable bindings in results
 - **Type Definitions** — lambda-based type expansion for specialized reasoning
+- **CGIF** — read and write the Conceptual Graph Interchange Format of ISO/IEC 24707 (Common Logic), to exchange graphs with other CG tools: see [docs/cgif.md](docs/cgif.md)
 
 ### Visualization
 

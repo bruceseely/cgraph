@@ -388,6 +388,27 @@ nested inside another and goes back to the outer one:
 `[EAT]- (agnt)→[CAT]- (attr)→[OLD], (obj)→[FOOD]`. See the
 [tutorial](tutorial.md) for the notation.
 
+`parse-cgif` and `read-cgif-graphs` signal it too, for CGIF text, with the
+caret in that text. See [cgif.md](cgif.md).
+
+### cgif-unsupported
+
+"Can't write [X] as … CGIF: … has no standard CGIF form". `format-cgif` or
+`write-cgif-graphs` was asked to write something its mode can't: a set, a
+measure or a quantifier like `@most` outside `:mode :lossless`, anything
+`:strict` would have to leave out, or a negated concept holding no graph,
+`~[CAT]`, which has no CGIF form at all. The message says which. Use
+`:mode :lossless` to keep cgraph's own notation (other tools may not read
+it), or change the graph. See [cgif.md](cgif.md#modes).
+
+### cgif-dropped (warning)
+
+"Writing [X] as CGIF left out …". In `:mode :portable`, the default,
+`format-cgif` writes standard CGIF and leaves out what has no logical meaning
+there: the individual marker `#`, and `@past` and the other annotations. The
+CGIF is still correct; it says less. `:mode :lossless` keeps them, and
+`:mode :strict` refuses instead.
+
 ### concept-type-lookup-failed
 
 A concept type name isn't in the catalog. Usually a typo in a graph or a
