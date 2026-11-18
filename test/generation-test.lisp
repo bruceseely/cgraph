@@ -184,9 +184,9 @@
     ;; A denied conjunct -- itself a negation, or holding one -- says "not"
     ;; on its own verb, and still shares a subject with the others.
     ("~[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]->(and)->[PROPOSITION: [BOY]<-(agnt)<-[DRINK]]."
-     . "A girl does not eat a pie and a boy drinks.")
+     . "No girl eats a pie and a boy drinks.")
     ("[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]->(or)->[PROPOSITION: ~[[BOY]<-(agnt)<-[DRINK]]]."
-     . "A girl eats a pie or a boy does not drink.")
+     . "A girl eats a pie or no boy drinks.")
     ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT]]->(and)->~[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
      . "Sue eats and does not drink.")
     ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT: @past]]->(and)->[PROPOSITION: ~[[GIRL: Sue]<-(agnt)<-[DRINK: @past]]]."
@@ -194,7 +194,7 @@
     ("~[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT]]->(or)->~[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
      . "Sue does not eat or does not drink.")
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [PROPOSITION: [GIRL]<-(agnt)<-[EAT]]->(and)->~[PROPOSITION: [BOY]<-(agnt)<-[DRINK]]]."
-     . "Ivan knows that a girl eats and a boy does not drink.")
+     . "Ivan knows that a girl eats and no boy drinks.")
     ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT: @past]]->(and)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
      . "Sue ate and drinks.")
 
@@ -260,17 +260,31 @@
     ;; own verb -- do-support for a simple verb, 'not' after the first
     ;; auxiliary otherwise. Inside a proposition only the inner clause is
     ;; denied; around the whole graph only the outer verb is.
-    ("~[[GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]."              . "A girl does not eat a pie.")
-    ("~[[GIRL]<-(agnt)<-[EAT: @past]->(obj)->[PIE]]."       . "A girl did not eat a pie.")
-    ("~[[GIRL]<-(agnt)<-[EAT: @future]->(obj)->[PIE]]."     . "A girl will not eat a pie.")
-    ("~[[GIRL]<-(agnt)<-[EAT: @perfect]->(obj)->[PIE]]."    . "A girl has not eaten a pie.")
-    ("~[[DOG: {*}@every]<-(agnt)<-[BARK: @progressive]]."   . "All dogs are not barking.")
-    ("~[[PIE]<-(obj)<-[EAT: @past]]."                       . "A pie was not eaten.")
+    ("~[[GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]."              . "No girl eats a pie.")
+    ("~[[GIRL]<-(agnt)<-[EAT: @past]->(obj)->[PIE]]."       . "No girl ate a pie.")
+    ("~[[GIRL]<-(agnt)<-[EAT: @future]->(obj)->[PIE]]."     . "No girl will eat a pie.")
+    ("~[[GIRL]<-(agnt)<-[EAT: @perfect]->(obj)->[PIE]]."    . "No girl has eaten a pie.")
+    ("~[[DOG: {*}@every]<-(agnt)<-[BARK: @progressive]]."   . "Not all dogs are barking.")
+    ("~[[PIE]<-(obj)<-[EAT: @past]]."                       . "No pie was eaten.")
     ("~[[PERSON: Tom]->(poss)->[CAT]]."                     . "Tom does not have a cat.")
+    ;; An indefinite under negation is `no' (or `not every'), said on the
+    ;; subject; a name, a definite, a count or a possessed noun keeps the
+    ;; verb's `not', and so does an object, where "not ... a" already means no.
+    ("~[[GIRL: Sue]<-(agnt)<-[EAT]->(obj)->[PIE]]."          . "Sue does not eat a pie.")
+    ("~[[GIRL: Sue]<-(agnt)<-[EAT: @past]->(obj)->[PIE]]."   . "Sue did not eat a pie.")
+    ("~[[GIRL: Sue]<-(agnt)<-[EAT: @future]->(obj)->[PIE]]." . "Sue will not eat a pie.")
+    ("~[[GIRL: Sue]<-(agnt)<-[EAT: @perfect]->(obj)->[PIE]]." . "Sue has not eaten a pie.")
+    ("~[[DOG: {*}@3]<-(agnt)<-[BARK: @progressive]]."        . "Three dogs are not barking.")
+    ("~[[PIE: #]<-(obj)<-[EAT: @past]]."                     . "The pie was not eaten.")
+    ("~[[BARK]-(agnt)->[DOG]<-(poss)<-[GIRL: Sue]]."         . "Sue's dog does not bark.")
+    ("~[[DOG: {*}]<-(agnt)<-[BARK]]."                        . "No dogs bark.")
+    ("~[[DOG: @every]<-(agnt)<-[BARK]]."                     . "Not every dog barks.")
+    ("~[[CAKE]->(attr)->[OLD]]."                             . "No cake is old.")
+    ("~[[PERSON]->(poss)->[CAT]]."                           . "No person has a cat.")
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: ~[[GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
-     . "Ivan knows that a girl does not eat a pie.")
+     . "Ivan knows that no girl eats a pie.")
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: ~[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
-     . "Ivan knows that a girl does not eat a pie.")
+     . "Ivan knows that no girl eats a pie.")
     ("~[[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
      . "Ivan does not know that a girl eats a pie.")
     ;; A denied graph that says nothing of its concept denies it exists.
@@ -284,11 +298,11 @@
     ;; A concept beside a negation that the negation refers back to: the
     ;; negation is a relative clause on it, the coreferent its gap.
     ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [CAKE: *c] ~[[GIRL]<-(agnt)<-[EAT]->(obj)->[CAKE: ?c]]]."
-     . "Ivan believes that there is a cake that a girl does not eat.")
+     . "Ivan believes that there is a cake that no girl eats.")
     ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [GIRL: *g] ~[[GIRL: ?g]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
      . "Ivan believes that there is a girl who does not eat a pie.")
     ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [CAKE: *c]->(attr)->[OLD] ~[[GIRL]<-(agnt)<-[EAT]->(obj)->[CAKE: ?c]]]."
-     . "Ivan believes that there is an old cake that a girl does not eat.")
+     . "Ivan believes that there is an old cake that no girl eats.")
     ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [CAKE: *c] ~[[CAKE: ?c]->(attr)->[OLD]]]."
      . "Ivan believes that there is a cake that is not old.")
     ;; ... unless it is named, when it needs no introducing.

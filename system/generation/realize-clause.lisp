@@ -223,7 +223,7 @@
                        rels)))
     (format nil "~a's ~{~a~^ and ~}" owner nouns)))
 
-(defun realize-have-clause (possessor state)
+(defun realize-have-clause-body (possessor state)
   "Render 'POSSESSOR has/have X (and Y ...)' for a POSS-only graph -- or, when
    every possession is a definite dimension, 'POSSESSOR's X'."
   (let ((possessions (remove-if-not (lambda (rel)
@@ -232,7 +232,7 @@
                                     (concept-relations possessor))))
     (when (and possessions
                (every (lambda (rel) (definite-dimension-p (outarc rel))) possessions))
-      (return-from realize-have-clause
+      (return-from realize-have-clause-body
         (realize-dimension-possessive possessor possessions state))))
   (let ((have-form (cond ((negated-p possessor)
                           (if (eq (concept-number possessor) :plural)
@@ -288,7 +288,7 @@
   (let ((subj-rel (first (gethash :subject buckets))))
     (and subj-rel (other-end subj-rel predicate))))
 
-(defun realize-passive-with-agent (predicate buckets state)
+(defun realize-passive-with-agent-body (predicate buckets state)
   "Head-driven passive (Sowa transformation): the OBJ becomes the surface
    subject and the AGNT is demoted to a 'by X' phrase. Used when the graph
    head is the patient/object rather than the agent."
@@ -321,7 +321,7 @@
                                (clause-object-relation buckets))))
     (and head surface-dobj-rel (eq head (other-end surface-dobj-rel predicate)))))
 
-(defun realize-passive-clause (predicate buckets state)
+(defun realize-passive-clause-body (predicate buckets state)
   "Render PREDICATE in passive voice: OBJ + 'is/are' + past-participle +
    the rest of the complements. Used when there is no AGNT/EXPR but the
    verb has a direct object (Phase 6)."
@@ -387,14 +387,14 @@
       (t
        (format nil "~a ~:[does~;do~] not exist" (realize-full-np topic state) plural)))))
 
-(defun realize-copula-clause (topic state)
+(defun realize-copula-clause-body (topic state)
   "Render a verbless graph as TOPIC + 'is/are' + complements.
    Used when the graph has no subject-introducing relation (Phase 6).
    Denied with nothing said of it, it is a denial of existence."
   (when (and (negated-p topic)
              (notany (lambda (rel) (member (relation-role rel) '(:adj :pp)))
                      (concept-relations topic)))
-    (return-from realize-copula-clause (realize-existence-denial topic state)))
+    (return-from realize-copula-clause-body (realize-existence-denial topic state)))
   (let ((copula (lambda (topic-np)
                   ;; Singular `they' -- a person of unknown gender said again --
                   ;; takes `are' like the plural: "they are blithe".
@@ -461,7 +461,7 @@
                   promoted)))))
     (nreverse promoted)))
 
-(defun realize-clause (main-concept buckets state)
+(defun realize-clause-body (main-concept buckets state)
   (mark-clause-relations-traversed buckets state)
   ;; promote-subject-adjuncts MUST run before realize-np on the subject:
   ;; it marks clause-level PPs traversed so the NP doesn't fold them
@@ -600,3 +600,68 @@
                                 (:copula (realize-copula-infinitive
                                           inner-subj state)))))
              (format nil "~a ~{~a~^ ~} ~a" subj-np verb-list infinitive))))))
+
+;;; --- Negation carried by the subject ----------------------------------------
+;;; An indefinite under a negation means `no': ~[[GIRL]<-(agnt)<-[EAT]...]
+;;; says no girl eats, and "a girl does not eat" reads as some girl not
+;;; eating. English puts that `no' on the subject, before the verb; after the
+;;; verb "does not eat a pie" already means no pie, so objects are left alone.
+;;; Each clause renderer below decides its surface subject and hands it here.
+
+(defun subject-absorbs-negation-p (subject head state)
+  "True when HEAD's clause is denied and its surface SUBJECT says so itself --
+   `no girl', `no dogs', `not every dog' -- leaving the verb positive. Not for
+   a name, a definite, a count ('three dogs do not bark'), a possessed noun
+   (`Sue's dog' takes no `no'), something already said (a pronoun), or the gap
+   of a relative clause."
+  (and subject
+       (negated-p head)
+       (not (eq subject *gap-concept*))
+       (not (uttered-or-coref-uttered-p state subject))
+       (not (concept-count-word subject))
+       (member (concept-definiteness subject) '(:indefinite :existential :universal))
+       (notany (lambda (rel) (and (eq (relation-role rel) :poss)
+                                  (eq (outarc rel) subject)))
+               (concept-relations subject))))
+
+(defmacro with-subject-negation ((subject head state) &body body)
+  "Run BODY with HEAD's denial moved onto SUBJECT when it absorbs it: the
+   subject's article becomes `no' (or `not every'), the verb loses `not'."
+  (let ((absorb (gensym "ABSORB")) (subj (gensym "SUBJ")))
+    `(let* ((,subj ,subject)
+            (,absorb (subject-absorbs-negation-p ,subj ,head ,state))
+            (*denied-concept* (if ,absorb ,subj *denied-concept*))
+            (*negated-head*   (if ,absorb nil *negated-head*)))
+       ,@body)))
+
+(defun clause-object-concept (predicate buckets)
+  "The concept a passive promotes to subject: the other end of the object."
+  (let ((rel (clause-object-relation buckets)))
+    (and rel (other-end rel predicate))))
+
+(defun realize-clause (main-concept buckets state)
+  (with-subject-negation ((clause-subject-concept main-concept buckets) main-concept state)
+    (realize-clause-body main-concept buckets state)))
+
+(defun realize-passive-with-agent (predicate buckets state)
+  (with-subject-negation ((clause-object-concept predicate buckets) predicate state)
+    (realize-passive-with-agent-body predicate buckets state)))
+
+(defun realize-passive-clause (predicate buckets state)
+  (with-subject-negation ((clause-object-concept predicate buckets) predicate state)
+    (realize-passive-clause-body predicate buckets state)))
+
+(defun realize-copula-clause (topic state)
+  ;; Denied with nothing said of it, a topic is denied existence -- "there is
+  ;; no cake" -- which the body handles; only a topic with something said of
+  ;; it can carry the denial itself, "no cake is old".
+  (if (notany (lambda (rel) (member (relation-role rel) '(:adj :pp)))
+              (concept-relations topic))
+      (realize-copula-clause-body topic state)
+      (with-subject-negation (topic topic state)
+        (realize-copula-clause-body topic state))))
+
+(defun realize-have-clause (possessor state)
+  (with-subject-negation (possessor possessor state)
+    (realize-have-clause-body possessor state)))
+

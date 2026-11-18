@@ -238,7 +238,11 @@
          nil)
         ;; `no' takes the place of `a', of nothing before a bare plural or a
         ;; mass noun, and of `some': there is no cake, no cakes, no water.
-        ((eq concept *denied-concept*) "no")
+        ;; A universal is denied as `not every' / `not all'.
+        ((eq concept *denied-concept*)
+         (if (eq (concept-definiteness concept) :universal)
+             (if (eq (concept-number concept) :plural) "not all" "not every")
+             "no"))
         (t (article-for concept (or (first mods-pre) head)))))
 
 (defun realize-full-np (concept state)
