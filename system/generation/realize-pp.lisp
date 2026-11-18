@@ -72,27 +72,53 @@
   (let ((head (and (typep inner-graph 'graph) (head inner-graph))))
     (realize-graph-clause (context-nodes inner-graph) state head)))
 
+(defun unwrap-negation (inner-graph)
+  "For a SITUATION holding a bare negation, [SITUATION: ~[[GO]...]], return
+   (values the negated graph T); otherwise (values INNER-GRAPH NIL)."
+  (let ((negation (and (typep inner-graph 'graph)
+                       (negated-context-concept (context-nodes inner-graph)))))
+    (if negation
+        (values (graph-referent negation) t)
+        (values inner-graph nil))))
+
+(defun situation-predicate (graph)
+  "The verb of a SITUATION's graph: its main predicate, wherever the graph
+   happens to start. The head is where the writer began, and
+   [SITUATION: [PERSON: Bob]<-(agnt)<-[EAT]] begins at Bob -- inflecting
+   that said 'Bob desires to Bob'."
+  (and (typep graph 'graph)
+       (let ((nodes (context-nodes graph)))
+         (or (and (find-subject-relation (graph-relations-of nodes))
+                  (find-main-predicate nodes))
+             (find-if #'act-or-event-concept-p (graph-concepts-of nodes))
+             (head graph)))))
+
 (defun realize-nested-infinitive (inner-graph state)
   "Render an embedded SITUATION as a 'to <verb> ...' infinitive, dropping its
    (controlled, coreferential) subject -- 'the boy wants to go', not 'the boy wants
    that a boy goes'. Reuses realize-verbal-infinitive on the inner predicate head.
-   Falls back to 'that <clause>' when the inner graph has no realizable predicate."
-  (let* ((head    (and (typep inner-graph 'graph) (head inner-graph)))
-         (buckets (and head (classify-relations head))))
-    (if (and head buckets)
-        (realize-verbal-infinitive head buckets state)
-        (format nil "that ~a" (realize-nested-graph inner-graph state)))))
+   A negated situation is 'not to go'. Falls back to 'that <clause>' when the
+   inner graph has no realizable predicate."
+  (multiple-value-bind (graph negated) (unwrap-negation inner-graph)
+    (let* ((head    (situation-predicate graph))
+           (buckets (and head (classify-relations head))))
+      (if (and head buckets)
+          (format nil "~:[~;not ~]~a" negated
+                  (realize-verbal-infinitive head buckets state))
+          (format nil "that ~a" (realize-nested-graph inner-graph state))))))
 
 (defun realize-nested-gerund (inner-graph state)
   "Render an embedded SITUATION as a '<verb>ing ...' gerund, for a clause that
-   sits under a preposition -- 'about eating a pie'. Otherwise
-   REALIZE-NESTED-INFINITIVE's twin, including the 'that <clause>' fallback
-   when there is no realizable predicate to inflect."
-  (let* ((head    (and (typep inner-graph 'graph) (head inner-graph)))
-         (buckets (and head (classify-relations head))))
-    (if (and head buckets)
-        (realize-verbal-gerund head buckets state)
-        (format nil "that ~a" (realize-nested-graph inner-graph state)))))
+   sits under a preposition -- 'about eating a pie', or 'about not eating a pie'
+   when negated. Otherwise REALIZE-NESTED-INFINITIVE's twin, including the
+   'that <clause>' fallback when there is no realizable predicate to inflect."
+  (multiple-value-bind (graph negated) (unwrap-negation inner-graph)
+    (let* ((head    (situation-predicate graph))
+           (buckets (and head (classify-relations head))))
+      (if (and head buckets)
+          (format nil "~:[~;not ~]~a" negated
+                  (realize-verbal-gerund head buckets state))
+          (format nil "that ~a" (realize-nested-graph inner-graph state))))))
 
 (defun realize-argument (concept state &key (case :nominative) preposition)
   "Render CONCEPT as a verb argument. A clausal SITUATION emits '<verb>ing' under

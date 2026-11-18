@@ -342,6 +342,17 @@
      . "Bruce informs Sue about eating a pie.")
     ("[WISH]-(expr)→[PERSON: Sue](thme)→[SITUATION: [EAT]-(agnt)→[PERSON: Sue](obj)→[PIE]]"
      . "Sue wishes to eat a pie.")
+    ;; ... and negated, "not" before either form.
+    ("[WISH]-(expr)→[PERSON: Sue](thme)→[SITUATION: ~[[EAT]-(agnt)→[PERSON: Sue](obj)→[PIE]]]"
+     . "Sue wishes not to eat a pie.")
+    ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](thme)→[SITUATION: ~[[EAT]-(agnt)→[PERSON: Sue](obj)→[PIE]]]"
+     . "Bruce informs Sue about not eating a pie.")
+    ;; Written subject-first, the situation's head is the subject, not the
+    ;; verb; the infinitive is still of the verb.
+    ("[PERSON: Sue]<-(expr)<-[WISH]->(thme)->[SITUATION: [PERSON: Sue]<-(agnt)<-[EAT]->(obj)->[PIE]]"
+     . "Sue wishes to eat a pie.")
+    ("[PERSON: Sue]<-(expr)<-[WISH]->(thme)->[SITUATION: ~[[PERSON: Sue]<-(agnt)<-[EAT]->(obj)->[PIE]]]"
+     . "Sue wishes not to eat a pie.")
     ;; The non-clausal theme is untouched by that split.
     ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](thme)→[DOG]"
      . "Bruce informs Sue about a dog.")
