@@ -181,6 +181,20 @@
     ;; doesn't force a single tense on the VP.
     ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT: @past]]->(and)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK: @past]]."
      . "Sue ate and drank.")
+    ;; A denied conjunct -- itself a negation, or holding one -- says "not"
+    ;; on its own verb, and still shares a subject with the others.
+    ("~[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]->(and)->[PROPOSITION: [BOY]<-(agnt)<-[DRINK]]."
+     . "A girl does not eat a pie and a boy drinks.")
+    ("[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]->(or)->[PROPOSITION: ~[[BOY]<-(agnt)<-[DRINK]]]."
+     . "A girl eats a pie or a boy does not drink.")
+    ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT]]->(and)->~[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
+     . "Sue eats and does not drink.")
+    ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT: @past]]->(and)->[PROPOSITION: ~[[GIRL: Sue]<-(agnt)<-[DRINK: @past]]]."
+     . "Sue ate and did not drink.")
+    ("~[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT]]->(or)->~[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
+     . "Sue does not eat or does not drink.")
+    ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [PROPOSITION: [GIRL]<-(agnt)<-[EAT]]->(and)->~[PROPOSITION: [BOY]<-(agnt)<-[DRINK]]]."
+     . "Ivan knows that a girl eats and a boy does not drink.")
     ("[PROPOSITION: [GIRL: Sue]<-(agnt)<-[EAT: @past]]->(and)->[PROPOSITION: [GIRL: Sue]<-(agnt)<-[DRINK]]."
      . "Sue ate and drinks.")
 

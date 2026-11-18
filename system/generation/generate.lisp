@@ -61,13 +61,29 @@
         (when (and chain (>= (length chain) 2))
           (values (first labels) chain))))))
 
-(defun active-conjunct-info (concept)
+(defun conjunct-graph (concept)
+  "The graph a conjunct asserts, and whether it is denied: (values graph
+   negated). A conjunct is denied when it is itself a negation,
+   ~[PROPOSITION: G]->(and)->..., or when what it holds is one,
+   [PROPOSITION: ~[G]]->(and)->...; both at once cancel."
+  (let* ((graph  (graph-referent concept))
+         (inner  (and (typep graph 'graph)
+                      (negated-context-concept (context-nodes graph))))
+         (graph  (if inner (graph-referent inner) graph)))
+    (values graph (not (eq (and (negated concept) t) (and inner t))))))
+
+(defun active-conjunct-info (concept &key unwrap-negation)
   "Inspect CONCEPT (a proposition referent in an AND/OR chain) and
    decide whether it would render as an active verbal clause. Returns
    (values main buckets head) when yes, NIL when the conjunct would
    dispatch to passive/copula/have/coord — in which case shared-subject
-   collapse is skipped and the caller falls back to per-clause rendering."
-  (let* ((g (and concept (graph-referent concept)))
+   collapse is skipped and the caller falls back to per-clause rendering.
+   UNWRAP-NEGATION looks through a denied conjunct to the clause it denies
+   (coordination says the 'not' itself); without it, a negation is not an
+   active clause, which is what raising needs."
+  (let* ((g (and concept (if unwrap-negation
+                             (conjunct-graph concept)
+                             (graph-referent concept))))
          (nodes (and g (graph-nodes g)))
          (head  (and (typep g 'graph) (head g)))
          (relations (and nodes (graph-relations-of nodes))))
@@ -91,7 +107,7 @@
    shape, or when the subjects don't agree."
   (let ((shared nil))
     (dolist (c concepts shared)
-      (multiple-value-bind (main buckets) (active-conjunct-info c)
+      (multiple-value-bind (main buckets) (active-conjunct-info c :unwrap-negation t)
         (cond ((null main) (return nil))
               (t (let ((subj (clause-subject-concept main buckets)))
                    (cond ((null subj) (return nil))
@@ -110,7 +126,7 @@
   ;; first conjunct's AGNT relation as an unrealized predication and
   ;; emits a relative clause ('Sue who eats eats and drinks').
   (dolist (c concepts)
-    (multiple-value-bind (main buckets) (active-conjunct-info c)
+    (multiple-value-bind (main buckets) (active-conjunct-info c :unwrap-negation t)
       (declare (ignore main))
       (when buckets
         (dolist (rel (gethash :subject buckets))
@@ -118,9 +134,11 @@
   (let* ((subj-np (realize-np shared-subj state :case :nominative))
          (vps (mapcar
                (lambda (c)
-                 (multiple-value-bind (main buckets) (active-conjunct-info c)
+                 (multiple-value-bind (main buckets) (active-conjunct-info c :unwrap-negation t)
                    (when main
-                     (let ((local-subj (clause-subject-concept main buckets)))
+                     (let ((local-subj (clause-subject-concept main buckets))
+                           (*negated-head* (and (nth-value 1 (conjunct-graph c))
+                                                main)))
                        (mark-clause-relations-traversed buckets state)
                        (realize-predicate-body main buckets state
                                                :subject-concept local-subj)))))
@@ -181,8 +199,8 @@
            (realize-shared-subject-coordination label concepts shared-subj state))
           (t
            (let ((clauses (mapcar (lambda (c)
-                                    (let ((g (graph-referent c)))
-                                      (and g (realize-nested-graph g state))))
+                                    (multiple-value-bind (g negated) (conjunct-graph c)
+                                      (and g (realize-conjunct g negated state))))
                                   concepts)))
              (cond ((some (lambda (s) (or (null s) (zerop (length s)))) clauses) "")
                    (t (join-with-conjunction clauses label))))))))
@@ -348,6 +366,12 @@
 (defun negated-p (concept)
   "True when CONCEPT's clause is the one being denied."
   (and concept (eq concept *negated-head*)))
+
+(defun realize-conjunct (graph negated state)
+  "One conjunct of a coordination as a full clause, denied when NEGATED."
+  (let* ((nodes (context-nodes graph))
+         (*negated-head* (and negated (clause-negation-target nodes))))
+    (realize-graph-clause nodes state (and (typep graph 'graph) (head graph)))))
 
 (defun realize-graph-clause (nodes state &optional head)
   "Render NODES as a single clause: AND/OR coordination, voice-annotated /
