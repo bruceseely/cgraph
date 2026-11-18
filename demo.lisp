@@ -34,6 +34,7 @@
                        "[CITY: Baltimore]←(dest)←[DRIVE]"
                        "[PERSON: Dave]→(attr)→[YOUNG]"))
 
+(initialize-context *context*)
 (add-cgraphs
  (combine-cgraphs (list "[PERSON: Dave]←(agnt)←[DRIVE]"
                         "[person: Sue]←(agnt)←[eat]→(obj)→[pie]"
@@ -48,10 +49,6 @@
  )
 
 (graphs *context*)
-(initialize-context *context*)
-
-
-
 (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" *context*)
 (query "[PERSON: *x]→(attr)->[ATTRIBUTE: *Y]" *context*)
 (query "[ANIMATE: *x]→(attr)->[ATTRIBUTE: *Y]" *context*)
@@ -106,8 +103,9 @@
   nil)
 
 
-(multiple-value-list (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" *context*))
-(say (caadr *))
+(say (caadr (multiple-value-list
+             (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" *context*))))
+
 
 
 
@@ -119,10 +117,21 @@
                             "[CITY: Baltimore]←(dest)<-[DRIVE]"
                             "[PERSON: Dave]→(attr)→[YOUNG]"
                             "[CHEVY-VEHICLE]→(attr)→[OLD]"))
-  (format t "~&before: (graphs *context*): ~s~%"  (graphs *context*))
+  (format t "~2&before consolidation:")
+  (dolist (graph (graphs *context*)) (print graph))
+
   (consolidate-cgraphs)
-  (format t "~&after: (graphs *context*): ~s~%"  (graphs *context*))
-  (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" *context*))
+
+  (format t "~2&after consolidation:")
+  (dolist (graph (graphs *context*)) (print graph))
+
+  (format t "~2&query: [PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]")
+  (multiple-value-setq (assignments text)
+      (query "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]" *context*))
+  (print (getf (car assignments) :bindings))
+  text)
+
+
 
 
 (progn
@@ -136,31 +145,27 @@
   (include-cgraph "[CHEVY-VEHICLE]→(attr)→[OLD]" kb)
   ;;(format t "~&(graphs kb): ~:a~%"  (graphs kb))
   (let* ((query-string "[PERSON: *x]←(agnt)←[DRIVE]→(dest)→[CITY: *Y]")
-         (q (query query-string kb)))
-    (format t "~%graph: ~a" (pcg (getf (car q) :graph)))
+         (q (query query-string kb))
+         (results (car q)))
+    (format t "~%graph: ~a" (pcg (getf results :graph)))
     (format t "~%query: ~a" query-string kb)
-    (format t "~%bindings: ~a" (getf (car q) :bindings))))
+    (format t "~%bindings: ~a" (getf results :bindings))))
 
 (progn
-(setq g1 (make-cgraph "[person: Bob]←(expr)←[desire]→(thme)→[cake]."))
-(setq g2 (make-cgraph "[person: Bob]←(agnt)←[eat]→(obj)->[cake]."))
-(setq g3  (make-cgraph "[person: Bob]←(expr)←[desire]→(goal)→[situation: [dog]←(agnt)←[eat]→(obj)->[cake] ]."))
-(setq g11 (make-cgraph "[person: Bob *x]←(expr)←[desire]→(goal)→[situation: [person: Bob ?x]←(agnt)←[eat]→(obj)->[cake] ]."))
-(setq g12 (make-cgraph "[person: Molly]←(expr)←[belief]→(stat)→[proposition: [person: Bob]←(expr)←[desire]→(thme)→[cake] ]."))
-(setq g13 (make-cgraph "[person: Molly]←(expr)←[belief]→(stat)→[proposition: [person: Bob *x]←(expr)←[desire]→(goal)→[situation: [person: Bob ?x]←(agnt)←[eat]→(obj)->[cake]]."))
-(setq g14 (make-cgraph "[PERSON: Molly *y]←(expr)←[belief]→(stat)→[proposition: [person: Bob *x]←(expr)←[desire]→(goal)→[situation: [person: Bob ?x]←(agnt)←[INFORM]- (rcpt)→[PERSON: Molly ?y] (inst)→[TELEPHONE] (obj)→[NEWS]"))
+  (initialize-context *context*)
+  (setq g1 (make-cgraph "[person: Bob]←(expr)←[desire]→(thme)→[cake]."))
+  (setq g2 (make-cgraph "[person: Bob]←(agnt)←[eat]→(obj)->[cake]."))
+  (setq g3  (make-cgraph "[person: Bob]←(expr)←[desire]→(goal)→[situation: [dog]←(agnt)←[eat]→(obj)->[cake] ]."))
+  (setq g11 (make-cgraph "[person: Bob *x]←(expr)←[desire]→(goal)→[situation: [person: Bob ?x]←(agnt)←[eat]→(obj)->[cake] ]."))
+  (setq g12 (make-cgraph "[person: Molly]←(expr)←[belief]→(stat)→[proposition: [person: Bob]←(expr)←[desire]→(thme)→[cake] ]."))
+  (setq g13 (make-cgraph "[person: Molly]←(expr)←[belief]→(stat)→[proposition: [person: Bob *x]←(expr)←[desire]→(goal)→[situation: [person: Bob ?x]←(agnt)←[eat]→(obj)->[cake]]]."))
+  (setq g14 (make-cgraph "[PERSON: Molly *y]←(expr)←[belief]→(stat)→[proposition: [person: Bob *x]←(expr)←[desire]→(goal)→[situation: [person: Bob ?x]←(agnt)←[INFORM]- (rcpt)→[PERSON: Molly ?y] (inst)→[TELEPHONE] (obj)→[NEWS]]]"))
+  (setq g15 (make-cgraph "[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: dave *x]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: dave *x]. "))
+  (setq query "[person: *x]←(expr)←[belief]→(stat)→[proposition: [person: *y]←(expr)←[desire]→(goal)→[situation: *z]]")
+ ;;(graphs *context*)
 
-
-(setq g15 (make-cgraph "[CHEVY-VEHICLE]-
-           (attr)→[OLD]
-           (inst)←[DRIVE]-
-                      (agnt)→[PERSON: dave *x]→(attr)→[YOUNG]
-                      (dest)→[CITY: Baltimore],
-           (poss)←[PERSON: dave *x]. ")))
-
-
-(query "[person: *x]←(expr)←[belief]→(stat)→[proposition: [person: *y]←(expr)←[desire]→(goal)→[situation: *z]]" *context* )
-
+(query query *context* )
+)
 
 
 (let ((graph (make-cgraph "[PERSON: Sue]-
@@ -178,6 +183,10 @@
   (graph-to-text graph))
 
 
+
+
+
+
 (let ((graph (make-cgraph "[CHEVY-VEHICLE]-
            (attr)→[OLD]
            (inst)←[DRIVE]-
@@ -186,6 +195,11 @@
            (poss)←[PERSON: dave *x]. ")))
   (print graph)
   (graph-to-text graph))
+
+
+
+
+
 
 
 (progn
@@ -278,3 +292,18 @@
 (let ((g (make-cgraph "[PERSON: Molly *y]←(expr)←[belief]→(stat)→[proposition: [person: Bob *x]←(expr)←[desire]→(goal)→[situation: [person: Bob ?x]←(agnt)←[INFORM]- (rcpt)→[PERSON: Molly ?y] (inst)→[TELEPHONE] (obj)→[NEWS]")))
   (format t "~%~a" (pcg g))
   (graph-to-text g))
+
+
+(graph-to-text (make-cgraph "[person: Molly]←(expr)←[belief]→(stat)→[proposition: ~[[person:
+  Bob]←(expr)←[desire]→(thme)→[cake]] ]."))
+
+
+
+CG> (graph-to-text (make-cgraph "[person: Molly]←(expr)←[belief]→(stat)→[proposition: ~[[person:
+  Bob]←(expr)←[desire]→(thme)→[cake]] ]."))
+"Molly believes that
+  Bob does not desire a cake."
+CG> (graph-to-text (make-cgraph "[person: Molly]←(expr)←[belief]→(stat)→[proposition: [cake: *c] ~[[person:
+  Bob]←(expr)←[desire]→(thme)→[cake: ?c]] ]."))
+"Molly believes that a cake."
+CG>
