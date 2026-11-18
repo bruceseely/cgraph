@@ -273,6 +273,14 @@
      . "Ivan knows that a girl does not eat a pie.")
     ("~[[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
      . "Ivan does not know that a girl eats a pie.")
+    ;; A denied graph that says nothing of its concept denies it exists.
+    ("~[[CAKE]]."                       . "There is no cake.")
+    ("~[[CAKE: {*}]]."                  . "There are no cakes.")
+    ("~[[DOG: {*}@3]]."                 . "There are not three dogs.")
+    ("~[[GIRL: Sue]]."                  . "Sue does not exist.")
+    ("~[[CAKE: #]]."                    . "The cake does not exist.")
+    ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: ~[[CAKE]]]."
+     . "Ivan knows that there is no cake.")
     ;; A concept beside a negation that the negation refers back to: the
     ;; negation is a relative clause on it, the coreferent its gap.
     ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [CAKE: *c] ~[[GIRL]<-(agnt)<-[EAT]->(obj)->[CAKE: ?c]]]."

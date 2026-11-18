@@ -365,9 +365,36 @@
                          complements)))))))
     (nreverse complements)))
 
+(defun deniable-by-no-p (concept)
+  "True when CONCEPT's denial is `there is no X': an indefinite, an existential
+   or a bare plural. A name or a definite is denied by saying it does not
+   exist -- `there is no Bob' and `there is no the cake' are not English."
+  (member (concept-definiteness concept) '(:indefinite :existential)))
+
+(defun realize-existence-denial (topic state)
+  "~[[CAKE]]: 'there is no cake', 'there are no cakes'; for a name or a
+   definite, 'Bob does not exist'."
+  (mark-uttered state topic)
+  (let ((plural (eq (concept-number topic) :plural)))
+    (cond
+      ;; A count is denied, not replaced: "there are not three dogs" -- `no'
+      ;; would drop the three and deny there are any.
+      ((and (deniable-by-no-p topic) (concept-count-word topic))
+       (format nil "there ~:[is~;are~] not ~a" plural (realize-full-np topic state)))
+      ((deniable-by-no-p topic)
+        (let ((*denied-concept* topic))
+          (format nil "there ~:[is~;are~] ~a" plural (realize-full-np topic state))))
+      (t
+       (format nil "~a ~:[does~;do~] not exist" (realize-full-np topic state) plural)))))
+
 (defun realize-copula-clause (topic state)
   "Render a verbless graph as TOPIC + 'is/are' + complements.
-   Used when the graph has no subject-introducing relation (Phase 6)."
+   Used when the graph has no subject-introducing relation (Phase 6).
+   Denied with nothing said of it, it is a denial of existence."
+  (when (and (negated-p topic)
+             (notany (lambda (rel) (member (relation-role rel) '(:adj :pp)))
+                     (concept-relations topic)))
+    (return-from realize-copula-clause (realize-existence-denial topic state)))
   (let ((copula (lambda (topic-np)
                   ;; Singular `they' -- a person of unknown gender said again --
                   ;; takes `are' like the plural: "they are blithe".

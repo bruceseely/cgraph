@@ -34,6 +34,10 @@
   "The concept whose verb (or copula, or 'have') carries 'not' in the clause
    being realized. Bound by REALIZE-GRAPH-CLAUSE for a negated context.")
 
+(defvar *denied-concept* nil
+  "A concept whose existence is denied: its noun phrase takes `no' for its
+   article -- `there is no cake'. Bound by REALIZE-COPULA-CLAUSE.")
+
 (defvar *gap-text* ""
   "What *GAP-CONCEPT* is spoken as: nothing in a relative clause, or a name
    when the anchor is a named individual and no relative clause is needed.")
