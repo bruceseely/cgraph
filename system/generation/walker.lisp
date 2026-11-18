@@ -18,6 +18,19 @@
   ;; ones competing for it, and "most recent" needs an order to be a fact.
   (clock 0))
 
+(defvar *negated-head* nil
+  "The concept whose verb (or copula, or 'have') carries 'not' in the clause
+   being realized. Bound by REALIZE-GRAPH-CLAUSE for a negated context.")
+
+(defvar *gap-text* ""
+  "What *GAP-CONCEPT* is spoken as: nothing in a relative clause, or a name
+   when the anchor is a named individual and no relative clause is needed.")
+
+(defvar *gap-concept* nil
+  "The concept a relative clause is about, rendered as nothing in that clause:
+   the cake in 'a cake that Bob does not desire'. Bound by
+   REALIZE-NEGATED-EXISTENTIAL; REALIZE-NP answers it with the empty string.")
+
 (defun mark-uttered (state concept)
   "Record that CONCEPT has been uttered, and when.
 
@@ -42,6 +55,15 @@
         ((typep graph 'graph) (nodes graph))
         ((listp graph) graph)
         (t (error "graph-nodes: unrecognized argument ~s" graph))))
+
+(defun context-nodes (graph)
+  "GRAPH's nodes and, after them, the concepts holding the contexts that stand
+   beside it unconnected -- the ~[...] of [CAKE: *c] ~[... [CAKE: ?c]] or of an
+   if-then. The parser keeps those out of the graph's node list (GRAPH-SIDE-
+   CONTEXTS), so a generator reading only NODES never sees them."
+  (if (typep graph 'graph)
+      (append (nodes graph) (graph-side-contexts graph))
+      (graph-nodes graph)))
 
 (defun graph-relations-of (nodes)
   (remove-if-not #'relation-p nodes))

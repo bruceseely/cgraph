@@ -70,7 +70,7 @@
    Dispatches through realize-graph-clause so '@passive', AND/OR
    coordination, have-clauses, etc. all fire inside the nesting."
   (let ((head (and (typep inner-graph 'graph) (head inner-graph))))
-    (realize-graph-clause (graph-nodes inner-graph) state head)))
+    (realize-graph-clause (context-nodes inner-graph) state head)))
 
 (defun realize-nested-infinitive (inner-graph state)
   "Render an embedded SITUATION as a 'to <verb> ...' infinitive, dropping its

@@ -23,7 +23,8 @@
                                :tense  (resolve-tense predicate)
                                :aspect (or (concept-aspect predicate) :simple)
                                :voice  :active
-                               :person person :numbr numbr)))
+                               :person person :numbr numbr
+                               :negated (negated-p predicate))))
     (list verb)))
 
 (defun dobj-bucket-relation (buckets label)
@@ -233,7 +234,11 @@
                (every (lambda (rel) (definite-dimension-p (outarc rel))) possessions))
       (return-from realize-have-clause
         (realize-dimension-possessive possessor possessions state))))
-  (let ((have-form (if (eq (concept-number possessor) :plural) "have" "has"))
+  (let ((have-form (cond ((negated-p possessor)
+                          (if (eq (concept-number possessor) :plural)
+                              "do not have" "does not have"))
+                         ((eq (concept-number possessor) :plural) "have")
+                         (t "has")))
         ;; Before marking, as in REALIZE-COPULA-CLAUSE and for the same reason.
         ;; This was the third and last clause path that rendered its subject
         ;; with REALIZE-FULL-NP and so never asked whether it was a revisit.
@@ -260,7 +265,8 @@
          (verb     (inflect-verb (base-lemma predicate)
                                  :tense  (resolve-tense predicate)
                                  :aspect (or (concept-aspect predicate) :simple)
-                                 :voice  :passive :numbr number))
+                                 :voice  :passive :numbr number
+                                 :negated (negated-p predicate)))
          (particle (lexicon-prop (concept-type predicate) :particle)))
     (if particle (list verb particle) (list verb))))
 
@@ -362,7 +368,13 @@
 (defun realize-copula-clause (topic state)
   "Render a verbless graph as TOPIC + 'is/are' + complements.
    Used when the graph has no subject-introducing relation (Phase 6)."
-  (let ((copula (if (eq (concept-number topic) :plural) "are" "is"))
+  (let ((copula (lambda (topic-np)
+                  ;; Singular `they' -- a person of unknown gender said again --
+                  ;; takes `are' like the plural: "they are blithe".
+                  (format nil "~:[is~;are~]~:[~; not~]"
+                          (or (eq (concept-number topic) :plural)
+                              (string-equal topic-np "they"))
+                          (negated-p topic))))
         ;; Asked BEFORE marking, since marking is what makes it false. Within
         ;; one graph the topic of a copular clause is always its first mention,
         ;; so this was moot; across a decomposition it is not -- the pieces
@@ -389,7 +401,7 @@
            (complements (realize-copula-complements topic state)))
       (cond ((null complements) topic-np)
             (t (format nil "~a ~a ~{~a~^ and ~}"
-                       topic-np copula complements))))))
+                       topic-np (funcall copula topic-np) complements))))))
 
 (defun clause-level-pp-on-p (rel concept)
   "True if REL is a :pp adjunct on CONCEPT that should be emitted at clause

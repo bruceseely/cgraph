@@ -4,8 +4,14 @@
 (in-package #:conceptual-graphs)
 
 
+(defparameter *whitespace-chars* '(#\space #\tab #\return #\newline)
+  "What the reader counts as whitespace. Names and set members are trimmed of
+   all of it, not just spaces: a graph typed across lines, [PERSON:<newline>
+   Bob], otherwise names a person \"<newline>  Bob\", and the line break turns
+   up in the middle of a generated sentence.")
+
 (defmethod whitespace-char-p ((char character))
-  (find char '(#\space #\tab #\return #\newline) :test #'char=))
+  (find char *whitespace-chars* :test #'char=))
 
 
 
@@ -162,7 +168,7 @@
                (read stream nil nil))
               (t
                ;; preserve case info for mame
-               (let ((text (string-trim " " (read-string stream :end-chars end-chars :skip skip))))
+               (let ((text (string-trim *whitespace-chars* (read-string stream :end-chars end-chars :skip skip))))
                  (when (plusp (length text))
                    (list :name text)))))))))
 
@@ -327,7 +333,7 @@
     (consume-whitespace stream)
     ;; set-text does not include the #\{ and #\} characters
     (let* ((set-text (read-string stream :end-chars '(#\})))
-           (trimmed  (string-trim " " set-text)))
+           (trimmed  (string-trim *whitespace-chars* set-text)))
 
       (with-input-from-string (stream trimmed)
         (block nil
@@ -346,7 +352,11 @@
                    (starred (and pchar (char= pchar #\*)))
                    (feature (read-term stream :end-chars terms)))
               (skip-char stream #\,)
-              (consume-whitespace stream)
+              ;; Across lines: a set is closed by its brace, so a member on
+              ;; the next line, {Spot,<newline>  Fido}, is still a member.
+              ;; Stopping at the newline left "<newline>  Fido" to READ-TERM,
+              ;; which read nothing, and the loop ended with Fido unread.
+              (consume-whitespace stream t)
               (cond ((and feature (not (equal feature "")))
                      (push feature set-contents))
                     (starred
@@ -411,7 +421,7 @@
                 (make-individual concept-type props)))))))
     ;; Handle string directly
     ((stringp member-spec)
-     (let ((trimmed (string-trim " " member-spec)))
+     (let ((trimmed (string-trim *whitespace-chars* member-spec)))
        (cond
          ;; Generic marker - return nil to indicate unspecified member
          ((or (string= trimmed "*") (string= trimmed ""))
@@ -439,7 +449,7 @@
   (let ((members (list))
         (generic nil))
     (flet ((marker (spec text)
-             (and (stringp spec) (string= (string-trim " " spec) text))))
+             (and (stringp spec) (string= (string-trim *whitespace-chars* spec) text))))
       (dolist (spec member-specs)
         (cond ((marker spec "*") (setf generic t))   ; unnamed members besides
               ((marker spec "")  nil)                ; `{}' -- a set, no members

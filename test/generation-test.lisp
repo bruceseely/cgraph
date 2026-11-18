@@ -242,6 +242,50 @@
     ;; concept holds an inner graph that becomes a 'that' clause.
     ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]."
      . "Ivan knows that a girl eats a pie.")
+    ;; Negation: a bare ~[...] is its inner clause, denied on that clause's
+    ;; own verb -- do-support for a simple verb, 'not' after the first
+    ;; auxiliary otherwise. Inside a proposition only the inner clause is
+    ;; denied; around the whole graph only the outer verb is.
+    ("~[[GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]."              . "A girl does not eat a pie.")
+    ("~[[GIRL]<-(agnt)<-[EAT: @past]->(obj)->[PIE]]."       . "A girl did not eat a pie.")
+    ("~[[GIRL]<-(agnt)<-[EAT: @future]->(obj)->[PIE]]."     . "A girl will not eat a pie.")
+    ("~[[GIRL]<-(agnt)<-[EAT: @perfect]->(obj)->[PIE]]."    . "A girl has not eaten a pie.")
+    ("~[[DOG: {*}@every]<-(agnt)<-[BARK: @progressive]]."   . "All dogs are not barking.")
+    ("~[[PIE]<-(obj)<-[EAT: @past]]."                       . "A pie was not eaten.")
+    ("~[[PERSON: Tom]->(poss)->[CAT]]."                     . "Tom does not have a cat.")
+    ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: ~[[GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
+     . "Ivan knows that a girl does not eat a pie.")
+    ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: ~[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
+     . "Ivan knows that a girl does not eat a pie.")
+    ("~[[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
+     . "Ivan does not know that a girl eats a pie.")
+    ;; A concept beside a negation that the negation refers back to: the
+    ;; negation is a relative clause on it, the coreferent its gap.
+    ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [CAKE: *c] ~[[GIRL]<-(agnt)<-[EAT]->(obj)->[CAKE: ?c]]]."
+     . "Ivan believes that there is a cake that a girl does not eat.")
+    ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [GIRL: *g] ~[[GIRL: ?g]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
+     . "Ivan believes that there is a girl who does not eat a pie.")
+    ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [CAKE: *c]->(attr)->[OLD] ~[[GIRL]<-(agnt)<-[EAT]->(obj)->[CAKE: ?c]]]."
+     . "Ivan believes that there is an old cake that a girl does not eat.")
+    ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [CAKE: *c] ~[[CAKE: ?c]->(attr)->[OLD]]]."
+     . "Ivan believes that there is a cake that is not old.")
+    ;; ... unless it is named, when it needs no introducing.
+    ("[PERSON: ivan]<-(expr)<-[BELIEF]->(stat)->[PROPOSITION: [PERSON: Tom *t] ~[[PERSON: ?t]->(poss)->[CAT]]]."
+     . "Ivan believes that Tom does not have a cat.")
+    ;; If/Then ~[A ~[B]] and Either/Or ~[~[A] ~[B]].
+    ("~[[DOG: *x]<-(agnt)<-[BARK] ~[[DOG: ?x]->(attr)->[NOISY]]]."
+     . "If a dog barks, then the dog is noisy.")   ; not `it': [BARK] competes
+    ("~[[PERSON: *x]<-(agnt)<-[EAT]->(obj)->[PIE] ~[[PERSON: ?x]->(attr)->[OLD]]]."
+     . "If a person eats a pie, then they are old.")
+    ("~[PROPOSITION: ~[PROPOSITION: [DOG]<-(agnt)<-[BARK]] ~[PROPOSITION: [GIRL]<-(agnt)<-[EAT]]]."
+     . "Either a dog barks or a girl eats.")
+    ;; A graph typed across lines: the line break is not part of a name or a
+    ;; set member.
+    ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: ~[[PERSON:
+  Tom]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
+     . "Ivan knows that Tom does not eat a pie.")
+    ("[dog: {Spot,
+  Fido}]"                                                   . "The dogs Spot and Fido.")
     ;; Sowa Rule 4 second half — raising. A cognitive verb with :raising
     ;; in the lexicon and a clausal :dobj, used without an EXPR/AGNT,
     ;; lifts the inner clause's subject to the outer surface and renders

@@ -36,6 +36,10 @@
    (adjectives, possessive, determiner, possibly trailing relative clauses).
    On revisits (Sowa Rule 5), emit the pronoun in the given grammatical CASE."
   (cond
+        ;; The gap of a relative clause: 'a cake that Bob does not desire __'.
+        ((and *gap-concept* (eq concept *gap-concept*))
+         (mark-uttered state concept)
+         *gap-text*)
         ;; An INDEXICAL pronoun ([PERSON: She]) is already a noun phrase, and
         ;; the only one whose form depends on CASE. It needs no article, no
         ;; modifiers and no first-mention/revisit distinction -- a pronoun is
@@ -234,6 +238,10 @@
         (t (article-for concept (or (first mods-pre) head)))))
 
 (defun realize-full-np (concept state)
+  ;; The copula and have-clause paths build their subject here directly, so the
+  ;; relative-clause gap is answered here as well as in REALIZE-NP.
+  (when (and *gap-concept* (eq concept *gap-concept*))
+    (return-from realize-full-np *gap-text*))
   (let ((named-set (realize-named-set-np concept)))
     (when named-set
       (return-from realize-full-np named-set)))

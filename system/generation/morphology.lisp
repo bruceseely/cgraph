@@ -154,14 +154,35 @@
     (:perfect              (past-participle    vlemma))
     (:perfect-progressive  (present-participle vlemma))))
 
+(defun do-aux-for (tense person numbr)
+  "'does'/'do'/'did' -- the auxiliary a simple active verb takes to be denied."
+  (ecase tense
+    (:present (if (and (eql person 3) (eq numbr :singular)) "does" "do"))
+    (:past    "did")))
+
+(defun insert-not (aux)
+  "AUX with 'not' after its first word: 'will have been' -> 'will not have been'."
+  (let ((space (position #\Space aux)))
+    (if space
+        (format nil "~a not~a" (subseq aux 0 space) (subseq aux space))
+        (format nil "~a not" aux))))
+
 (defun inflect-verb (vlemma &key (tense :present) (aspect :simple)
-                                 (voice :active) (person 3) (numbr :singular))
+                                 (voice :active) (person 3) (numbr :singular)
+                                 negated)
   "Render the verb phrase for the given grammatical features. Supports
    :present/:past/:future tenses and :simple/:progressive/:perfect/
    :perfect-progressive aspects in both :active and :passive voice.
    Named INFLECT-VERB rather than CONJUGATE because cl:conjugate is a
    built-in function (complex-conjugate) whose ftype declaration would
-   collide and type-check our first argument as a NUMBER."
+   collide and type-check our first argument as a NUMBER.
+
+   NEGATED puts 'not' after the first auxiliary ('has not eaten', 'is not
+   eaten', 'will not eat'), and a form with no auxiliary takes do-support:
+   'does not eat', 'did not eat'."
+  (when (and negated (eq voice :active) (eq aspect :simple) (not (eq tense :future)))
+    (return-from inflect-verb
+      (format nil "~a not ~a" (do-aux-for tense person numbr) vlemma)))
   (let* ((aux  (ecase voice
                  (:active  (active-aux-chain  tense aspect numbr))
                  (:passive (passive-aux-chain tense aspect numbr))))
@@ -169,7 +190,7 @@
                  (:active  (active-main-form vlemma tense aspect numbr person))
                  (:passive (past-participle  vlemma)))))
     (cond ((and aux (plusp (length aux)))
-           (format nil "~a ~a" aux main))
+           (format nil "~a ~a" (if negated (insert-not aux) aux) main))
           (t main))))
 
 ;;; --- Articles / determiners -------------------------------------------------
