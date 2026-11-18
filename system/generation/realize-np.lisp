@@ -35,6 +35,7 @@
   "Emit a noun phrase for CONCEPT. On the first visit, build the full NP
    (adjectives, possessive, determiner, possibly trailing relative clauses).
    On revisits (Sowa Rule 5), emit the pronoun in the given grammatical CASE."
+  (mark-nominal state concept)
   (cond
         ;; The gap of a relative clause: 'a cake that Bob does not desire __'.
         ((and *gap-concept* (eq concept *gap-concept*))
@@ -242,6 +243,7 @@
   ;; relative-clause gap is answered here as well as in REALIZE-NP.
   (when (and *gap-concept* (eq concept *gap-concept*))
     (return-from realize-full-np *gap-text*))
+  (mark-nominal state concept)
   (let ((named-set (realize-named-set-np concept)))
     (when named-set
       (return-from realize-full-np named-set)))

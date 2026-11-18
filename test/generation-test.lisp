@@ -274,7 +274,7 @@
      . "Ivan believes that Tom does not have a cat.")
     ;; If/Then ~[A ~[B]] and Either/Or ~[~[A] ~[B]].
     ("~[[DOG: *x]<-(agnt)<-[BARK] ~[[DOG: ?x]->(attr)->[NOISY]]]."
-     . "If a dog barks, then the dog is noisy.")   ; not `it': [BARK] competes
+     . "If a dog barks, then it is noisy.")
     ("~[[PERSON: *x]<-(agnt)<-[EAT]->(obj)->[PIE] ~[[PERSON: ?x]->(attr)->[OLD]]]."
      . "If a person eats a pie, then they are old.")
     ("~[PROPOSITION: ~[PROPOSITION: [DOG]<-(agnt)<-[BARK]] ~[PROPOSITION: [GIRL]<-(agnt)<-[EAT]]]."

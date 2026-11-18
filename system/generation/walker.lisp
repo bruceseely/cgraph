@@ -16,7 +16,19 @@
   ;; Ticks once per thing uttered, so UTTERED can record WHEN as well as
   ;; whether. A pronoun is only safe if its referent is the most recent of the
   ;; ones competing for it, and "most recent" needs an order to be a fact.
-  (clock 0))
+  (clock 0)
+  ;; The concepts said as noun phrases -- the only ones a pronoun can be heard
+  ;; as meaning. A concept said as a verb ([BARK] in "if a dog barks") is
+  ;; uttered, but no reader takes a later `it' to be the barking.
+  (nominal (make-hash-table :test 'eq)))
+
+(defun mark-nominal (state concept)
+  "Record that CONCEPT was said as a noun phrase."
+  (setf (gethash concept (walk-state-nominal state)) t))
+
+(defun nominal-p (state concept)
+  "True when CONCEPT has been said as a noun phrase."
+  (gethash concept (walk-state-nominal state)))
 
 (defvar *negated-head* nil
   "The concept whose verb (or copula, or 'have') carries 'not' in the clause

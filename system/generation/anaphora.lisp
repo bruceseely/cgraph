@@ -168,6 +168,10 @@
    nearest antecedent is the one a reader reaches for, so the most recent
    mention wins the pronoun and everything else must be named.
 
+   Only a referent said as a noun phrase competes. A verb's concept is
+   uttered too, and pronoun-for would call an event `it', but nobody hears
+   `if a dog barks, then it is noisy' as the barking being noisy.
+
    Deliberately not modelled: syntactic prominence (a subject outranks an
    object at equal distance), and decay (an antecedent long enough ago is gone
    whether or not anything competes). Both are real, and neither is needed to
@@ -177,7 +181,8 @@
     (and mine
          my-tick
          (notany (lambda (other)
-                   (and (not (or (eq other concept)
+                   (and (nominal-p state other)
+                        (not (or (eq other concept)
                                  (same-individual-p other concept)))
                         (let ((theirs (pronoun-for other :case case :state state)))
                           (and theirs
