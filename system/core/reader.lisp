@@ -790,6 +790,7 @@ Use ?~a for cross-context co-reference instead."
   (with-readtable-mods (list (list #\: #'referent-reader)
                              (list #\] #'concept-ender))
     (let ((concept nil)
+          (type-label nil)
           (*referent-contents* (list))
           (*graph-referent-closed* nil))
       (consume-whitespace stream)
@@ -800,8 +801,9 @@ Use ?~a for cross-context co-reference instead."
           ((and peek-next (char-equal peek-next #\[))
            (setf concept (read-graph-referent-concept stream 'proposition)))
           (t
-           (multiple-value-bind (type-label next-char)
+           (multiple-value-bind (label next-char)
                (read-concept-type-label stream)
+             (setf type-label label)
              (cond ((null next-char)
                     (parse-failure nil "the concept [~a has no closing ]" type-label))
                    ((char-equal next-char #\])
@@ -822,6 +824,7 @@ Use ?~a for cross-context co-reference instead."
         (parse-failure nil "~:[a concept~;the concept ~:*~a~] has no closing ]" concept))
       (when (and concept *negated-concept*)
         (setf (negated concept) t))
+      (note-concept-type-spelling concept type-label)
       concept)))
 
 

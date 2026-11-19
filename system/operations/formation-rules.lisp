@@ -13,9 +13,11 @@
 (defun copy-concept (concept)
   "Copy Rule: Create an identical copy of a concept.
    The copy has the same type and referent but is a distinct object."
-  (make-concept (concept-type concept)
-                (referent concept)
-                :context (context concept)))
+  (let ((copy (make-concept (concept-type concept)
+                            (referent concept)
+                            :context (context concept))))
+    (setf (concept-type-spelling copy) (concept-type-spelling concept))
+    copy))
 
 ;; (defun copy-relation (relation)
 ;;   "Copy Rule: Create an identical copy of a relation.

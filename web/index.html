@@ -164,6 +164,7 @@
     #nt-fields > * { min-width: 0; }                       /* let cells shrink to fit */
     #nt-sep { align-self: flex-start; margin: 0.12rem 0.15rem 0 0; } /* ⊑ leads the supertypes, not its own cell */
     #nt-label     { width: 9rem; flex-shrink: 0; }
+    #nt-aliases   { width: 8rem; flex-shrink: 0; }
     /* the #new-type-form prefix outranks `#new-type-form textarea { font-family: inherit }`,
        so the canonical graph actually renders monospace (columns line up; JS width
        measurement is reliable) */
@@ -682,6 +683,10 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* CAR -> AUTOMOBILE: the alias is the row's name, the type it names
+       follows it, quieter. */
+    .type-item-alias-of { color: #999; font-size: 0.9em; }
+    .type-item.selected .type-item-alias-of { color: inherit; opacity: 0.75; }
     /* Shows the type's canonical graph without disturbing the lattice. Negative
        margins pull it to the row's edges so the whole right end of the row is
        the target: aiming should not be the cost of using it. */
@@ -903,6 +908,10 @@
   <div id="new-type-form" hidden>
     <div id="nt-fields">
       <input id="nt-label" type="text" placeholder="new type name" autocomplete="off" spellcheck="false">
+      <!-- Other names for the same type: CAR for AUTOMOBILE. Not types of their
+           own -- each is drawn inside this type's box and selects this type. -->
+      <input id="nt-aliases" type="text" placeholder="also called (optional)" autocomplete="off" spellcheck="false"
+             title="Other names for this same type, separated by spaces or commas. Each one can be used anywhere the type's name can.">
       <div id="nt-supers" title="click a chip to remove it; click + then a type to add one">
         <span id="nt-sep" title="subtype of">⊑</span>
         <span id="nt-supers-empty">click + then a type</span>

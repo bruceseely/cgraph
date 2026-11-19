@@ -89,22 +89,18 @@
           "Bad request: no types specified")
         ;; Build name list as symbols (get-concept-type already resolved them,
         ;; but generate-concept-type-digraph wants symbols).
-        (let ((name-list (mapcar #'(lambda (tok)
-                                     (intern (string-upcase tok) :cg))
-                                 tokens))
-              ;; Expansion lists: intern each token and silently skip unknown types.
-              (expand-sub-names
-               (loop for tok in (split-type-string (or expand_sub ""))
-                     for sym = (intern (string-upcase tok) :cg)
-                     when (get-concept-type sym) collect sym))
-              (expand-super-names
-               (loop for tok in (split-type-string (or expand_super ""))
-                     for sym = (intern (string-upcase tok) :cg)
-                     when (get-concept-type sym) collect sym))
-              (reveal-names
-               (loop for tok in (split-type-string (or reveal ""))
-                     for sym = (intern (string-upcase tok) :cg)
-                     when (get-concept-type sym) collect sym)))
+        ;; Every name goes through its type's own label, so an alias (CAR)
+        ;; arrives as the type it names (AUTOMOBILE) and is drawn as that one
+        ;; node, never as a second box.
+        (flet ((real-labels (string)
+                 (loop for tok in (split-type-string (or string ""))
+                       for ct = (ignore-errors (get-concept-type (intern (string-upcase tok) :cg)))
+                       when ct collect (label ct))))
+        (let ((name-list (mapcar #'label validated))
+              ;; Expansion lists: silently skip unknown types.
+              (expand-sub-names (real-labels expand_sub))
+              (expand-super-names (real-labels expand_super))
+              (reveal-names (real-labels reveal)))
           (with-output-to-string (s)
             (generate-concept-type-digraph :type-name-list name-list
                                            :stream s
@@ -113,7 +109,7 @@
                                            :hide-bottom t
                                            :expand-sub expand-sub-names
                                            :expand-super expand-super-names
-                                           :reveal reveal-names))))))
+                                           :reveal reveal-names)))))))
 
 ;;; POST /api/initialize — reinitialize the concept-type system and reload types.
 (hunchentoot:define-easy-handler (handle-api-initialize :uri "/api/initialize") ()
@@ -237,26 +233,48 @@
 ;;; superset asked for by the one caller that wants it. Either way this is ONE
 ;;; request for the whole catalog — the state is computed here, beside the type
 ;;; objects, rather than by asking the server once per row or once per hover.
-(defun concept-type-cg-json (ctype name)
+(defun concept-type-cg-json (ctype name &optional alias-p)
+  "One sidebar row. NAME is the type's label, or -- with ALIAS-P -- one of its
+   aliases, in which case the row also says which type it names (alias_of):
+   the browser selects that type when the row is clicked. A real type's row
+   lists its aliases, so filtering on one finds the type too."
   (multiple-value-bind (state ancestors) (concept-type-cg-state ctype)
-    (format nil "{\"name\":\"~a\",\"cg\":\"~a\",\"cg_from\":~a}"
+    (format nil "{\"name\":\"~a\",\"cg\":\"~a\",\"cg_from\":~a~
+                 ~:[,\"aliases\":~a~;~*,\"alias_of\":\"~a\"~]}"
             (json-escape name)
             (string-downcase (symbol-name state))
             (json-string-array
              (mapcar (lambda (a) (string-downcase (symbol-name (label a))))
-                     ancestors)))))
+                     ancestors))
+            alias-p
+            (json-string-array
+             (mapcar (lambda (a) (string-downcase (symbol-name a)))
+                     (concept-type-aliases ctype)))
+            (json-escape (string-downcase (symbol-name (label ctype)))))))
 
 (hunchentoot:define-easy-handler (handle-api-types :uri "/api/types") (detail)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (let ((rows (loop for k being the hash-keys of *concept-type-catalog*
                     using (hash-value v)
                     unless (bottom-concept-type-p v)
-                    collect (cons (string-downcase (symbol-name k)) v))))
-    (setf rows (sort rows #'string< :key #'car))
+                    collect (list (string-downcase (symbol-name k)) v nil))))
     (if (and detail (plusp (length detail)) (not (string= detail "0")))
-        (format nil "[~{~a~^,~}]"
-                (mapcar (lambda (row) (concept-type-cg-json (cdr row) (car row))) rows))
-        (json-string-array (mapcar #'car rows)))))
+        ;; Aliases get rows of their own, in alphabetical place, so CAR can be
+        ;; found under C without knowing it is spelled AUTOMOBILE.
+        (progn
+          (maphash (lambda (alias target)
+                     (let ((ctype (gethash target *concept-type-catalog*)))
+                       (when ctype
+                         (push (list (string-downcase (symbol-name alias)) ctype t) rows))))
+                   *concept-type-aliases*)
+          (setf rows (sort rows #'string< :key #'first))
+          (format nil "[~{~a~^,~}]"
+                  (mapcar (lambda (row) (destructuring-bind (name ctype alias-p) row
+                                          (concept-type-cg-json ctype name alias-p)))
+                          rows)))
+        ;; The names-only form stays the list of real types: its callers want
+        ;; types, and an alias is not one.
+        (json-string-array (mapcar #'first (sort rows #'string< :key #'first))))))
 
 ;;; GET /api/check-type?label=...&supertypes=a,b — advice about a type that
 ;;; does not exist yet. Called as the New Type form is filled in, because the
@@ -395,22 +413,29 @@ under the standard readtable/:cg package so the CG readtable can't skew the plis
             thereis (let ((l (and (consp def) (getf def :label))))
                       (and l (string-equal (string l) (string label))))))))
 
-(defun concept-type-def-string (label supertypes canonical note)
+(defun concept-type-def-string (label supertypes canonical note &optional aliases)
   "The one-line (:label ...) source form (no trailing newline). LABEL/SUPERTYPES are
-lowercased to match the file's style; CANONICAL and NOTE appear only when non-empty
-(:note is a comment key the loader tolerates via &allow-other-keys and keeps in file)."
+lowercased to match the file's style; ALIASES, CANONICAL and NOTE appear only when
+non-empty (:note is a comment key the loader tolerates via &allow-other-keys and keeps
+in file)."
   (format nil "(:label ~(~a~) :supertypes (~{~(~a~)~^ ~})~
-               ~@[ :canonical-graph ~s~]~@[ :note ~s~])"
+               ~@[ :aliases (~{~(~a~)~^ ~})~]~@[ :canonical-graph ~s~]~@[ :note ~s~])"
           (string label)
           (mapcar #'string supertypes)
+          (and aliases (mapcar #'string aliases))
           (and canonical (plusp (length canonical)) canonical)
           (and note (plusp (length note)) note)))
 
-(defun append-concept-type-def (label supertypes canonical note file)
+(defun alias-tokens (string)
+  "The aliases typed into the editor, as :CG label symbols."
+  (mapcar (lambda (tok) (intern (string-upcase tok) :cg))
+          (split-type-string (or string ""))))
+
+(defun append-concept-type-def (label supertypes canonical note file &optional aliases)
   "Append one (:label ...) form to FILE in place (:append never renames, so a
 symlinked source keeps pointing at the edited file)."
   (with-open-file (out file :direction :output :if-exists :append :if-does-not-exist :error)
-    (format out "~&~a~%" (concept-type-def-string label supertypes canonical note))))
+    (format out "~&~a~%" (concept-type-def-string label supertypes canonical note aliases))))
 
 (defun %skip-to-form (stream)
   "Advance STREAM past whitespace and ; line comments; return the file-position of the
@@ -563,7 +588,10 @@ the catalog entry, so without the remhash the type would still surface in /api/t
     (when node (ignore-errors (remove-concept-type node))))
   (let ((key (loop for k being the hash-keys of *concept-type-catalog*
                    when (string-equal (symbol-name k) (string-upcase label)) return k)))
-    (when key (remhash key *concept-type-catalog*))))
+    (when key
+      ;; Its aliases go with it: left behind, CAR would name a type that is gone.
+      (set-concept-type-aliases key nil)
+      (remhash key *concept-type-catalog*))))
 
 (defun collapse-graph-whitespace (string)
   "Flatten a (possibly multi-line, indented) canonical graph to a single line:
@@ -673,7 +701,7 @@ the catalog is keyed :cg."
 ;;; validate any canonical graph, and append the form to the source file. Refuses a
 ;;; type already defined in the file; rejects (and rolls back) an invalid canonical.
 (hunchentoot:define-easy-handler (handle-api-create-type :uri "/api/create-type")
-    (label supertypes canonical note)
+    (label supertypes canonical note aliases)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (unless (eq (hunchentoot:request-method*) :post)
     (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
@@ -709,9 +737,17 @@ the catalog is keyed :cg."
             (error "~a is already defined in the ontology file; ~
                     give the new type a different name, or use Edit Type to ~
                     change the existing one" label))
+          ;; An alias of another type is taken: defining it would modify that type.
+          (when (concept-type-alias-p sym)
+            (error "~a is already another name for ~a" label
+                   (string-downcase (symbol-name (concept-type-alias-target sym)))))
           ;; live: create the type first (canonical attached only after it validates)
           ;; so a self-referential canonical — [WANT] in WANT's own graph — resolves.
           (define-concept-type :label sym :supertypes super-syms :canonical-graph "")
+          (handler-case (set-concept-type-aliases sym (alias-tokens aliases))
+            (concept-type-alias-conflict (c)
+              (unless pre-existed (rollback-concept-type label))
+              (error "~a" c)))
           (when canonical
             (let ((verr (validate-canonical-graph canonical label)))
               (when verr
@@ -721,7 +757,8 @@ the catalog is keyed :cg."
               (define-concept-type :label sym :supertypes super-syms
                                    :canonical-graph canonical)))
           ;; persist: append the form to the source file.
-          (append-concept-type-def label super-tokens canonical note file)
+          (append-concept-type-def label super-tokens canonical note file
+                                   (alias-tokens aliases))
           (saved-type-json label)))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
@@ -737,6 +774,8 @@ the catalog is keyed :cg."
              (node  (and label (plusp (length label))
                          (ignore-errors (get-concept-type (intern (string-upcase label) :cg))))))
         (unless node (error "no such type: ~a" (or label "")))
+        ;; Asked by an alias, answer for the type it names.
+        (setf label (string-downcase (symbol-name (label node))))
         (let ((supers (loop for s in (direct-supertypes node)
                             unless (or (eq s *concept-type-top*) (eq s *concept-type-bottom*))
                               collect (string-downcase (symbol-name (label s)))))
@@ -746,9 +785,11 @@ the catalog is keyed :cg."
               ;; canonical-unchanged-p, which recognizes this exact text as "no edit".)
               (canon (canonical-as-served label node))
               (note  (or (type-def-file-note label (concept-types-file)) "")))
-          (format nil "{\"label\":\"~a\",\"supertypes\":~a,\"canonical\":\"~a\",\"note\":\"~a\"}"
+          (format nil "{\"label\":\"~a\",\"supertypes\":~a,\"aliases\":~a,\"canonical\":\"~a\",\"note\":\"~a\"}"
                   (json-escape (string-downcase label))
                   (json-string-array (sort supers #'string<))
+                  (json-string-array (mapcar (lambda (a) (string-downcase (symbol-name a)))
+                                             (concept-type-aliases node)))
                   (json-escape canon)
                   (json-escape note))))
     (error (e)
@@ -761,7 +802,7 @@ the catalog is keyed :cg."
 ;;; append if the type was runtime-only). The type must exist; because it does, the
 ;;; canonical is validated BEFORE mutating, so a bad graph leaves everything unchanged.
 (hunchentoot:define-easy-handler (handle-api-edit-type :uri "/api/edit-type")
-    (label supertypes canonical note)
+    (label supertypes canonical note aliases)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (unless (eq (hunchentoot:request-method*) :post)
     (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
@@ -784,12 +825,20 @@ the catalog is keyed :cg."
                (node (ignore-errors (get-concept-type sym))))
           (unless node
             (error "no such type to edit: ~a" label))
+          ;; Asked by an alias, edit the type it names.
+          (setf label (string-downcase (symbol-name (label node)))
+                sym   (label node))
           (dolist (s super-tokens)
             (unless (ignore-errors (get-concept-type s))
               (error "unknown supertype: ~a" s)))
           (when (member label super-tokens :test #'string-equal)
             (error "a type cannot be its own supertype"))
-          (let* ((file        (writable-types-file :concept))
+          (let* ((old-aliases (concept-type-aliases node))
+                 ;; Not sent means not edited: keep what the type has.
+                 (new-aliases (if aliases (alias-tokens aliases) old-aliases))
+                 (aliases-same (equal (sort (copy-list new-aliases) #'string< :key #'symbol-name)
+                                      old-aliases))
+                 (file        (writable-types-file :concept))
                  (canon-same  (canonical-unchanged-p canonical label node))
                  (supers-same (supertypes-unchanged-p super-tokens node))
                  (note-same   (string= (or note "")
@@ -797,7 +846,7 @@ the catalog is keyed :cg."
             ;; Nothing actually changed — leave the file alone. Merely opening a type
             ;; reformats its canonical for display, so without this a look-and-save
             ;; would rewrite the source line.
-            (when (and canon-same supers-same note-same)
+            (when (and canon-same supers-same note-same aliases-same)
               (return-from handle-api-edit-type
                 (format nil "{\"ok\":true,\"unchanged\":true,\"label\":\"~a\"}"
                         (json-escape (string-downcase label)))))
@@ -812,14 +861,23 @@ the catalog is keyed :cg."
               (when canonical
                 (let ((verr (validate-canonical-graph canonical label)))
                   (when verr (error "invalid canonical graph: ~a" verr))))
+              ;; Aliases first: a conflict is the one refusal left, and it must
+              ;; come before anything else changes.
+              (unless aliases-same
+                (handler-case (set-concept-type-aliases sym new-aliases)
+                  (concept-type-alias-conflict (c)
+                    (ignore-errors (set-concept-type-aliases sym old-aliases))
+                    (error "~a" c))))
               ;; live: replace the definition (modify supertypes + canonical).
               (define-concept-type :label sym
                                    :supertypes (mapcar (lambda (s) (intern (string-upcase s) :cg))
                                                        super-tokens)
                                    :canonical-graph (or canonical ""))
               ;; persist: splice the form in place, or append if it wasn't in the file.
-              (unless (splice-type-def label (concept-type-def-string label super-tokens canonical note) file)
-                (append-concept-type-def label super-tokens canonical note file))
+              (unless (splice-type-def label (concept-type-def-string label super-tokens canonical note
+                                                                      new-aliases)
+                                       file)
+                (append-concept-type-def label super-tokens canonical note file new-aliases))
               (saved-type-json label)))))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
@@ -883,6 +941,8 @@ the catalog is keyed :cg."
                (node (ignore-errors (get-concept-type sym))))
           (unless node
             (error "no such type: ~a" label))
+          ;; Asked by an alias, delete the type it names (and its aliases).
+          (setf label (string-downcase (symbol-name (label node))))
           (when (or (top-concept-type-p node) (bottom-concept-type-p node))
             (error "~a is a bound of the lattice and cannot be deleted" label))
           ;; Validate everything before mutating anything -- same order create

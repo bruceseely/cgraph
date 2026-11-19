@@ -14,9 +14,18 @@
 ;; *CONCEPT-TYPE-BOTTOM* are slots of the current environment; see
 ;; setup/environment.lisp.
 
+(define-condition concept-type-alias-conflict (error)
+  ((alias :initarg :alias :reader conflict-alias)
+   (explanation :initarg :explanation :reader conflict-explanation))
+  (:report (lambda (condition stream)
+             (format stream "Concept type alias ~a: ~a"
+                     (conflict-alias condition) (conflict-explanation condition)))))
+
 (defun clear-concept-catalog ()
   (when *concept-type-catalog*
-    (clrhash *concept-type-catalog*)))
+    (clrhash *concept-type-catalog*))
+  (when *concept-type-aliases*
+    (clrhash *concept-type-aliases*)))
 
 (defun clear-relation-catalog ()
   (when *relation-type-catalog*
@@ -260,7 +269,11 @@
 
 (defmethod make-concept-type ((type-label symbol) &rest keys &key supertypes-list canonical-graph-string graph-compatible definition-string)
   supertypes-list canonical-graph-string definition-string
-  (apply #'make-concept-type-aux (type-label-symbol type-label) keys))
+  ;; An alias whose type is not defined yet -- a supertype named by alias
+  ;; above the line declaring it -- gets its placeholder under the REAL label,
+  ;; which that line then fills in, never one under the alias's own.
+  (let ((label (type-label-symbol type-label)))
+    (apply #'make-concept-type-aux (or (concept-type-alias-target label) label) keys)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -619,11 +632,16 @@
   (get-concept-type (intern (string-upcase type-name) :cg)))
 
 (defmethod get-concept-type ((type-name symbol))
-  (multiple-value-bind (value present-p)
-      (gethash (type-label-symbol type-name) *concept-type-catalog*)
-    (cond (present-p
-           value)
-          (t (error 'concept-type-lookup-failed :type (princ-to-string type-name))))))
+  (let ((key (type-label-symbol type-name)))
+    (multiple-value-bind (value present-p) (gethash key *concept-type-catalog*)
+      (cond (present-p
+             value)
+            ;; An alias names the same type object as its real label, so
+            ;; everything that compares types -- projection, subtype tests,
+            ;; joins -- treats [CAR] and [AUTOMOBILE] as one type unchanged.
+            ((and (concept-type-alias-target key)
+                  (gethash (concept-type-alias-target key) *concept-type-catalog*)))
+            (t (error 'concept-type-lookup-failed :type (princ-to-string type-name)))))))
 
 (defmethod get-concept-type ((type-name t))
   (error 'concept-type-lookup-failed :type (format nil "~s, of type ~a"  type-name (type-of type-name))))
@@ -643,10 +661,83 @@
   type-object)
 
 (defmethod concept-type-exists ((type-name symbol))
-  (multiple-value-bind (value present-p)
-      (gethash (type-label-symbol type-name) *concept-type-catalog*)
-    value
-    present-p))
+  (let ((key (type-label-symbol type-name)))
+    (multiple-value-bind (value present-p) (gethash key *concept-type-catalog*)
+      value
+      (or present-p
+          (and (concept-type-alias-target key) t)))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;  ;; concept type aliases ;;  ;;  ;;  ;;  ;;  ;;  ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; A second name for one type: (:label automobile :supertypes (vehicle)
+;; :aliases (car auto)). The lattice has one node, AUTOMOBILE; CAR and AUTO
+;; are only names that look it up. GET-CONCEPT-TYPE returns the same object for
+;; all three, so [CAR] and [AUTOMOBILE] are interchangeable in graphs and
+;; queries. A concept remembers the name it was WRITTEN with (CONCEPT-TYPE-
+;; SPELLING, concept.lisp) so [CAR] prints and generates as "car".
+;;
+;; Aliases are kept out of *CONCEPT-TYPE-CATALOG*: about twenty places iterate
+;; it -- the lattice check, the web type list, the lint -- and each would see
+;; the type twice. An alias has nothing of its own -- no supertypes, canonical
+;; graph or definition -- and names a real type, never another alias.
+
+(defun concept-type-alias-target (name)
+  "The label symbol of the real type NAME is an alias for, or NIL when NAME is
+   not an alias."
+  (values (gethash (type-label-symbol name) *concept-type-aliases*)))
+
+(defun concept-type-alias-p (name)
+  (and (symbolp name) (concept-type-alias-target name) t))
+
+(defun concept-type-aliases (type)
+  "The alias label symbols naming TYPE (a concept type or its label), sorted."
+  (let ((label (if (typep type 'concept-type) (label type) (type-label-symbol type)))
+        (aliases '()))
+    (maphash (lambda (alias target)
+               (when (eq target label) (push alias aliases)))
+             *concept-type-aliases*)
+    (sort aliases #'string< :key #'symbol-name)))
+
+(defun register-concept-type-alias (alias target)
+  "Make ALIAS a second name for the concept type labelled TARGET. TARGET need
+   not be defined yet -- the type file is read in order, and a type may use an
+   alias as a supertype before the line that declares it -- but it must not be
+   an alias itself, and ALIAS must not already name a real type or another
+   type's alias."
+  (let ((alias  (type-label-symbol alias))
+        (target (type-label-symbol target)))
+    (flet ((conflict (control &rest args)
+             (error 'concept-type-alias-conflict
+                    :alias alias
+                    :explanation (apply #'format nil control args))))
+      (when (eq alias target)
+        (conflict "a type cannot be an alias of itself"))
+      (when (nth-value 1 (gethash alias *concept-type-catalog*))
+        (conflict "~a is already a concept type, so it cannot also name ~a"
+                  alias target))
+      (let ((existing (gethash alias *concept-type-aliases*)))
+        (when (and existing (not (eq existing target)))
+          (conflict "it already names ~a, so it cannot also name ~a" existing target)))
+      (when (gethash target *concept-type-aliases*)
+        (conflict "~a is itself an alias (of ~a); name the real type"
+                  target (gethash target *concept-type-aliases*)))
+      (setf (gethash alias *concept-type-aliases*) target)
+      alias)))
+
+(defun set-concept-type-aliases (target aliases)
+  "Make ALIASES exactly the aliases of TARGET: register the new ones and drop
+   any it had that are not in the list."
+  (let ((target (type-label-symbol target))
+        (aliases (mapcar #'type-label-symbol aliases)))
+    (dolist (old (concept-type-aliases target))
+      (unless (member old aliases)
+        (remhash old *concept-type-aliases*)))
+    (dolist (alias aliases)
+      (register-concept-type-alias alias target))
+    aliases))
 
 
 ;;;; This is to recover when a supertype had to be created before it was defined.
@@ -705,8 +796,21 @@
 		      :canonical-graph-string ,canonical-graph-string))
 
 
-(defun define-concept-type (&key label supertypes canonical-graph graph-compatible definition)
+(defun define-concept-type (&key label supertypes canonical-graph graph-compatible definition
+                                (aliases nil aliases-p))
+  "Define, or redefine, the concept type LABEL. ALIASES, when given, become
+   exactly its aliases (see REGISTER-CONCEPT-TYPE-ALIAS); when not given, the
+   aliases it has are kept."
   (when (symbolp label) (setf label (type-label-symbol label)))
+  ;; Must come before the lookup below: GET-CONCEPT-TYPE resolves an alias, so
+  ;; without this, defining CAR as a type of its own would silently MODIFY
+  ;; AUTOMOBILE -- replacing its supertypes with CAR's.
+  (when (and (symbolp label) (concept-type-alias-p label))
+    (error 'concept-type-alias-conflict
+           :alias label
+           :explanation (format nil "it already names ~a, so it cannot be ~
+                                     defined as a concept type of its own"
+                                (concept-type-alias-target label))))
   (setf supertypes (mapcar (lambda (supertype)
                              (if (or (stringp supertype) (symbolp supertype))
                                  (type-label-symbol supertype)
@@ -728,6 +832,8 @@
                                         :definition-string definition))))
     (when (and definition result)
       (setf (definition-string result) definition))
+    (when (and aliases-p result)
+      (set-concept-type-aliases label aliases))
     result))
 
 
@@ -736,13 +842,31 @@
   ;; maintainers put in a definition so a comment travels with it when the file
   ;; is alphabetically sorted. Only the keys named below carry meaning.
   (destructuring-bind (&key label supertypes canonical-graph graph-compatible definition
+                            (aliases nil aliases-p)
                        &allow-other-keys) def
     ;;(format t "~&~a ~a ~a" label supertypes cgraph) ; debug
     (let ((type-label (intern (string-upcase (string label)) :cg))
           (normalized-supertypes (mapcar (lambda (s) (intern (string-upcase (string s)) :cg))
                                          supertypes)))
-      (define-concept-type :label type-label :supertypes normalized-supertypes :canonical-graph canonical-graph
-                           :graph-compatible graph-compatible :definition definition))))
+      (apply #'define-concept-type
+             :label type-label :supertypes normalized-supertypes :canonical-graph canonical-graph
+             :graph-compatible graph-compatible :definition definition
+             (when aliases-p
+               (list :aliases (mapcar (lambda (a) (intern (string-upcase (string a)) :cg))
+                                      aliases)))))))
+
+(defun register-file-aliases (filename)
+  "Register every :ALIASES declaration in the type file FILENAME before any
+   type in it is defined. A type may name an alias as a supertype earlier in
+   the file than the line declaring the alias; without this pass that
+   reference would create a placeholder type with the alias's label, which
+   the declaration would then collide with."
+  (with-open-file (stream filename :direction :input)
+    (loop for def = (read stream nil 'eof)
+          until (eq def 'eof)
+          when (and (consp def) (getf def :label) (getf def :aliases))
+            do (dolist (alias (getf def :aliases))
+                 (register-concept-type-alias alias (getf def :label))))))
 
 
 ;;; load lisp file
@@ -750,6 +874,7 @@
   supress-warnings
   (let ((count 0)
         (seen (make-hash-table :test 'eq)))
+    (register-file-aliases filename)
     (with-open-file (stream filename :direction :input)
       (loop
 	(let ((def (read stream nil 'eof)))
@@ -889,6 +1014,9 @@
 	        (mapcar #'(lambda (x)
 			    (format nil "~s" (label x)))
 		        (direct-supertypes node))))
+      (let ((aliases (concept-type-aliases node)))
+        (when aliases
+          (format stream " :aliases (~{~a~^ ~})" aliases)))
       (when (canonical-graph-string node)
         (format stream " :canonical-graph-string \"~a\"" (canonical-graph-string node)))
       (format stream ")"))))

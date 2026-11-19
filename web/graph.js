@@ -274,17 +274,29 @@ function listEmptyEl(q, whenEmpty) {
   return el;
 }
 
+// An alias row (CAR, alias_of AUTOMOBILE) stands for the type it names:
+// `name' below is that type, so every click on the row does exactly what a
+// click on AUTOMOBILE's row does. Only the text differs -- the alias, then the
+// type it names, quieter -- so the list can be searched by either word.
 function typeRowEl(row) {
-  const name = row.name;
+  const name = row.alias_of || row.name;
   const el = document.createElement('div');
   el.className = 'type-item'
+               + (row.alias_of ? ' is-alias' : '')
                + (selected.has(name) ? ' selected' : '')
                + (superSet.has(name) ? ' is-super' : '');
   el.dataset.name = name;
 
   const nameEl = document.createElement('span');
   nameEl.className = 'type-item-name';
-  nameEl.textContent = name;
+  nameEl.textContent = row.name;
+  if (row.alias_of) {
+    const target = document.createElement('span');
+    target.className = 'type-item-alias-of';
+    target.textContent = `→ ${row.alias_of}`;
+    nameEl.append(' ', target);
+    el.title = `${row.name} is another name for ${row.alias_of}`;
+  }
 
   // Shows the canonical graph WITHOUT touching the selection — the one thing
   // the row click cannot do, since clicking a row means "put this in the
@@ -349,7 +361,10 @@ function typeRowEl(row) {
 
 function paintTypeList() {
   const q = filterQuery();
-  const shown = lastTypeRows.filter(row => matchesFilter(row.name, q));
+  // A type's row also answers to its aliases, so "car" shows AUTOMOBILE as
+  // well as CAR's own row.
+  const shown = lastTypeRows.filter(row =>
+    matchesFilter(row.name, q) || (row.aliases || []).some(a => matchesFilter(a, q)));
   if (!shown.length) {
     typeListEl.replaceChildren(listEmptyEl(q, 'no concept types'));
     return;
@@ -366,11 +381,12 @@ function renderSidebar(rows) {
   paintTypeList();
 }
 
+// Every row naming the type -- its own and its aliases' -- so CAR and
+// AUTOMOBILE light up together.
 function updateSidebarItem(name) {
   for (const el of typeListEl.children) {
     if (el.dataset.name === name) {
       el.classList.toggle('selected', selected.has(name));
-      break;
     }
   }
 }
@@ -1162,6 +1178,7 @@ const ntSupEmpty  = document.getElementById('nt-supers-empty');
 const ntAddSuper  = document.getElementById('nt-add-super');
 const ntCanon     = document.getElementById('nt-canonical');
 const ntNote      = document.getElementById('nt-note');
+const ntAliases   = document.getElementById('nt-aliases');
 const ntStatus    = document.getElementById('nt-status');
 const ntCreateBtn = document.getElementById('nt-create');
 const ntSaveBtn   = document.getElementById('nt-save');
@@ -1252,7 +1269,7 @@ function renderSuperChips() {
 // Reflect supertype membership on the sidebar item for NAME.
 function updateSidebarSuper(name) {
   for (const el of typeListEl.children)
-    if (el.dataset.name === name) { el.classList.toggle('is-super', superSet.has(name)); break; }
+    if (el.dataset.name === name) { el.classList.toggle('is-super', superSet.has(name)); }
 }
 
 function toggleSupertype(name) {
@@ -1304,7 +1321,7 @@ function clearSuperSet() {
 }
 
 // Open the form to create (edit=null) or to edit an existing type.
-function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
+function openForm({ edit = null, supers = [], canon = '', note = '', aliases = [] } = {}) {
   hideRelForm();               // the two forms are never open at once
   editingLabel = edit;
   pickTargetMode = false;
@@ -1319,6 +1336,7 @@ function openForm({ edit = null, supers = [], canon = '', note = '' } = {}) {
   superSet.forEach(updateSidebarSuper);
   ntCanon.value = canon;
   ntNote.value  = note;
+  ntAliases.value = aliases.join(' ');
   ntCanon.classList.remove('field-error');
   ntCreateBtn.hidden = isEdit;               // Create ↔ Save
   ntSaveBtn.hidden   = !isEdit;
@@ -1482,7 +1500,8 @@ async function loadTypeForEdit(name) {
     const resp = await fetch(`/api/type-def?label=${encodeURIComponent(name)}`);
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || data.error) { showError(data.error || `could not load ${name}`); return; }
-    openForm({ edit: data.label, supers: data.supertypes || [], canon: data.canonical || '', note: data.note || '' });
+    openForm({ edit: data.label, supers: data.supertypes || [], canon: data.canonical || '',
+               note: data.note || '', aliases: data.aliases || [] });
   } catch (err) {
     showError(err.message);
   }
@@ -1503,6 +1522,7 @@ async function submitType() {
   // so indentation the user adds for readability survives a round-trip.
   const canon = ntCanon.value.trim();
   const note  = ntNote.value.trim();
+  const aliases = ntAliases.value.trim();
   ntCanon.classList.remove('field-error');
   if (!label)         { showError('a type name is required'); if (!editing) ntLabel.focus(); return; }
   if (!superSet.size) { showError('click at least one supertype'); return; }
@@ -1513,7 +1533,8 @@ async function submitType() {
     const url = `/api/${path}?label=${encodeURIComponent(label)}`
               + `&supertypes=${encodeURIComponent([...superSet].join(','))}`
               + `&canonical=${encodeURIComponent(canon)}`
-              + `&note=${encodeURIComponent(note)}`;
+              + `&note=${encodeURIComponent(note)}`
+              + `&aliases=${encodeURIComponent(aliases)}`;
     const { resp, data } = await postTypeChange(url);
     if (!resp.ok || !data.ok) {
       const msg = data.error || `failed: ${resp.status}`;
@@ -1651,7 +1672,7 @@ for (const el of [ntCanon, ntNote]) el.addEventListener('input', syncEditorField
 // Editing the canonical field clears its error ring.
 ntCanon.addEventListener('input', () => ntCanon.classList.remove('field-error'));
 
-for (const el of [ntLabel, ntCanon, ntNote]) {
+for (const el of [ntLabel, ntAliases, ntCanon, ntNote]) {
   el.addEventListener('keydown', e => {
     // Plain Enter submits; Shift+Enter inserts a newline in the textareas.
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitType(); }
@@ -2239,7 +2260,8 @@ function stashTypeForm() {
     label:   ntLabel.value,
     supers:  [...superSet],
     canon:   ntCanon.value,
-    note:    ntNote.value
+    note:    ntNote.value,
+    aliases: ntAliases.value
   }));
 }
 
@@ -2256,6 +2278,7 @@ function restoreTypeForm() {
   openForm({ edit: s.editing, supers: s.supers || [],
              canon: drawn !== null ? drawn : (s.canon || ''),
              note: s.note || '' });
+  ntAliases.value = s.aliases || '';
   // openForm fills the name from `edit', which is null while creating — so the
   // half-typed name of a type that does not exist yet has to be put back here.
   if (s.editing === null) ntLabel.value = s.label || '';

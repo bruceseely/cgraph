@@ -479,6 +479,7 @@
            (concept (make-concept ctype (make-referent graph nil))))
       (when (cgif-concept-negated c)
         (setf (negated concept) t))
+      (note-concept-type-spelling concept (type-label-symbol (cgif-concept-type c)))
       concept)))
 
 (defun cgif-build-level (concepts relations session &key inner apart)

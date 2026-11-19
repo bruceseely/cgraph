@@ -416,6 +416,14 @@ type definition, or a type used before the file that defines it was loaded.
 Check the name with `(cg::get-concept-type 'name)`, or look in the type
 browser.
 
+### concept-type-alias-conflict
+
+A type's `:aliases` clash with something already named: the alias is already
+a type's label, or another type's alias, or it names an alias rather than a
+real type. Also signalled when a type is defined under a name that is already
+an alias, since defining it would change the type the alias names. The
+message says which name and what it collides with. Rename one of them.
+
 ### relation-type-lookup-failed
 
 The same for a relation name. If this happens only in the web UI, for a

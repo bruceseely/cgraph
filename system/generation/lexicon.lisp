@@ -318,14 +318,20 @@
   "Lower-case lemma for CONCEPT: the dimension it is the bare filler of
    (DIMENSION-NOUN) > explicit override > referent name > type label."
   (let* ((ctype  (concept-type concept))
-         (override (lexicon-prop ctype :lemma))
+         ;; [CAR] says "car" even though its type is AUTOMOBILE: the name it
+         ;; was written with wins, and an alias may have a :LEMMA of its own.
+         ;; It takes the place of the type's label, and of the type's :LEMMA;
+         ;; a referent's name still comes first.
+         (spelling (concept-type-name concept))
+         (alias-p  (and spelling ctype (not (eq spelling (label ctype)))))
+         (override (lexicon-prop (if alias-p spelling ctype) :lemma))
          (ref (referent concept))
          (name (and ref (referent-name concept)))
          (dimension (dimension-noun concept)))
     (cond (dimension dimension)
           (override override)
           ((and name (stringp name) (plusp (length name))) name)
-          (t (string-downcase (label ctype))))))
+          (t (string-downcase (string (or spelling (label ctype))))))))
 
 (defun proper-name-p (concept)
   "True if the lemma should be treated as a proper noun (no article, capitalized)."

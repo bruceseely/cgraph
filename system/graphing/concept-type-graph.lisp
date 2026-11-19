@@ -122,8 +122,14 @@
                  (declare (ignore v))
                  (unless (and hide-bottom (bottom-concept-type-p super-type))
                    (setf (gethash super-type type-id-table) index)
-                   (format stream " type~a [label=\"~a\" id=\"~(~a~)\"]~%"
-                           index (label super-type) (label super-type)))
+                   ;; A type's aliases ride along in its box -- AUTOMOBILE (CAR)
+                   ;; -- so picking CAR in the list and landing on a box that
+                   ;; says only AUTOMOBILE is not a puzzle. The id stays the
+                   ;; real label: it is what a click on the box selects.
+                   (format stream " type~a [label=\"~a~@[ (~{~a~^, ~})~]\" id=\"~(~a~)\"]~%"
+                           index (label super-type)
+                           (concept-type-aliases super-type)
+                           (label super-type)))
                  (incf index))
              types-visited)
 

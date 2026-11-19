@@ -17,11 +17,14 @@ modifier keys.
   type under the *Relation Types* tab. The filter box matches a prefix of the
   whole name or of any hyphenated part of it: `stage` finds `LIFE-STAGE`. A
   relation that no part of the English generator reads is marked, since such a
-  relation is silently left out of generated text.
+  relation is silently left out of generated text. A type's aliases have rows
+  of their own, `CAR → AUTOMOBILE`, and clicking one does exactly what clicking
+  the type does; filtering on an alias also shows the type.
 - **Graph** (middle): the lattice for the types you have selected -- every
   inheritance path from the top type ⊤ through each selected type to the
   bottom type ⊥. Selecting several types shows the union of their paths, which
-  is a way to see how they interact.
+  is a way to see how they interact. A type with aliases shows them in its box:
+  `AUTOMOBILE (AUTO, CAR)`.
 - **Canonical graphs** (right): types you pin, with their canonical graphs,
   shown as linear notation or drawn as a graph (*Options* above the pane).
   *Clear* unpins them all; the ✕ on an entry unpins one.
@@ -49,7 +52,8 @@ can tell them from the paths of your selection.
 - **New Type** / **Edit Type** open the type form. After *Edit Type*, the next
   type you click is the one edited. In the form, `+` next to the supertypes
   arms a one-time pick: the next type you click becomes a supertype, and
-  clicks after that explore the graph again. *Draw…* opens the canonical graph
+  clicks after that explore the graph again. *also called* takes the type's
+  aliases, separated by spaces or commas. *Draw…* opens the canonical graph
   in the [graph editor](graph-editor.md).
 - **New Relation** opens the relation form; its source and destination slots
   are filled the same way, with `+` and then a click on a type.

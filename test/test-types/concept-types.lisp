@@ -14,7 +14,7 @@
 (:label areal-extent :supertypes (spatial-extent))
 (:label attend :supertypes (act))
 (:label attribute :supertypes (quality) :canonical-graph "[ATTRIBUTE]←(attr)←[ENTITY].")
-(:label automobile :supertypes (vehicle))
+(:label automobile :supertypes (vehicle) :aliases (car auto))
 (:label bag :supertypes (collection))
 (:label bark :supertypes (communicate))
 (:label belief :supertypes (state) :canonical-graph "[BELIEF]→(expr)→[ANIMATE]." :graph-compatible t)

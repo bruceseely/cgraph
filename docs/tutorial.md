@@ -42,6 +42,21 @@ everything is below the top type ‚ä§, and everything is above the bottom type ‚ä
 `(cg:print-concept-types)` prints the whole lattice, and the
 [type browser](type-browser.md) draws it.
 
+A type can have other names, declared in its line of `concept-types.lisp`:
+
+```lisp
+(:label automobile :supertypes (vehicle) :aliases (car auto))
+```
+
+CAR and AUTO are not types of their own: they look up AUTOMOBILE, so the
+lattice has one node and everything that compares types treats the names as
+the same. A graph written with `[CAR]` is found by a query written with
+`[AUTOMOBILE]`, and the other way round; `(cg:subtype-p 'ford-vehicle 'car)`
+is true. A concept keeps the name it was written with, so `[CAR]` prints as
+`[CAR]` and generates "a car". An alias has no supertypes, canonical graph or
+definition of its own, names a real type rather than another alias, and cannot
+also be the label of a type.
+
 ## Graphs
 
 Graphs are written in CG linear notation: concepts in square brackets,

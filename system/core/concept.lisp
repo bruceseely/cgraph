@@ -11,6 +11,14 @@
 (defclass concept (graph-node)
   ((concept-type :initarg :concept-type
                  :accessor concept-type)
+   ;; The alias the type was WRITTEN with -- CAR in [CAR] when CAR is an alias
+   ;; of AUTOMOBILE -- or NIL for the type's own label. Display only: the
+   ;; type is CONCEPT-TYPE, and matching never looks here. Read it through
+   ;; CONCEPT-TYPE-NAME, which ignores a spelling that no longer names the
+   ;; concept's type (after a restriction, say).
+   (type-spelling :initform nil
+                  :initarg :type-spelling
+                  :accessor concept-type-spelling)
    (referent :initarg :referent
              :accessor referent
              :initform nil)
@@ -73,16 +81,35 @@
         (*include-node-ref*
          (print-unreadable-object (node stream :type t)
            (format stream "~a;~d"
-                   (label (concept-type node))
+                   (concept-type-name node)
                    (node-ref node))))
         (t
          (print-unreadable-object (node stream :type t)
-           (format stream "~a" (label (concept-type node))))))))
+           (format stream "~a" (concept-type-name node)))))))
 
 
 
 (defmethod concept-type ((arg t))
   nil)
+
+(defun concept-type-name (concept)
+  "The name CONCEPT's type is shown with: the alias it was written with, when
+   that alias still names its type, otherwise the type's label."
+  (let ((spelling (concept-type-spelling concept))
+        (ctype    (concept-type concept)))
+    (if (and spelling ctype
+             (eq (concept-type-alias-target spelling) (label ctype)))
+        spelling
+        (and ctype (label ctype)))))
+
+(defun note-concept-type-spelling (concept name)
+  "Record on CONCEPT that its type was written as NAME, when NAME is an alias.
+   A concept reached a second time under another name -- [CAR: *x] ...
+   [AUTOMOBILE: ?x] -- keeps the first."
+  (when (and concept (symbolp name) (concept-type-alias-p name)
+             (null (concept-type-spelling concept)))
+    (setf (concept-type-spelling concept) (type-label-symbol name)))
+  concept)
 
 (defmethod id ((concept concept))
   (let ((referent (referent concept)))
@@ -315,7 +342,8 @@
                        (format nil ":~a~a~a~a"  separator body separator node-ref-text)
                        node-ref-text)))
 
-    (format nil "[~a~a]" (princ-to-string (label concept-type)) (string-right-trim " " ref-text))))
+    concept-type
+    (format nil "[~a~a]" (princ-to-string (concept-type-name node)) (string-right-trim " " ref-text))))
 
 (defmethod format-concept ((node (eql nil)) &key &allow-other-keys)
   "")
@@ -416,7 +444,7 @@
 
 (defmethod make-concept ((type symbol) referent &key (context *context*) &allow-other-keys)
   (let ((ctype (get-concept-type type)))
-    (make-concept ctype referent :context context)))
+    (note-concept-type-spelling (make-concept ctype referent :context context) type)))
 
 ;; (defmethod :around make-concept (type referent &key (context *context*) &allow-other-keys)
 ;;   (let* ((concept (call-next-method)))

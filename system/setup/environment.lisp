@@ -69,6 +69,10 @@
   ;; --- the type hierarchy
   (*concept-type-catalog* (make-hash-table :test 'eql))
   (*relation-type-catalog* (make-hash-table :test 'eql))
+  (*concept-type-aliases* (make-hash-table :test 'eql)
+   "Alias label symbol -> the label symbol of the real type it names. Kept
+    apart from *CONCEPT-TYPE-CATALOG* so that everything iterating the catalog
+    sees each type once. See REGISTER-CONCEPT-TYPE-ALIAS (types.lisp).")
   (*concept-type-top* nil)
   (*concept-type-bottom* nil)
   (*loaded-types-source* nil

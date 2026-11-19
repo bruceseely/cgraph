@@ -106,7 +106,7 @@
              (write-char #\" out)))))
 
 (defun cgif-type-name (concept)
-  (cgif-name (princ-to-string (label (concept-type concept)))))
+  (cgif-name (princ-to-string (concept-type-name concept))))
 
 (defun cgif-relation-name (relation)
   (cgif-name (string-downcase (princ-to-string (label (relation-type relation))))))

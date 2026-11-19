@@ -222,6 +222,7 @@
                              (:file "graphs-for-testing")
                              (:file "set-operations-test")
                              (:file "type-test")
+                             (:file "alias-test")
                              (:file "environment-test")
                              (:file "canonical-inheritance-test")
                              (:file "linkup-test")
