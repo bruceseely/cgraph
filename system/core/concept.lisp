@@ -343,7 +343,16 @@
                        node-ref-text)))
 
     concept-type
-    (format nil "[~a~a]" (princ-to-string (concept-type-name node)) (string-right-trim " " ref-text))))
+    (let* ((name (princ-to-string (concept-type-name node)))
+           ;; A graph referent is laid out on its own from column 0; its later
+           ;; lines belong under its first, which starts after "[NAME: " --
+           ;; "[", the name, ":" and the separator. See INDENT-EMBEDDED-LINES
+           ;; (formatter.lisp).
+           (ref-text (if ref-p
+                         (indent-embedded-lines
+                          ref-text (+ 1 (layout-width name) 1 (length separator)))
+                         ref-text)))
+      (format nil "[~a~a]" name (string-right-trim " " ref-text)))))
 
 (defmethod format-concept ((node (eql nil)) &key &allow-other-keys)
   "")
@@ -359,7 +368,11 @@
                            (s (if (and (plusp (length s)) (char= (char s (1- (length s))) #\]))
                                   (subseq s 0 (1- (length s))) s)))
                       s)))
-    (format nil "~a[~@[~a~]~a~@[+~a~]]" neg marked node-text ref)))
+    ;; Whatever goes in front of the text the primary method laid out moves a
+    ;; graph referent's later lines over by as much.
+    (format nil "~a[~@[~a~]~a~@[+~a~]]" neg marked
+            (indent-embedded-lines node-text (+ (length neg) (length (or marked ""))))
+            ref)))
 
 
 (defmethod format-node ((node concept) &rest keys &key &allow-other-keys)

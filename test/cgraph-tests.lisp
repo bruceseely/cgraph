@@ -56,6 +56,7 @@
     make-concept-plist-test
     package-independence-test
     format-test
+    nested-graph-layout-test
     normalize-test
     cache-test
     concept-cache-index-test

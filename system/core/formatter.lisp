@@ -106,14 +106,22 @@
     (reverse text-list)))
 
 
-(defmethod format-segment ((segment graph-segment) &key trim-path)
+(defmethod format-segment ((segment graph-segment) &key trim-path (start-column 0))
+  "The text of SEGMENT, which will be written starting at START-COLUMN. A concept
+   holding a graph brings that graph's later lines with it, laid out as if the
+   concept stood at column 0; each is moved over to the column it actually
+   starts at (INDENT-EMBEDDED-LINES)."
   (let* ((original-path (path segment))
          (path (if trim-path
                    (cdr original-path)
                    original-path))
          (text-list (format-path-tokens path))
-         (text (apply #'strcat text-list)))
-    text))
+         (text ""))
+    (dolist (token text-list text)
+      (let ((column (if (find #\Newline text)
+                        (layout-width (last-line text))
+                        (+ start-column (layout-width text)))))
+        (setf text (strcat text (indent-embedded-lines token column)))))))
 
 
 (defmethod next-arrow ((current-node concept) (next-node relation))
@@ -208,6 +216,29 @@
                  (dotimes (ignore (- j i)) (write-char #\Space out)))
                (setf i j)))
             (t (write-char c out) (incf i))))))))
+
+(defun last-line (text)
+  "The part of TEXT after its last newline: the line being written."
+  (let ((newline (position #\Newline text :from-end t)))
+    (if newline (subseq text (1+ newline)) text)))
+
+(defun indent-embedded-lines (text column)
+  "TEXT with COLUMN spaces after each of its newlines.
+
+   A concept whose referent is a graph -- [PROPOSITION: [DRIVE]- ...] -- formats
+   that graph on its own, laid out from column 0, and the result arrives here
+   inside the concept's text. Its later lines belong under its first one,
+   wherever the concept lands, so they are moved over by the column it starts
+   at. Without this they kept their own column-0 layout and sat to the left of
+   the graph they belong to. A graph nested deeper was already laid out the same
+   way inside its own, so one uniform shift keeps every level in place."
+  (if (or (zerop column) (not (find #\Newline text)))
+      text
+      (let ((pad (make-string column :initial-element #\Space)))
+        (with-output-to-string (out)
+          (loop for c across text
+                do (write-char c out)
+                   (when (char= c #\Newline) (write-string pad out)))))))
 
 (defun layout-width (text)
   "The width TEXT will occupy once displayed.
@@ -312,7 +343,11 @@
                  ;;(trim-path (> branched 1))
                  (trim-path (not initial))
 
-                 (segment-text (format-segment current-segment :trim-path trim-path))
+                 (segment-text (format-segment
+                                current-segment
+                                :trim-path trim-path
+                                :start-column (layout-width
+                                               (last-line (strcat *text-result* prefix)))))
 
                  (text (strcat prefix segment-text suffix))
                  )

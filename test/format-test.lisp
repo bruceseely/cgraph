@@ -445,3 +445,53 @@
        (inst)->[chevy: *y]->(attr)->[old]
        (dest)->[city: St. Louis]."
 |#
+
+
+;;; A graph inside a concept -- [PROPOSITION: [KNOW]- ...] -- is laid out on its
+;;; own, from column 0, and its later lines used to keep that layout wherever
+;;; the concept landed: under the outer graph's arcs, left of the head they
+;;; belong to. Each must now appear exactly as it does on its own, moved over to
+;;; the column its first line starts at, at every depth -- and read back the same.
+
+(defun nested-graph-layout-test (&optional verbose)
+  (with-test-types
+    (let* ((*allow-dynamic-individual-creation* t)
+           (inner "[EAT]-(agnt)->[PERSON: Ann](obj)->[PIE]")
+           (middle (format nil "[KNOW]-(expr)->[PERSON: Dave](stat)->[PROPOSITION: ~a]" inner))
+           (outer (format nil "[KNOW]-(expr)->[PERSON: Sue](stat)->[PROPOSITION: ~a]" middle))
+           (ok t))
+      (flet ((check (label pass)
+               (setf ok (and ok (and pass t)))
+               (when (or verbose (not pass))
+                 (format t "~&  ~:[FAIL <<<~;pass~] ~a~%" pass label)))
+             (text (string)
+               ;; no trailing period: these are compared as pieces of a whole
+               (string-right-trim "." (format-cgraph (parse-cgraph string))))
+             (column-of (needle text)
+               ;; column of the last occurrence of NEEDLE, within its own line
+               (let* ((at (search needle text :from-end t))
+                      (line-start (let ((nl (position #\Newline text :end at :from-end t)))
+                                    (if nl (1+ nl) 0))))
+                 (- at line-start))))
+        (dolist (*concise* '(nil t))
+          (let* ((whole (text outer))
+                 (alone-inner (text inner))
+                 (alone-middle (text middle)))
+            (when verbose (format t "~&~a~%" whole))
+            (check (format nil "the innermost graph keeps its own layout, moved under [EAT (concise ~a)"
+                           *concise*)
+                   (search (indent-embedded-lines alone-inner (column-of "[EAT" whole)) whole))
+            (check (format nil "the middle graph keeps its own layout, moved under [KNOW (concise ~a)"
+                           *concise*)
+                   (search (indent-embedded-lines alone-middle (column-of "[KNOW" whole)) whole))
+            (check (format nil "it reads back the same (concise ~a)" *concise*)
+                   (equal whole (text whole)))))
+        (let ((negated (let ((*concise* nil))
+                         (text (format nil "[PERSON: Sue]<-(expr)<-[KNOW]->(stat)->~~[PROPOSITION: ~a]"
+                                       inner)))))
+          (when verbose (format t "~&~a~%" negated))
+          (check "a negated context's graph sits under its head too"
+                 (search (indent-embedded-lines (let ((*concise* nil)) (text inner))
+                                                (column-of "[EAT" negated))
+                         negated))))
+      ok)))
