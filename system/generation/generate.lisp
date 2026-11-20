@@ -158,7 +158,10 @@
   (when (lexicon-prop (concept-type predicate) :raising)
     (let* ((dobj-rel (first (gethash :dobj buckets)))
            (dobj-concept (and dobj-rel (other-end dobj-rel predicate))))
-      (when (and dobj-concept (clausal-concept-p dobj-concept))
+      ;; A denied complement, ~[PROPOSITION: ...], keeps its 'that'-clause:
+      ;; the ECM form has nowhere to say 'not'.
+      (when (and dobj-concept (clausal-concept-p dobj-concept)
+                 (not (negated dobj-concept)))
         ;; Try active dispatch first (inner clause has a subject).
         (multiple-value-bind (main inner-buckets) (active-conjunct-info dobj-concept)
           (let ((subj (and main (clause-subject-concept main inner-buckets))))

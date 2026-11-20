@@ -287,6 +287,12 @@
      . "Ivan knows that no girl eats a pie.")
     ("~[[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->[PROPOSITION: [GIRL]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
      . "Ivan does not know that a girl eats a pie.")
+    ;; The complement denied on its own concept says 'not' too, and a denial
+    ;; inside as well cancels it.
+    ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->~[PROPOSITION: [PERSON: Tom]<-(agnt)<-[EAT]->(obj)->[PIE]]."
+     . "Ivan knows that Tom does not eat a pie.")
+    ("[PERSON: ivan]<-(expr)<-[KNOW]->(stat)->~[PROPOSITION: ~[[PERSON: Tom]<-(agnt)<-[EAT]->(obj)->[PIE]]]."
+     . "Ivan knows that Tom eats a pie.")
     ;; A denied graph that says nothing of its concept denies it exists.
     ("~[[CAKE]]."                       . "There is no cake.")
     ("~[[CAKE: {*}]]."                  . "There are no cakes.")
@@ -388,6 +394,8 @@
     ("[PERSON: Sue]<-(expr)<-[WISH]->(thme)->[SITUATION: [PERSON: Sue]<-(agnt)<-[EAT]->(obj)->[PIE]]"
      . "Sue wishes to eat a pie.")
     ("[PERSON: Sue]<-(expr)<-[WISH]->(thme)->[SITUATION: ~[[PERSON: Sue]<-(agnt)<-[EAT]->(obj)->[PIE]]]"
+     . "Sue wishes not to eat a pie.")
+    ("[PERSON: Sue]<-(expr)<-[WISH]->(thme)->~[SITUATION: [PERSON: Sue]<-(agnt)<-[EAT]->(obj)->[PIE]]"
      . "Sue wishes not to eat a pie.")
     ;; The non-clausal theme is untouched by that split.
     ("[INFORM]-(agnt)→[PERSON: Bruce](rcpt)→[PERSON: Sue](thme)→[DOG]"
