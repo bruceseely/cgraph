@@ -316,7 +316,12 @@
 
 (defun base-lemma (concept)
   "Lower-case lemma for CONCEPT: the dimension it is the bare filler of
-   (DIMENSION-NOUN) > explicit override > referent name > type label."
+   (DIMENSION-NOUN) > referent name > explicit override > type label.
+
+   The name comes before the override: a :LEMMA says what to call one of the
+   type's members that has no name -- US-STATE's \"state\", in \"drives to a
+   state\" -- and a name is what to call this one. With the two the other way
+   round, [US-STATE: Maryland] said \"drives to State\"."
   (let* ((ctype  (concept-type concept))
          ;; [CAR] says "car" even though its type is AUTOMOBILE: the name it
          ;; was written with wins, and an alias may have a :LEMMA of its own.
@@ -329,8 +334,8 @@
          (name (and ref (referent-name concept)))
          (dimension (dimension-noun concept)))
     (cond (dimension dimension)
-          (override override)
           ((and name (stringp name) (plusp (length name))) name)
+          (override override)
           (t (string-downcase (string (or spelling (label ctype))))))))
 
 (defun proper-name-p (concept)
