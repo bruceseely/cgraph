@@ -658,6 +658,92 @@ the way /api/type-def presents them — top and bottom excluded, case-insensitiv
                 (graph-to-text (parse-cgraph cg)))
             (error () nil)))))))
 
+;;; --- The parser lexicon beside a type set ---------------------------------
+;;;
+;;; A type set may carry a lexicon.dict: the words cg-from-parse teaches its
+;;; parser for that domain. cgraph does not depend on the parser, so it treats
+;;; the file as text and asks the parser about a word only when the parser
+;;; happens to be loaded in the same image.
+
+(defun type-set-lexicon-file ()
+  "The lexicon.dict beside the current type set's concept-types.lisp, whether
+   or not it exists yet."
+  (merge-pathnames "lexicon.dict" (concept-types-file)))
+
+(defun lexicon-file-defines-p (word file)
+  "True when FILE has a (df WORD ...) or (jlike WORD ...) line. Text only: the
+   file is the parser's, in the parser's package."
+  (and (probe-file file)
+       (let ((needles (list (format nil "(df ~(~a~) " word)
+                            (format nil "(jlike ~(~a~) " word))))
+         (with-open-file (in file)
+           (loop for line = (read-line in nil)
+                 while line
+                 thereis (let ((down (string-downcase (string-left-trim " " line))))
+                           (some (lambda (n) (eql 0 (search n down))) needles)))))))
+
+(defun parser-knows-word-p (word)
+  "T or NIL when a parser (parsifal) is loaded in this image and can, or
+   cannot, read WORD; :UNKNOWN when there is no parser to ask."
+  (if (find-package :parsifal)
+      (null (ignore-errors (uiop:symbol-call :parsifal :unknown-words
+                                             (string-downcase (string word)))))
+      :unknown))
+
+(defun lexicon-word-status (word)
+  "How WORD stands for a `jlike' to copy it: :KNOWN, :MISSING, or :UNKNOWN when
+   nothing here can tell -- no parser loaded, and the type set's lexicon.dict
+   does not define it (it may still be in the parser's own dictionary)."
+  (cond ((lexicon-file-defines-p word (type-set-lexicon-file)) :known)
+        (t (let ((parser (parser-knows-word-p word)))
+             (cond ((eq parser :unknown) :unknown)
+                   (parser :known)
+                   (t :missing))))))
+
+(defun append-lexicon-like (label source-label)
+  "Append (jlike LABEL SOURCE-LABEL) to the type set's lexicon.dict, creating
+   the file if need be, and return the line. A word like SOURCE's: the parser
+   reads LABEL as it reads SOURCE, and cg-from-parse re-reads the file when it
+   changes, so the word parses at once. Refuses a word the file already
+   defines, and a source the parser is known not to have -- a jlike to a word
+   nobody defined would read as nothing at all."
+  (ensure-types-writable)
+  (let ((file  (type-set-lexicon-file))
+        (word  (string-downcase (string label)))
+        (model (string-downcase (string source-label))))
+    (when (lexicon-file-defines-p word file)
+      (error "~a already has an entry in ~a" word (namestring file)))
+    (when (eq (lexicon-word-status model) :missing)
+      (error "the parser has no word ~a to model ~a on" model word))
+    (let ((line (format nil "(jlike ~a ~a)" word model))
+          (new  (not (probe-file file))))
+      (with-open-file (out file :direction :output :if-exists :append
+                                :if-does-not-exist :create)
+        (when new
+          (format out ";;; -*- Mode: LISP; Syntax: Common-lisp -*-~%~
+                       ;;; Words this domain teaches the parser (read by cg-from-parse).~%"))
+        (format out "~&~a   ; like ~a: copied in the type browser~%" line model))
+      line)))
+
+(defun add-json-field (json key value)
+  "JSON, a one-object string, with KEY: VALUE (a string) added at the end."
+  (format nil "~a,\"~a\":\"~a\"}" (subseq json 0 (position #\} json :from-end t))
+          key (json-escape value)))
+
+;;; GET /api/lexicon-word?word=apple -- whether a new type copied from WORD can
+;;; be added to the parser lexicon as a word like it. The Copy button asks, to
+;;; set its checkbox.
+(hunchentoot:define-easy-handler (handle-api-lexicon-word :uri "/api/lexicon-word") (word)
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (handler-case
+      (format nil "{\"word\":\"~a\",\"status\":\"~(~a~)\",\"file\":\"~a\"}"
+              (json-escape (string-downcase (or word "")))
+              (lexicon-word-status (or word ""))
+              (json-escape (namestring (type-set-lexicon-file))))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (error-json e))))
+
 (defun saved-type-json (label)
   "The reply to a successful create or edit: what the type now READS as, and
    what the lattice thinks of it. Neither is an error -- the save happened --
@@ -696,16 +782,17 @@ the catalog is keyed :cg."
       ;; page renders the breaks.
       (string-trim " " (princ-to-string e)))))
 
-;;; POST /api/create-type?label=...&supertypes=a,b&canonical=...&note=...[&like=X]
+;;; POST /api/create-type?label=...&supertypes=a,b&canonical=...&note=...[&like=X&lexicon=1]
 ;;; Create the type live (so it shows at once — the catalog is process-global),
 ;;; validate any canonical graph, and append the form to the source file. Refuses a
 ;;; type already defined in the file; rejects (and rolls back) an invalid canonical.
-;;; LIKE is the type the form was duplicated from: its name (and aliases) in the
-;;; canonical graph become the new type's, as DEFINE-CONCEPT-TYPE :LIKE does --
-;;; the Duplicate button cannot do that itself, since the new name is not known
-;;; until Create.
+;;; LIKE is the type the form was copied from (the Copy button). The canonical
+;;; graph arrives already renamed -- the form does that as the name is typed, so
+;;; what was on screen is what is saved. With LEXICON, the new type's word is
+;;; also added to the parser lexicon as a word like LIKE's: see
+;;; APPEND-LEXICON-LIKE.
 (hunchentoot:define-easy-handler (handle-api-create-type :uri "/api/create-type")
-    (label supertypes canonical note aliases like)
+    (label supertypes canonical note aliases like lexicon)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (unless (eq (hunchentoot:request-method*) :post)
     (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
@@ -719,11 +806,6 @@ the catalog is keyed :cg."
              (canonical    (and canonical (plusp (length canonical)) canonical))
              (source       (and like (plusp (length like))
                                 (ignore-errors (get-concept-type (intern (string-upcase like) :cg)))))
-             (canonical    (if (and canonical source label)
-                               (rename-type-in-graph-string
-                                canonical (cons (label source) (concept-type-aliases source))
-                                label)
-                               canonical))
              (note         (and note (string-trim '(#\Space #\Tab #\Newline #\Return) note)))
              (note         (and note (plusp (length note)) note)))
         (when (or (null label) (zerop (length label)))
@@ -740,7 +822,7 @@ the catalog is keyed :cg."
                (super-syms  (mapcar (lambda (s) (intern (string-upcase s) :cg)) super-tokens))
                (pre-existed (ignore-errors (get-concept-type sym))))
           (when (type-def-in-file-p label file)
-            ;; The most likely way to reach this is Duplicate with the name left
+            ;; The most likely way to reach this is Copy with the name left
             ;; as the source's, so the message names the two ways out rather than
             ;; describing what the endpoint cannot do. It used to say "editing
             ;; existing types is not yet supported", which stopped being true
@@ -770,7 +852,14 @@ the catalog is keyed :cg."
           ;; persist: append the form to the source file.
           (append-concept-type-def label super-tokens canonical note file
                                    (alias-tokens aliases))
-          (saved-type-json label)))
+          ;; The type is saved; a lexicon line that cannot be written is
+          ;; reported with it, not instead of it.
+          (let ((entry (and source (equal lexicon "1")
+                            (handler-case (append-lexicon-like label (label source))
+                              (error (e) (format nil "not added to the lexicon: ~a" e))))))
+            (if entry
+                (add-json-field (saved-type-json label) "lexicon" entry)
+                (saved-type-json label)))))
     (error (e)
       (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
       (error-json e))))

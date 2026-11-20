@@ -268,6 +268,8 @@
     #nt-delete.armed,
     #nt-delete.armed:hover { background: #c0392b; border-color: #a5301f; color: #fff; }
     #nt-sep    { color: #999; }
+    #nt-lexicon { flex-basis: 100%; font-size: 11px; color: #555; }
+    #nt-lexicon[hidden] { display: none; }
     #nt-status { flex-basis: 100%; font-size: 11px; color: #aaa; }  /* comment on its own line below the fields+buttons row */
     #nt-status.error { color: #c0392b; }
     /* Amber, like #nr-status.warn: this is advice about a type that has not
@@ -926,10 +928,11 @@
     </div>
     <button id="nt-create">Create</button>
     <button id="nt-save" hidden>Save Type Definition</button>
-    <!-- Editing only: turns the open type into the starting point for a new one.
-         Pure client state — the fields are already filled, so this only clears
-         the identity and switches Save back to Create. -->
-    <button id="nt-duplicate" hidden title="Start a new type from this one's supertypes, canonical graph and note">Duplicate</button>
+    <!-- Editing only: turns the open type into the starting point for a new
+         one, its sibling. The fields are already filled, so this clears the
+         identity and switches Save back to Create; the canonical graph then
+         follows the new name as it is typed. -->
+    <button id="nt-copy" hidden title="Start a new type as a copy of this one: same supertypes, canonical graph and note, under a new name">Copy</button>
     <!-- The wizard on demand, for a type that already exists. It runs itself
          after a create, when the English is undecided; this is how you reach it
          later, without going to the listener. -->
@@ -947,6 +950,9 @@
          landed on the armed button and committed the delete. The confirmation
          wording lives in the hint line below instead, where it costs no width. -->
     <button id="nt-delete" hidden title="Delete this type (refused if anything still uses it)">Delete</button>
+    <!-- While copying: also teach the parser the new word, as one like the
+         original's -- a line in the type set's lexicon.dict. -->
+    <label id="nt-lexicon" hidden><input id="nt-lexicon-box" type="checkbox"> <span id="nt-lexicon-text"></span></label>
     <span id="nt-status"></span>
     <!-- Advice about the name, while the name is still free. Below the status
          line rather than beside it: these are things to think about, not
@@ -988,7 +994,7 @@
     </div>
     <button id="nr-create">Create</button>
     <button id="nr-save" hidden>Save Relation</button>
-    <button id="nr-duplicate" hidden title="Start a new relation from this one's signature, role and description">Duplicate</button>
+    <button id="nr-copy" hidden title="Start a new relation as a copy of this one: same signature, role and description, under a new name">Copy</button>
     <button id="nr-cancel">Cancel</button>
     <!-- Same two-step arming as #nt-delete, and last in the row for the same
          reason: arming must not move any control out from under the pointer. -->

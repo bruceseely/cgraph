@@ -852,10 +852,9 @@
    Nothing links the two afterwards; a later change to APPLE leaves LABEL as
    it is.
 
-   A copy is APPLE's sibling, not a kind of APPLE, so a relation whose
-   signature names APPLE does not accept it: copying PLACE, whose canonical
-   graph is [PLACE]<-(loc)<-[T], gives a graph LOC refuses. Give such a copy
-   APPLE itself as its supertype instead."
+   The copy is APPLE's sibling -- that is what it is for -- so a relation
+   whose signature names APPLE does not accept it: copying PLACE, whose
+   canonical graph is [PLACE]<-(loc)<-[T], gives a graph LOC refuses."
   (when (symbolp label) (setf label (type-label-symbol label)))
   (when like
     (let ((source (get-concept-type (if (symbolp like) (type-label-symbol like) like))))

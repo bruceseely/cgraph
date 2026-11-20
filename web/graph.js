@@ -1137,6 +1137,9 @@ function reportSavedType(data) {
   const rows = [];
   if (data.reads) rows.push(`reads: “${data.reads}”`);
   for (const problem of data.lattice || []) rows.push(`⚠ ${problem}`);
+  // A copy's word, added to the parser lexicon -- or why it was not.
+  if (data.lexicon) rows.push(data.lexicon.startsWith('(')
+                              ? `parser lexicon: added ${data.lexicon}` : `⚠ ${data.lexicon}`);
   if (!rows.length) return;
   // The banner, not the form's advice line: a save CLOSES the form, so
   // anything written inside it is hidden the moment it is written. This is
@@ -1183,7 +1186,10 @@ const ntStatus    = document.getElementById('nt-status');
 const ntCreateBtn = document.getElementById('nt-create');
 const ntSaveBtn   = document.getElementById('nt-save');
 const ntDeleteBtn = document.getElementById('nt-delete');
-const ntDupBtn    = document.getElementById('nt-duplicate');
+const ntCopyBtn    = document.getElementById('nt-copy');
+const ntLexicon     = document.getElementById('nt-lexicon');
+const ntLexiconBox  = document.getElementById('nt-lexicon-box');
+const ntLexiconText = document.getElementById('nt-lexicon-text');
 const ntClassifyBtn = document.getElementById('nt-classify');
 const editTypeBtn = document.getElementById('edit-type-btn');
 
@@ -1324,7 +1330,8 @@ function clearSuperSet() {
 function openForm({ edit = null, supers = [], canon = '', note = '', aliases = [] } = {}) {
   hideRelForm();               // the two forms are never open at once
   editingLabel = edit;
-  duplicateSource = null;      // Duplicate sets it again after this returns
+  copySource = null;           // Copy sets it again after this returns
+  ntLexicon.hidden = true;
   pickTargetMode = false;
   exitPickSuper();                           // start out of supertype-pick mode
   editTypeBtn.classList.remove('active');
@@ -1342,7 +1349,7 @@ function openForm({ edit = null, supers = [], canon = '', note = '', aliases = [
   ntCreateBtn.hidden = isEdit;               // Create ↔ Save
   ntSaveBtn.hidden   = !isEdit;
   ntDeleteBtn.hidden = !isEdit;              // nothing to delete while creating
-  ntDupBtn.hidden    = !isEdit;              // nor anything to copy
+  ntCopyBtn.hidden    = !isEdit;              // nor anything to copy
   ntClassifyBtn.hidden = !isEdit;            // a type must exist to be read aloud
   disarmDelete();                            // never inherit an arm from a previous type
   clearError();
@@ -1365,10 +1372,11 @@ function hideForm() {
   clearError();
 }
 
-// ── Duplicate a type ────────────────────────────────────────────────────────────
-// "A new type like that one." Editing-only, because the type you want to copy is
-// the one you just opened, and OPENFORM already takes every field as an argument —
-// so this is a re-open with the identity dropped, and no server call at all.
+// ── Copy a type ─────────────────────────────────────────────────────────────────
+// "A new type like that one" -- a SIBLING: same supertypes, same canonical
+// graph, same note. Editing-only, because the type you want to copy is the one
+// you just opened, and OPENFORM already takes every field as an argument -- so
+// this is a re-open with the identity dropped.
 //
 // It is NOT a rename, and the difference is the whole point. A copy leaves every
 // referrer — subtypes, canonical graphs, relation signatures — pointing at the
@@ -1379,14 +1387,17 @@ function hideForm() {
 // The name is prefilled with the source's and SELECTED rather than left blank:
 // most copies are a variation on the name, so typing replaces it and clicking
 // into it edits it. An unchanged name is not a hazard — /api/create-type refuses
-// a label already in the ontology file, which every duplicable type is.
+// a label already in the ontology file, which every copyable type is.
 //
-// A canonical graph that names its own type — [APPLE] in APPLE's graph — is
-// carried over as it reads, and renamed on Create: the form sends the source as
-// `like', and /api/create-type retypes it (and its aliases) to the new name,
-// as DEFINE-CONCEPT-TYPE :LIKE does. It cannot happen here, because the new
-// name is not known until then.
-let duplicateSource = null;
+// The canonical graph FOLLOWS THE NAME as it is typed: APPLE's graph says
+// [APPLE], and with "banana" in the name box the field says [BANANA]. What is
+// on screen is what Create saves, and it is there to be edited. Each keystroke
+// renames the COPIED text afresh rather than the field's current text, so a
+// name that passes through another type's spelling on the way ("red" before
+// "reddish") cannot capture that type's concepts. It stops for good once the
+// field is changed by anything else -- typing in it, or Draw… -- so it never
+// overwrites an edit.
+let copySource = null;   // {label, names, canon, lastAuto}: the type being copied
 
 // Mirrors TYPE-NAME-MENTIONED-P (api.lisp:352): a whole token, where tokens run
 // over alphanumerics and hyphens — so CAT does not match inside CATALOG, and
@@ -1397,25 +1408,78 @@ function typeNameMentioned(label, text) {
   return new RegExp(`(^|[^0-9a-z-])${esc}($|[^0-9a-z-])`, 'i').test(text);
 }
 
-ntDupBtn.addEventListener('click', () => {
+// Mirrors RENAME-TYPE-IN-GRAPH-STRING (types.lisp): retype every concept whose
+// type is one of NAMES as TO -- the name right after a concept's [, whole names
+// only, keeping the case it replaces.
+function renameTypeInGraph(text, names, to) {
+  const lower = names.map(n => n.toLowerCase());
+  return text.replace(/\[(\s*)([0-9A-Za-z-]+)/g, (whole, space, word) =>
+    lower.includes(word.toLowerCase())
+      ? `[${space}${word === word.toUpperCase() ? to.toUpperCase() : to.toLowerCase()}`
+      : whole);
+}
+
+function followCopyName() {
+  if (!copySource || copySource.lastAuto === null) return;
+  if (ntCanon.value !== copySource.lastAuto) {   // changed by hand, or by Draw…
+    copySource.lastAuto = null;
+    return;
+  }
+  const name = ntLabel.value.trim();
+  const to = /^[0-9A-Za-z-]+$/.test(name) ? name : copySource.label;
+  ntCanon.value = renameTypeInGraph(copySource.canon, copySource.names, to);
+  copySource.lastAuto = ntCanon.value;
+  syncEditorFields();
+  updateLexiconOffer();
+}
+ntLabel.addEventListener('input', followCopyName);
+
+// The parser lexicon offer: "also add (jlike banana apple)". Shown only while
+// copying; the server says whether APPLE is a word the parser has (when it can
+// tell), and the box starts checked only when it is not known to be missing.
+async function offerLexicon(source) {
+  ntLexicon.hidden = true;
+  ntLexiconBox.checked = false;
+  try {
+    const resp = await fetch(`/api/lexicon-word?word=${encodeURIComponent(source)}`);
+    const data = await resp.json();
+    if (!copySource || copySource.label !== source) return;   // form moved on
+    copySource.lexicon = data;
+    ntLexiconBox.checked = data.status !== 'missing';
+    ntLexiconBox.disabled = data.status === 'missing';
+    ntLexicon.hidden = false;
+    updateLexiconOffer();
+  } catch (err) { /* no offer, no harm: the type itself is unaffected */ }
+}
+
+function updateLexiconOffer() {
+  if (!copySource || !copySource.lexicon) return;
+  const d = copySource.lexicon;
+  const name = ntLabel.value.trim().toLowerCase() || '…';
+  ntLexiconText.textContent =
+    d.status === 'missing'
+      ? `the parser has no word “${d.word}”, so ${name} can't be added to its lexicon as a word like it`
+      : `also add to the parser lexicon: (jlike ${name} ${d.word})`
+        + (d.status === 'unknown' ? ` — no parser loaded to check “${d.word}”` : '');
+  ntLexicon.title = d.file;
+}
+
+ntCopyBtn.addEventListener('click', () => {
   if (editingLabel === null) return;          // hidden while creating, but be sure
   const source = editingLabel;
   const canon  = ntCanon.value;
   const note   = ntNote.value;
   const supers = [...superSet];               // read before openForm clears the set
-  // A canonical graph that names its own type — [WANT] inside WANT's graph —
-  // would go on describing the ORIGINAL if copied as it reads. It is renamed
-  // on Create (see duplicateSource above); the hint says so while the field is
-  // on screen.
-  const selfRef = typeNameMentioned(source, canon);
+  // The source's other names are its spellings in its own graph too.
+  const names  = [source, ...ntAliases.value.split(/[\s,]+/).filter(Boolean)];
   openForm({ edit: null, supers, canon, note });
-  duplicateSource = source;
+  copySource = { label: source, names, canon, lastAuto: canon, lexicon: null };
   ntLabel.value = source;
   ntLabel.select();
-  setNtHint(selfRef
-    ? `copy of ${source} — give it a new name, then Create; `
-      + `its canonical graph's [${source.toUpperCase()}] becomes the new name`
+  setNtHint(names.some(n => typeNameMentioned(n, canon))
+    ? `copy of ${source} — type the new name; the canonical graph follows it`
     : `copy of ${source} — give it a new name, then Create`);
+  offerLexicon(source);
 });
 
 // ── Delete a type ───────────────────────────────────────────────────────────────
@@ -1543,8 +1607,10 @@ async function submitType() {
               + `&canonical=${encodeURIComponent(canon)}`
               + `&note=${encodeURIComponent(note)}`
               + `&aliases=${encodeURIComponent(aliases)}`
-              + (!editing && duplicateSource
-                   ? `&like=${encodeURIComponent(duplicateSource)}` : '');
+              + (!editing && copySource
+                   ? `&like=${encodeURIComponent(copySource.label)}`
+                     + (!ntLexicon.hidden && ntLexiconBox.checked ? '&lexicon=1' : '')
+                   : '');
     const { resp, data } = await postTypeChange(url);
     if (!resp.ok || !data.ok) {
       const msg = data.error || `failed: ${resp.status}`;
@@ -1722,7 +1788,7 @@ const nrStatus    = document.getElementById('nr-status');
 const nrCreateBtn = document.getElementById('nr-create');
 const nrSaveBtn   = document.getElementById('nr-save');
 const nrDeleteBtn = document.getElementById('nr-delete');
-const nrDupBtn    = document.getElementById('nr-duplicate');
+const nrCopyBtn    = document.getElementById('nr-copy');
 
 const sourceSet = new Set();
 let destType      = null;   // a single name, or null — a relation has exactly one
@@ -2065,7 +2131,7 @@ function openRelForm({ edit = null, supertypes = [], sources = [], dest = '',
   nrCreateBtn.hidden = isEdit;
   nrSaveBtn.hidden   = !isEdit;
   nrDeleteBtn.hidden = !isEdit;
-  nrDupBtn.hidden    = !isEdit;
+  nrCopyBtn.hidden    = !isEdit;
   disarmRelDelete();
   clearError();
   setNrHint(warning || (isEdit
@@ -2156,8 +2222,8 @@ async function submitRelation() {
 nrCreateBtn.addEventListener('click', submitRelation);
 nrSaveBtn.addEventListener('click', submitRelation);
 
-// ── Duplicate ─────────────────────────────────────────────────────────────────
-// The concept form's Duplicate, for relations, and simpler: a relation's fields
+// ── Copy ──────────────────────────────────────────────────────────────────────
+// The concept form's Copy, for relations, and simpler: a relation's fields
 // are a signature, a role and prose — none of them can name the relation itself,
 // so there is no equivalent of the canonical graph's self-reference to warn about.
 //
@@ -2167,7 +2233,7 @@ nrSaveBtn.addEventListener('click', submitRelation);
 // says nothing. As X's sibling it starts where X starts, which is what "like that
 // one" means.
 
-nrDupBtn.addEventListener('click', () => {
+nrCopyBtn.addEventListener('click', () => {
   if (editingRel === null) return;
   const source = editingRel;
   const fields = { edit: null,
