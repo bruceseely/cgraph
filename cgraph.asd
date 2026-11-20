@@ -223,6 +223,7 @@
                              (:file "set-operations-test")
                              (:file "type-test")
                              (:file "alias-test")
+                             (:file "like-test")
                              (:file "environment-test")
                              (:file "canonical-inheritance-test")
                              (:file "linkup-test")

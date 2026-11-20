@@ -152,13 +152,17 @@ Looking up a type that doesn't exist signals `concept-type-lookup-failed` or
 
 ### Creating and Modifying Types
 
-#### `define-concept-type (&key label supertypes canonical-graph graph-compatible definition)`
-Define a new concept type or modify an existing one.
+#### `define-concept-type (&key label supertypes canonical-graph graph-compatible definition aliases like)`
+Define a new concept type or modify an existing one. `aliases` are other
+names for it. `like` copies an existing type once: its supertypes,
+graph-compatibility, and canonical graph with the type renamed, each unless
+given here (see [Copying a type](docs/type-browser.md#copying-a-type)).
 
 ```lisp
 (define-concept-type :label 'ROBOT
                      :supertypes '(animate)
                      :canonical-graph "[ROBOT]←(agnt)←[ACT]")
+(define-concept-type :label 'ANDROID :like 'ROBOT)   ; [ANDROID]←(agnt)←[ACT]
 ```
 
 #### `make-concept-type (type-label &key supertypes-list canonical-graph-string graph-compatible definition-string)`

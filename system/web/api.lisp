@@ -696,12 +696,16 @@ the catalog is keyed :cg."
       ;; page renders the breaks.
       (string-trim " " (princ-to-string e)))))
 
-;;; POST /api/create-type?label=...&supertypes=a,b&canonical=...&note=...
+;;; POST /api/create-type?label=...&supertypes=a,b&canonical=...&note=...[&like=X]
 ;;; Create the type live (so it shows at once — the catalog is process-global),
 ;;; validate any canonical graph, and append the form to the source file. Refuses a
 ;;; type already defined in the file; rejects (and rolls back) an invalid canonical.
+;;; LIKE is the type the form was duplicated from: its name (and aliases) in the
+;;; canonical graph become the new type's, as DEFINE-CONCEPT-TYPE :LIKE does --
+;;; the Duplicate button cannot do that itself, since the new name is not known
+;;; until Create.
 (hunchentoot:define-easy-handler (handle-api-create-type :uri "/api/create-type")
-    (label supertypes canonical note aliases)
+    (label supertypes canonical note aliases like)
   (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
   (unless (eq (hunchentoot:request-method*) :post)
     (setf (hunchentoot:return-code*) hunchentoot:+http-method-not-allowed+)
@@ -713,6 +717,13 @@ the catalog is keyed :cg."
              (canonical    (and canonical (collapse-graph-whitespace canonical)))
              (canonical    (and canonical (string-trim '(#\Space) canonical)))
              (canonical    (and canonical (plusp (length canonical)) canonical))
+             (source       (and like (plusp (length like))
+                                (ignore-errors (get-concept-type (intern (string-upcase like) :cg)))))
+             (canonical    (if (and canonical source label)
+                               (rename-type-in-graph-string
+                                canonical (cons (label source) (concept-type-aliases source))
+                                label)
+                               canonical))
              (note         (and note (string-trim '(#\Space #\Tab #\Newline #\Return) note)))
              (note         (and note (plusp (length note)) note)))
         (when (or (null label) (zerop (length label)))

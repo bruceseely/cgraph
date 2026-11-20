@@ -54,7 +54,8 @@ can tell them from the paths of your selection.
   arms a one-time pick: the next type you click becomes a supertype, and
   clicks after that explore the graph again. *also called* takes the type's
   aliases, separated by spaces or commas. *Draw…* opens the canonical graph
-  in the [graph editor](graph-editor.md).
+  in the [graph editor](graph-editor.md). *Duplicate*, on a type being
+  edited, starts a new type as a copy of it: see [Copying a type](#copying-a-type).
 - **New Relation** opens the relation form; its source and destination slots
   are filled the same way, with `+` and then a click on a type.
 - **Options** sets display options.
@@ -73,3 +74,33 @@ A graph headed by another type describes that type, and is almost always a
 line copied from a sibling and not edited, so the save refuses it and says so.
 `(cg:check-type-lattice)` reports the same thing for graphs already in a type
 set's files.
+
+## Copying a type
+
+A new type is often like one you have: BANANA like APPLE, BAG like BOX. Open
+the one to copy with *Edit Type*, press *Duplicate*, type the new name over
+the old, and *Create*. The copy gets the original's supertypes, canonical
+graph and note. Where the canonical graph names the original's own type, it is
+renamed on Create, so BANANA's graph says `[BANANA]`, not `[APPLE]`.
+
+At the REPL, `:like` on `define-concept-type` does the same:
+
+```lisp
+(cg:define-concept-type :label 'banana :like 'apple)
+```
+
+It copies the supertypes, the canonical graph (renamed), and whether the type
+takes a graph as its referent. Anything you give alongside it wins:
+`:like 'apple :supertypes '(tropical-fruit)` keeps APPLE's graph but not its
+place in the lattice. Not copied: aliases, subtypes, the definition.
+
+The copy is made once. Nothing links the two afterwards, so a later change to
+APPLE leaves BANANA as it was.
+
+A copy is the original's **sibling**, not a kind of it. A relation that names
+APPLE in its signature does not accept BANANA, so a canonical graph that relies
+on that, as PLACE's `[PLACE]←(loc)←[⊤]` does, is refused for the copy. If the
+new type really is a kind of the old one, make the old one its supertype.
+
+A city or a person is not a new type: Boston is `[CITY: Boston]`, an individual
+of the type CITY.

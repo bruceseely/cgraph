@@ -1324,6 +1324,7 @@ function clearSuperSet() {
 function openForm({ edit = null, supers = [], canon = '', note = '', aliases = [] } = {}) {
   hideRelForm();               // the two forms are never open at once
   editingLabel = edit;
+  duplicateSource = null;      // Duplicate sets it again after this returns
   pickTargetMode = false;
   exitPickSuper();                           // start out of supertype-pick mode
   editTypeBtn.classList.remove('active');
@@ -1379,6 +1380,13 @@ function hideForm() {
 // most copies are a variation on the name, so typing replaces it and clicking
 // into it edits it. An unchanged name is not a hazard — /api/create-type refuses
 // a label already in the ontology file, which every duplicable type is.
+//
+// A canonical graph that names its own type — [APPLE] in APPLE's graph — is
+// carried over as it reads, and renamed on Create: the form sends the source as
+// `like', and /api/create-type retypes it (and its aliases) to the new name,
+// as DEFINE-CONCEPT-TYPE :LIKE does. It cannot happen here, because the new
+// name is not known until then.
+let duplicateSource = null;
 
 // Mirrors TYPE-NAME-MENTIONED-P (api.lisp:352): a whole token, where tokens run
 // over alphanumerics and hyphens — so CAT does not match inside CATALOG, and
@@ -1395,18 +1403,18 @@ ntDupBtn.addEventListener('click', () => {
   const canon  = ntCanon.value;
   const note   = ntNote.value;
   const supers = [...superSet];               // read before openForm clears the set
-  // A canonical graph that names its own type — [WANT] inside WANT's graph — is
-  // ordinary and is the one thing a copy cannot carry over silently: the copy's
-  // graph would go on describing the ORIGINAL. Nothing here rewrites it, because
-  // the new name is not known yet and a blind substitution is worse than a
-  // sentence; the hint says so while the field is on screen.
+  // A canonical graph that names its own type — [WANT] inside WANT's graph —
+  // would go on describing the ORIGINAL if copied as it reads. It is renamed
+  // on Create (see duplicateSource above); the hint says so while the field is
+  // on screen.
   const selfRef = typeNameMentioned(source, canon);
   openForm({ edit: null, supers, canon, note });
+  duplicateSource = source;
   ntLabel.value = source;
   ntLabel.select();
   setNtHint(selfRef
-    ? `copy of ${source} — give it a new name, and note that the canonical graph `
-      + `still says ${source}`
+    ? `copy of ${source} — give it a new name, then Create; `
+      + `its canonical graph's [${source.toUpperCase()}] becomes the new name`
     : `copy of ${source} — give it a new name, then Create`);
 });
 
@@ -1534,7 +1542,9 @@ async function submitType() {
               + `&supertypes=${encodeURIComponent([...superSet].join(','))}`
               + `&canonical=${encodeURIComponent(canon)}`
               + `&note=${encodeURIComponent(note)}`
-              + `&aliases=${encodeURIComponent(aliases)}`;
+              + `&aliases=${encodeURIComponent(aliases)}`
+              + (!editing && duplicateSource
+                   ? `&like=${encodeURIComponent(duplicateSource)}` : '');
     const { resp, data } = await postTypeChange(url);
     if (!resp.ok || !data.ok) {
       const msg = data.error || `failed: ${resp.status}`;

@@ -45,6 +45,7 @@
   '(set-operations-test
     type-test
     alias-test
+    like-test
     environment-test
     canonical-inheritance-test
     segment-test

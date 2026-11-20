@@ -796,12 +796,80 @@
 		      :canonical-graph-string ,canonical-graph-string))
 
 
+(defun type-token-char-p (char)
+  "A character of a type name: names run over alphanumerics and hyphens."
+  (or (alphanumericp char) (char= char #\-)))
+
+(defun rename-type-in-graph-string (text from-labels to)
+  "TEXT, a graph in linear form, with every concept whose type is one of
+   FROM-LABELS retyped as TO. Only a type position counts -- the name right
+   after a concept's [ -- and only the whole name, so [APPLE-TREE] and the
+   referent in [PERSON: Apple] are left alone. Each replacement keeps the case
+   it replaces: [APPLE] becomes [BANANA], [apple] becomes [banana].
+
+   This is what makes a copy describe ITSELF: APPLE's canonical graph says
+   [APPLE], and a BANANA copied from it should say [BANANA]."
+  (if (or (null text) (zerop (length text)))
+      text
+      (let ((names (mapcar (lambda (l) (string-downcase (string l))) from-labels))
+            (to    (string to))
+            (n     (length text)))
+        (with-output-to-string (out)
+          (loop with i = 0
+                while (< i n)
+                do (let ((c (char text i)))
+                     (write-char c out)
+                     (incf i)
+                     (when (char= c #\[)
+                       ;; whitespace between [ and the type is allowed
+                       (loop while (and (< i n) (member (char text i) '(#\Space #\Tab)))
+                             do (write-char (char text i) out) (incf i))
+                       (let* ((end  (or (position-if-not #'type-token-char-p text :start i) n))
+                              (word (subseq text i end)))
+                         (when (and (plusp (length word))
+                                    (member (string-downcase word) names :test #'string=))
+                           (write-string (if (string= word (string-upcase word))
+                                             (string-upcase to)
+                                             (string-downcase to))
+                                         out)
+                           (setf i end))))))))))
+
 (defun define-concept-type (&key label supertypes canonical-graph graph-compatible definition
-                                (aliases nil aliases-p))
+                                (aliases nil aliases-p) like
+                            &aux (supertypes-p (and supertypes t))
+                                 (canonical-p (and canonical-graph t))
+                                 (graph-compatible-p graph-compatible))
   "Define, or redefine, the concept type LABEL. ALIASES, when given, become
    exactly its aliases (see REGISTER-CONCEPT-TYPE-ALIAS); when not given, the
-   aliases it has are kept."
+   aliases it has are kept.
+
+   LIKE names an existing type to copy, once: \"a banana is like an apple\".
+   LABEL gets its supertypes, its graph-compatibility, and its canonical graph
+   with the type retyped to LABEL (see RENAME-TYPE-IN-GRAPH-STRING) -- each
+   unless given here, so (:like apple :supertypes (tropical-fruit)) keeps
+   APPLE's graph but not its place in the lattice. Not copied: aliases (they
+   are APPLE's names), subtypes (GRANNY-SMITH stays an apple), the definition.
+   Nothing links the two afterwards; a later change to APPLE leaves LABEL as
+   it is.
+
+   A copy is APPLE's sibling, not a kind of APPLE, so a relation whose
+   signature names APPLE does not accept it: copying PLACE, whose canonical
+   graph is [PLACE]<-(loc)<-[T], gives a graph LOC refuses. Give such a copy
+   APPLE itself as its supertype instead."
   (when (symbolp label) (setf label (type-label-symbol label)))
+  (when like
+    (let ((source (get-concept-type (if (symbolp like) (type-label-symbol like) like))))
+      (unless supertypes-p
+        (setf supertypes (loop for s in (direct-supertypes source)
+                               unless (eq s *concept-type-top*) collect (label s))))
+      (unless canonical-p
+        (let ((graph (canonical-graph-string source)))
+          (when (and graph (plusp (length graph)))
+            (setf canonical-graph
+                  (rename-type-in-graph-string
+                   graph (cons (label source) (concept-type-aliases source)) label)))))
+      (unless graph-compatible-p
+        (setf graph-compatible (graph-compatible-p source)))))
   ;; Must come before the lookup below: GET-CONCEPT-TYPE resolves an alias, so
   ;; without this, defining CAR as a type of its own would silently MODIFY
   ;; AUTOMOBILE -- replacing its supertypes with CAR's.
