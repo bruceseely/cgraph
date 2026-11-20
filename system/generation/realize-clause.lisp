@@ -110,11 +110,25 @@
               parts)))
     (nreverse parts)))
 
+(defun source-before-destination (rels)
+  "RELS with any SRC relation moved to just before the first DEST: English says
+   'from Baltimore to Boston', and a graph's arcs come in label order, which
+   puts dest first. Everything else keeps its place."
+  (flet ((labelled (name) (lambda (r) (string-equal (label (relation-type r)) name))))
+    (let ((srcs (remove-if-not (labelled "SRC") rels))
+          (at   (position-if (labelled "DEST") rels)))
+      (if (and srcs at)
+          (let ((rest (remove-if (labelled "SRC") rels)))
+            (let ((at (position-if (labelled "DEST") rest)))
+              (append (subseq rest 0 at) srcs (subseq rest at))))
+          rels))))
+
 (defun realize-adjuncts (predicate buckets state)
-  "Render PP and adverbial adjuncts on PREDICATE, in bucket order.
-   Voice-agnostic: shared by active and the two passive renderers."
+  "Render PP and adverbial adjuncts on PREDICATE, in bucket order (but see
+   SOURCE-BEFORE-DESTINATION). Voice-agnostic: shared by active and the two
+   passive renderers."
   (let ((parts '()))
-    (dolist (rel (gethash :pp buckets))
+    (dolist (rel (source-before-destination (gethash :pp buckets)))
       (push (realize-pp rel predicate state) parts))
     (dolist (rel (gethash :adv buckets))
       (push (realize-adv rel predicate state) parts))

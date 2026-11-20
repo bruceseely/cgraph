@@ -29,6 +29,7 @@
 (:label ptnt  :source-types act               :dest-type entity          :desc "patient")
 (:label rcpt  :source-types act               :dest-type animate         :desc "recipient - indicates the animate which receives the object or result of the act")
 (:label rslt  :source-types act               :dest-type state           :desc "result - the condition that obtains after an act")
+(:label src   :source-types event             :dest-type place           :desc "source - links [EVENT] to [PLACE], where the event starts: the origin of a motion, the mirror of dest")
 (:label sex   :source-types animate           :dest-type attribute       :desc "sex")
 (:label size  :source-types collection        :dest-type number          :desc "size - the number of members in a collection")
 (:label stat  :source-types state             :dest-type proposition     :desc "statement/content - links [ENTITY] with a [SITUATION]")

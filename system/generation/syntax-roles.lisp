@@ -45,6 +45,7 @@
     (rslt  :pp     "resulting in")
     (sex   :adj)
     (size  :pp     "of size")
+    (src   :pp     "from")
     (stat  :dobj)   ;; clausal complement ("that S" / infinitival "to VP")
     (temp  :pp     "at temperature")
     (thme  :dobj)

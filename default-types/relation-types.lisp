@@ -17,6 +17,7 @@
 (:label poss  :source-types animate           :dest-type entity          :desc "possession - indicating the animate object possesses the entity")
 (:label ptnt  :source-types act               :dest-type entity          :desc "")
 (:label rcpt  :source-types event             :dest-type animate         :desc "recipient - indicates the animate which receives the object or result of the act")
+(:label src   :source-types event             :dest-type place           :desc "source - links [EVENT] to [PLACE], where the event starts: the origin of a motion, the mirror of dest")
 (:label size :source-types set :dest-type number  :desc "size - the number of members in a set")
 (:label temp  :source-types physical         :dest-type temperature     :desc "temperature - links [PHYSICAL] to [TEMPERATURE], the temperature of the physical thing")
 (:label thme  :source-types situation         :dest-type entity          :desc "theme - associates some [ENTITY] with a [SITUATION]")
