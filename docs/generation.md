@@ -280,8 +280,8 @@ tick.
 
 | Text | Why |
 |---|---|
-| `Dave drives with his chevy-vehicle to Baltimore. He has an ancient bag containing a cake. He is young.` | one man — nothing competes for `he` |
-| `Young Dave drives with a chevy-vehicle to Baltimore. Bob has an ancient bag containing a cake and the chevy-vehicle. It is old.` | two men — neither may be `he`; the vehicle keeps `it`, being the most recent of the neuter things |
+| `Dave drives his chevy-vehicle to Baltimore. He has an ancient bag containing a cake. He is young.` | one man — nothing competes for `he` |
+| `Young Dave drives a chevy-vehicle to Baltimore. Bob has an ancient bag containing a cake and the chevy-vehicle. It is old.` | two men — neither may be `he`; the vehicle keeps `it`, being the most recent of the neuter things |
 
 Not modelled: syntactic prominence (a subject outranks an object at the same
 distance) and decay (an antecedent far enough back is gone even uncontested).
@@ -433,7 +433,7 @@ Possessive prefix (when the parser DOES fold it):
 ```
 [CHEVY-VEHICLE]-(attr)→[OLD] (inst)←[DRIVE]-(agnt)→[PERSON: dave *j]→(attr)→[YOUNG]
                 (dest)→[CITY: Baltimore],(poss)←[PERSON: dave *j].
-  →  Young Dave drives with Dave's old chevy-vehicle to Baltimore.
+  →  Young Dave drives Dave's old chevy-vehicle to Baltimore.
 ```
 
 ## 14. Adverbs
@@ -500,8 +500,8 @@ one graph; `graph-to-text-decomposed` is the way in.
 
 | Input | Output |
 |---|---|
-| a 6-referent graph (under the threshold) | `Young Dave drives with his old chevy-vehicle to Baltimore.` |
-| the same plus an ancient bag holding a cake | `Dave drives with his chevy-vehicle to Baltimore. Dave has an ancient bag containing a cake. He is young. It is old.` |
+| a 6-referent graph (under the threshold) | `Young Dave drives his old chevy-vehicle to Baltimore.` |
+| the same plus an ancient bag holding a cake | `Dave drives his chevy-vehicle to Baltimore. Dave has an ancient bag containing a cake. He is young. It is old.` |
 
 **Breaking up is join run backwards.** Two graphs sharing a concept join into
 one, so one graph cut at a shared concept gives two, and the pieces conjoined

@@ -32,7 +32,7 @@
                  :particle
      Noun class: :pos :mass-p :proper-p :gender (:masc/:fem) :ungendered
                  :human-p :animate-p
-     Verb frame: :raising :rcpt-direct :obj-prep :adv-form
+     Verb frame: :raising :rcpt-direct :obj-prep :inst-direct :adv-form
      Arc prep:   :inst-prep :time-prep :thme-prep
      Lint only:  :synonym-ok")
 
@@ -61,6 +61,7 @@
     (:raising     :reader "GRAPH-TO-TEXT dispatch")
     (:rcpt-direct :reader "REALIZE-CLAUSE")
     (:obj-prep    :reader "REALIZE-CLAUSE")
+    (:inst-direct :reader "PROMOTE-DIRECT-INSTRUMENT (walker.lisp)")
     (:inst-prep   :reader "REALIZE-PP")
     (:time-prep   :reader "REALIZE-PP")
     (:thme-prep   :reader "THEME-MODIFIER (realize-clause.lisp)")
@@ -691,3 +692,11 @@
 (register-builtin-lexicon-entry 'tell   :rcpt-direct t :obj-prep nil)
 (register-builtin-lexicon-entry 'teach  :rcpt-direct t :obj-prep nil)
 (register-builtin-lexicon-entry 'show   :rcpt-direct t :obj-prep nil)
+
+;;; --- Verbs whose instrument is their object --------------------------------
+;;; You drive a car, not "drive with a car": with no OBJ, the INST arc is the
+;;; direct object (and the passive subject, "the car was driven"). An English
+;;; fact about the verb, like :rcpt-direct above. With an OBJ present the
+;;; instrument stays a PP -- "drive Sue with the van".
+
+(register-builtin-lexicon-entry 'drive :inst-direct t)

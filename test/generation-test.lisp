@@ -373,14 +373,21 @@
      . "Dave gives food to Spot, and he has Spot.")
     ("[PERSON: Dexter]-(agnt)<-[GIVE]-(obj)->[FOOD] (rcpt)->[DOG: spot], (poss)->[DOG: spot]."
      . "Dexter gives food to Spot, and he has Spot.")
-    ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: dave *j]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: dave *j]." . "Young Dave drives with his old Chevy to Baltimore.")
-    ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: Dave *x]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: Dave *x]." . "Young Dave drives with his old Chevy to Baltimore.")
+    ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: dave *j]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: dave *j]." . "Young Dave drives his old Chevy to Baltimore.")
+    ("[CHEVY-VEHICLE]- (attr)→[OLD] (inst)←[DRIVE]- (agnt)→[PERSON: Dave *x]→(attr)→[YOUNG] (dest)→[CITY: Baltimore],(poss)←[PERSON: Dave *x]." . "Young Dave drives his old Chevy to Baltimore.")
     ;; A name beats the type's :lemma: CHEVY-VEHICLE is "Chevy" in the test
     ;; lexicon, but this one is Herbie.
     ("[PERSON: Bob]→(poss)→[CHEVY-VEHICLE: Herbie]." . "Bob has Herbie.")
     ("[PERSON: Bob]→(poss)→[CHEVY-VEHICLE]." . "Bob has a Chevy.")
     ;; src, the mirror of dest: where a motion starts.
     ("[DRIVE]- (agnt)→[PERSON: Dave] (src)→[CITY: Baltimore] (dest)→[CITY: Boston]." . "Dave drives from Baltimore to Boston.")
+    ;; DRIVE's instrument is its object (:inst-direct) -- "drives a car", not
+    ;; "drives with a car" -- and so the passive subject. With an object of its
+    ;; own, the instrument goes back to being a PP.
+    ("[DRIVE]- (agnt)→[PERSON: Dave] (inst)→[CAR] (src)→[CITY: Baltimore] (dest)→[CITY: Boston]." . "Dave drives a car from Baltimore to Boston.")
+    ("[PERSON: Dave]<-(agnt)<-[DRIVE: @passive]->(inst)->[CAR]." . "A car is driven by Dave.")
+    ("[DRIVE]- (agnt)→[PERSON: Dave] (obj)→[PERSON: Sue] (inst)→[CAR]." . "Dave drives Sue with a car.")
+    ("[EAT]- (agnt)→[PERSON: Sue] (inst)→[SPOON]." . "Sue eats with a spoon.")
 
     ;; A clausal SITUATION argument: gerund under a preposition, infinitive
     ;; without one. INFORM demotes its info-arg to a PP (:rcpt-direct), so it

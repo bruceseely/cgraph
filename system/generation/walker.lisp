@@ -196,4 +196,20 @@
                (unless (eq k :pp)
                  (setf (gethash k buckets) (nreverse v))))
              buckets)
+    (promote-direct-instrument main-concept buckets)
     buckets))
+
+(defun promote-direct-instrument (main-concept buckets)
+  "A verb whose lexicon entry says :inst-direct takes its instrument as its
+   direct object when it has no other: [DRIVE]-(inst)->[CAR] is 'drive a car',
+   not 'drive with a car'. Moves that INST relation from the :pp bucket to
+   :dobj, so the active renderer makes it the object and the passive one its
+   subject ('the car was driven by Dave'). A graph that has an object keeps
+   the instrument as a PP: 'drive Sue with the van'."
+  (when (and (lexicon-prop (concept-type main-concept) :inst-direct)
+             (null (gethash :dobj buckets)))
+    (let ((inst (find-if (lambda (r) (string-equal (label (relation-type r)) "INST"))
+                         (gethash :pp buckets))))
+      (when inst
+        (setf (gethash :pp buckets)   (remove inst (gethash :pp buckets))
+              (gethash :dobj buckets) (list inst))))))

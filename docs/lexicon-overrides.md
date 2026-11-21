@@ -60,6 +60,7 @@ these as `[STALE-LEXICON-OVERRIDE]`; see `system/generation/lexicon-lint.lisp`).
 | `:raising` | takes a clausal complement — "X believes **that** S" | `(belief :lemma "believe" :raising t)` |
 | `:rcpt-direct` | the recipient surfaces as the **direct** object (tell/inform/ask *someone* …), flipping the default `OBJ`=dobj / `RCPT`=iobj | used by INFORM/TELL |
 | `:obj-prep` | preposition for the displaced object under `:rcpt-direct` (default `"about"`) | "tell someone **about** X" |
+| `:inst-direct` | with no `OBJ`, the `INST` arc surfaces as the **direct** object (and the passive subject) instead of a "with" PP | `(drive :inst-direct t)` → "drive **a car**", "the car was driven" |
 | `:adv-form` | adverb surface form for abstract manner types where suffixing fails (MANNER → "mannerly") | `(manner :adv-form "somehow")` |
 
 ## Count vs. mass, restated

@@ -327,13 +327,21 @@
 (defun head-is-object-of-p (head predicate buckets)
   "True when HEAD is the SURFACE direct object of PREDICATE — i.e. what
    would appear as the unmarked NP after the verb in an active sentence.
-   For verbs like INFORM that take rcpt-as-direct, this is the recipient."
+   For verbs like INFORM that take rcpt-as-direct, this is the recipient.
+
+   Not an instrument made the object by :inst-direct (PROMOTE-DIRECT-
+   INSTRUMENT): that changes the word order, not who the clause is about. A
+   graph written from its vehicle, [CHEVY]<-(inst)<-[DRIVE]-(agnt)->[Dave],
+   stays 'Dave drives his Chevy' -- the passive would demote Dave to 'by him'
+   and lose what is said of him. '@passive' on the verb still asks for it."
   (let* ((rcpt-direct (and predicate
                            (lexicon-prop (concept-type predicate) :rcpt-direct)))
          (surface-dobj-rel (if rcpt-direct
                                (first (gethash :iobj buckets))
                                (clause-object-relation buckets))))
-    (and head surface-dobj-rel (eq head (other-end surface-dobj-rel predicate)))))
+    (and head surface-dobj-rel
+         (not (string-equal (label (relation-type surface-dobj-rel)) "INST"))
+         (eq head (other-end surface-dobj-rel predicate)))))
 
 (defun realize-passive-clause-body (predicate buckets state)
   "Render PREDICATE in passive voice: OBJ + 'is/are' + past-participle +
