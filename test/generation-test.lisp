@@ -485,4 +485,28 @@
           (format t "    actual:   ~s~%" actual))))
     (when (and verbose (null failed))
       (format t "~&  all ~d generation cases passed.~%" count))
-    (null failed))))
+    (and (null failed)
+         (introduced-indefinite-test verbose)))))
+
+;;; An individual first said with "a" keeps its "a". [GIRL: #4] says "the girl"
+;;; from the referent alone; CONCEPT-INTRODUCED :indefinite (set by an extractor
+;;; that gave "a girl" its individual afterwards, when a later "the girl"
+;;; referred back) says "a girl". Not expressible in linear notation, so it
+;;; cannot be one of the text-to-text cases above. Also checks that the Copy
+;;; Rule keeps it, since decomposed pieces are spoken from copies.
+(defun introduced-indefinite-test (&optional verbose)
+  (let* ((graph    (make-cgraph "[EAT: @present]- (agnt)→[GIRL: #] (obj)→[PIE]."))
+         (girl     (find-if (lambda (n) (and (typep n 'concept)
+                                             (string-equal "GIRL" (label (concept-type n)))))
+                            (nodes graph)))
+         (before   (graph-to-text graph))
+         (after    (progn (setf (concept-introduced girl) :indefinite)
+                          (graph-to-text graph)))
+         (copied   (concept-introduced (copy-concept girl)))
+         (ok (and (string= before "The girl eats a pie.")
+                  (string= after  "A girl eats a pie.")
+                  (eq copied :indefinite))))
+    (when (or verbose (not ok))
+      (format t "~&  ~:[FAIL~;pass~]  introduced :indefinite~%    plain: ~s~%    introduced: ~s~%    copied: ~s~%"
+              ok before after copied))
+    ok))

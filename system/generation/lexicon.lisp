@@ -429,12 +429,16 @@
 (defun concept-definiteness (concept)
   "Return :definite / :indefinite / :proper / :universal / :existential.
    '@every' -> :universal, '@some' -> :existential, named individual ->
-   :proper, bare or numbered individual marker ([T: #] / [T: #4]) ->
-   :definite, otherwise :indefinite."
+   :proper, an individual introduced with \"a\" (CONCEPT-INTRODUCED
+   :indefinite) -> :indefinite, bare or numbered individual marker ([T: #] /
+   [T: #4]) -> :definite, otherwise :indefinite."
   (let ((quant (and (typep concept 'concept) (concept-quantifier concept))))
     (cond ((eq quant :universal)   :universal)
           ((eq quant :existential) :existential)
           ((proper-name-p concept) :proper)
+          ((and (typep concept 'concept)
+                (eq (concept-introduced concept) :indefinite))
+           :indefinite)
           ((let ((ref (referent concept)))
              (and ref (individual-p (content ref))))
            :definite)

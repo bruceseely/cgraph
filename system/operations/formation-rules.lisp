@@ -17,6 +17,9 @@
                             (referent concept)
                             :context (context concept))))
     (setf (concept-type-spelling copy) (concept-type-spelling concept))
+    ;; How it was introduced travels with it: a decomposed piece is spoken from
+    ;; the copy, and would otherwise say "the girl" for "a girl".
+    (setf (concept-introduced copy) (concept-introduced concept))
     copy))
 
 ;; (defun copy-relation (relation)

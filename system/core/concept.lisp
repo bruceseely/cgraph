@@ -65,7 +65,16 @@
             :accessor concept-raising-p)
    (negated :initform nil
             :initarg :negated
-            :accessor negated)))
+            :accessor negated)
+   ;; How the text this concept came from introduced it: :indefinite for an
+   ;; individual first said with "a" -- [GIRL: #4] from "a girl", given its
+   ;; individual afterwards because a later "the girl" referred back to it.
+   ;; The referent alone says "the" (concept-definiteness), so without this
+   ;; the first sentence would come back as "The girl ...". Not printed:
+   ;; consumed by the realizer only, like tense and voice.
+   (introduced :initform nil
+               :initarg :introduced
+               :accessor concept-introduced)))
 
 
 
