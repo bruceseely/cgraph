@@ -85,7 +85,31 @@
     (format t "~&~%=== ATOMIC COPY TESTS ===~%"))
   (and (test-formation-rule "Copy Generic Concept" #'test-copy-concept-basic verbose)
        (test-formation-rule "Copy Individual Concept" #'test-copy-concept-with-individual verbose)
-       (test-formation-rule "Copy Relation" #'test-copy-relation-basic verbose)))
+       (test-formation-rule "Copy Relation" #'test-copy-relation-basic verbose)
+       (test-formation-rule "Copy Keeps Annotations" #'test-copy-concept-annotations verbose)))
+
+(defun test-copy-concept-annotations (&optional verbose)
+  "A copy says what the original says: the @-annotations are part of the graph
+([EAT: @past] is not [EAT]), so the Copy Rule keeps them -- through COPY-CGRAPH
+too, which a store copies to join without rewiring what was told."
+  (let* ((eat (make-concept (get-concept-type 'eat) nil))
+         (copy nil))
+    (setf (concept-tense eat) :past
+          (concept-aspect eat) :progressive
+          (concept-voice eat) :passive
+          (concept-quantifier eat) :universal
+          (negated eat) t)
+    (setf copy (copy-concept eat))
+    (when verbose
+      (format t "~&Original: ~A~%Copy:     ~A~%" eat copy))
+    (and (not (eq eat copy))
+         (eq :past (concept-tense copy))
+         (eq :progressive (concept-aspect copy))
+         (eq :passive (concept-voice copy))
+         (eq :universal (concept-quantifier copy))
+         (negated copy)
+         (eq :past (concept-tense
+                    (copy-cgraph (head (make-cgraph "[EAT: @past]→(agnt)→[DOG]." (make-context)))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;  ;;  RESTRICT RULE TESTS  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;  ;;

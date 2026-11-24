@@ -17,9 +17,18 @@
                             (referent concept)
                             :context (context concept))))
     (setf (concept-type-spelling copy) (concept-type-spelling concept))
-    ;; How it was introduced travels with it: a decomposed piece is spoken from
-    ;; the copy, and would otherwise say "the girl" for "a girl".
-    (setf (concept-introduced copy) (concept-introduced concept))
+    ;; Everything the concept says besides type and referent travels with it.
+    ;; The @-annotations are part of what the graph says ([EAT: @past] is not
+    ;; [EAT]), and a copy that dropped them answered "did ...?" with the
+    ;; present tense. How it was introduced travels too: a decomposed piece is
+    ;; spoken from the copy, and would otherwise say "the girl" for "a girl".
+    (setf (concept-quantifier copy) (concept-quantifier concept)
+          (concept-tense copy)      (concept-tense concept)
+          (concept-aspect copy)     (concept-aspect concept)
+          (concept-voice copy)      (concept-voice concept)
+          (concept-raising-p copy)  (concept-raising-p concept)
+          (negated copy)            (negated concept)
+          (concept-introduced copy) (concept-introduced concept))
     copy))
 
 ;; (defun copy-relation (relation)

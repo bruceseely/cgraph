@@ -15,7 +15,11 @@
   (:documentation
    "Query a context for graphs matching a pattern.
     Returns a list of results, each containing:
-      (:graph <head-concept> :bindings ((var . concept) ...))
+      (:graph <head-concept> :bindings ((var . concept) ...)
+       :mapping ((pattern-concept . target-concept) ...))
+    :GRAPH is the target graph's first concept, which says WHICH graph matched,
+    not what the pattern landed on -- in a joined store one graph holds many
+    sentences. :MAPPING says what each pattern concept matched.
     Pattern may contain variables (*x, *y) which will be bound
     to the matching concepts in each result.
     With :first-only t, stops after finding the first matching graph."))
@@ -36,7 +40,8 @@
                            (project pattern-head target-head :all-solutions t)))))
         (dolist (mapping mappings)
           (push (list :graph target-head
-                      :bindings (extract-bindings mapping saved-variables))
+                      :bindings (extract-bindings mapping saved-variables)
+                      :mapping mapping)
                 results))
         (when (and first-only mappings)
           (return))))
@@ -76,7 +81,8 @@
                          (project pattern target-head :all-solutions t))))
         (dolist (mapping mappings)
           (push (list :graph target-head
-                      :bindings (extract-bindings mapping *variables*))
+                      :bindings (extract-bindings mapping *variables*)
+                      :mapping mapping)
                 results))
         (when (and first-only mappings)
           (return))))
