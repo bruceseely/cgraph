@@ -16,7 +16,24 @@
 (defvar *relation-map*)
 (defvar *concept-map*)
 
-(defmethod combine-conceptual-graph-lists ((graph1 list) (graph2 list) &key (alignment-strategy :automatic))
+(defvar *alignment-strategy* :automatic
+  "How two graphs being combined decide which concepts are the same one -- the
+default for every ALIGNMENT-STRATEGY argument here, and what INCLUDE-CGRAPH and
+CONSOLIDATE-CGRAPHS use. Bind it to change how a store is joined.
+
+  :AUTOMATIC    concepts correspond when they look alike: compatible types and
+                referents, scored on type, referent and neighbourhood. Two
+                generic concepts of one type score highest of all, so [PIE] in
+                \"a girl eats a pie\" and [PIE] in \"a boy eats a pie\" become
+                one pie. The formation rules license that; the text never said it.
+  :INDIVIDUALS  concepts correspond only when both carry the SAME individual
+                ([PERSON: Sue] and [WOMAN: Sue] sharing one individual, [DOG: #9]
+                twice). A generic concept never corresponds, and neither does the
+                bare # (id T), which says \"a particular one\" without saying
+                which. Joins what the graphs say is the same thing and nothing
+                else -- the strategy for a store built from text.")
+
+(defmethod combine-conceptual-graph-lists ((graph1 list) (graph2 list) &key (alignment-strategy *alignment-strategy*))
   "Combine two conceptual graphs by finding correspondences and applying formation rules."
 
   ;; (format t "~2&___________________________________________________________~%")
@@ -101,24 +118,25 @@
 
 
 
-(defmethod combine-conceptual-graphs ((graph1 graph-node) (graph2 graph-node) &key (alignment-strategy :automatic))
+(defmethod combine-conceptual-graphs ((graph1 graph-node) (graph2 graph-node) &key (alignment-strategy *alignment-strategy*))
   (combine-conceptual-graph-lists (collect-nodes graph1) (collect-nodes graph2) :alignment-strategy alignment-strategy)
   graph1)
 
-(defmethod combine-conceptual-graphs ((graph1 graph) (graph2 graph) &key (alignment-strategy :automatic))
+(defmethod combine-conceptual-graphs ((graph1 graph) (graph2 graph) &key (alignment-strategy *alignment-strategy*))
   (combine-conceptual-graphs (head graph1) (head graph2) :alignment-strategy alignment-strategy)
   graph1)
 
-(defmethod combine-conceptual-graphs ((graph-string1 string) (graph-string2 string) &key (alignment-strategy :automatic))
+(defmethod combine-conceptual-graphs ((graph-string1 string) (graph-string2 string) &key (alignment-strategy *alignment-strategy*))
   (combine-conceptual-graphs (car (parse-cgraph graph-string1)) (car (parse-cgraph graph-string2)) :alignment-strategy alignment-strategy))
 
 
 
-(defun graphs-share-concepts-p (graph1 graph2)
-  "Return T if the two graphs have any joinable concept pairs."
-  (not (null (find-automatic-correspondences
+(defun graphs-share-concepts-p (graph1 graph2 &optional (strategy *alignment-strategy*))
+  "Return T if the two graphs have any concept pairs that STRATEGY would join."
+  (not (null (find-graph-correspondences
               (collect-nodes (head graph1))
-              (collect-nodes (head graph2))))))
+              (collect-nodes (head graph2))
+              strategy))))
 
 (defmethod combine-cgraphs ((graphs list))
   "Partition graphs into connected components and combine within each.
@@ -198,7 +216,9 @@ automatically, so a corpus of graphs whose events carry no individual referent
 collapses into one graph with one eating and eight eaters. The formation rules
 license it; the graphs never said the eatings were different. Individuate events
 first (cg-from-parse's system/identity.lisp), or use ADD-CGRAPH and join later
-with CONSOLIDATE-CGRAPHS."
+with CONSOLIDATE-CGRAPHS. Generic OBJECTS merge the same way (\"a girl eats a
+pie\" + \"a boy eats a pie\" share one pie); bind *ALIGNMENT-STRATEGY* to
+:INDIVIDUALS to join only on concepts that carry the same individual."
   (setf (graphs context)
         (combine-cgraphs (list* graph (graphs context)))))
 
@@ -207,7 +227,8 @@ with CONSOLIDATE-CGRAPHS."
   "Combine everything already in KB, in place. The third option, and usually the
 one you want: build the store with ADD-CGRAPH so it holds the record, then join
 when you actually want the consolidated reading. Same destructive combination as
-INCLUDE-CGRAPH -- it just happens when you ask rather than on every ingest."
+INCLUDE-CGRAPH -- it just happens when you ask rather than on every ingest.
+*ALIGNMENT-STRATEGY* decides what joins, as there."
   (setf (graphs kb) (combine-cgraphs (graphs kb)))
   kb)
 
@@ -296,6 +317,7 @@ INCLUDE-CGRAPH -- it just happens when you ask rather than on every ingest."
    Returns list of (concept1 concept2 confidence-score) triples."
   (case strategy
     (:automatic (find-automatic-correspondences graph1 graph2))
+    (:individuals (find-individual-correspondences graph1 graph2))
     (:manual (error "Manual correspondence not yet implemented"))
     (:forced (find-forced-correspondences graph1 graph2))
     (t (error "Unknown alignment strategy: ~A" strategy))))
@@ -338,6 +360,35 @@ INCLUDE-CGRAPH -- it just happens when you ask rather than on every ingest."
 
 
 
+
+
+(defun concept-individual-marker (concept)
+  "The individual CONCEPT's referent carries when it says WHICH one -- a name or
+a numbered marker -- else NIL. The bare # (id T) does not say which, so it is
+NIL here."
+  (let ((ref (referent concept)))
+    (when (and ref (individual-p ref))
+      (let ((ind (individual ref)))
+        (unless (eq (id ind) t) ind)))))
+
+(defun find-individual-correspondences (graph1 graph2)
+  "The :INDIVIDUALS strategy (see *ALIGNMENT-STRATEGY*): a concept of GRAPH1
+corresponds to one of GRAPH2 only when both carry the same individual and the
+concepts are joinable. Generic concepts and the bare # never correspond.
+Returns (concept1 concept2 1.0) triples, one-to-one."
+  (let ((correspondences '())
+        (concepts2 (remove nil (get-graph-concepts graph2)
+                           :key #'concept-individual-marker)))
+    (dolist (concept1 (get-graph-concepts graph1))
+      (let ((ind1 (concept-individual-marker concept1)))
+        (when ind1
+          (let ((match (find-if (lambda (concept2)
+                                  (and (individuals-equal ind1 (concept-individual-marker concept2))
+                                       (concepts-joinable-p concept1 concept2)))
+                                concepts2)))
+            (when match
+              (push (list concept1 match 1.0) correspondences))))))
+    (resolve-correspondence-conflicts correspondences)))
 
 
 (defun concept-similarity (concept1 concept2)

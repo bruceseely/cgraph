@@ -66,6 +66,7 @@
     parse-error-test
     formation-rules-test
     combine-test
+    combine-individuals-test
     projection-test
     maximal-join-test
     coreference-test

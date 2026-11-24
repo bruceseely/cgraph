@@ -97,7 +97,8 @@
    #:expand-type #:ensure-definition-parsed
 
    ;; --- contexts
-   #:make-context #:add-cgraph #:include-cgraph
+   #:make-context #:add-cgraph #:include-cgraph #:consolidate-cgraphs
+   #:*alignment-strategy*
    #:add-concept #:remove-concept #:graph-present-p #:graphs
    #:retrieve-concepts-having-properties #:retrieve-concepts-having-individual
    #:retrieve-concept
