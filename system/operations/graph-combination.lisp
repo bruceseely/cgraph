@@ -16,7 +16,9 @@
 (defvar *relation-map*)
 (defvar *concept-map*)
 
-(defvar *alignment-strategy* :automatic
+(clopt:defoption *alignment-strategy* :automatic
+  :type (member :automatic :individuals)
+  :doc
   "How two graphs being combined decide which concepts are the same one -- the
 default for every ALIGNMENT-STRATEGY argument here, and what INCLUDE-CGRAPH and
 CONSOLIDATE-CGRAPHS use. Bind it to change how a store is joined.

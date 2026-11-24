@@ -15,6 +15,7 @@ curl -O https://beta.quicklisp.org/quicklisp.lisp
 sbcl --non-interactive --load quicklisp.lisp \
      --eval '(quicklisp-quickstart:install)' \
      --eval '(ql-util:without-prompting (ql:add-to-init-file))'
+git clone https://github.com/bruceseely/clopt.git ~/quicklisp/local-projects/clopt
 git clone https://github.com/bruceseely/cgraph.git ~/quicklisp/local-projects/cgraph
 sbcl
 ```
@@ -97,6 +98,7 @@ both started by `(cg:init :web t)`.
 - **A Common Lisp**: developed on **SBCL**; the engine and its test suite
   also pass on **ECL**. The web UI and editor have only been run on SBCL.
 - **Quicklisp**, to fetch dependencies
+- **[clopt](https://github.com/bruceseely/clopt)**, a small library for declared options (cloned in the quick start)
 - **Graphviz** (optional, for type hierarchy visualization)
 - **Emacs + SLIME** (optional, for the Emacs integration below)
 

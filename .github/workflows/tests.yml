@@ -2,8 +2,9 @@ name: tests
 
 # Three jobs:
 #
-# - cgraph: cgraph's own suites on a clean SBCL with only Quicklisp -- no other
-#   repos, no secrets, CL left locked. This is the job a contributor's pull
+# - cgraph: cgraph's own suites on a clean SBCL with only Quicklisp and clopt
+#   (cgraph's one non-Quicklisp dependency) -- no other repos, no secrets, CL
+#   left locked. This is the job a contributor's pull
 #   request has to pass, and it runs test/run-tests.sh, the script a new user
 #   would run.
 # - whole-stack: the gate owned by cg-from-parse, against THIS repo's pushed
@@ -32,6 +33,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: cgraph
+
+      - name: Checkout clopt
+        uses: actions/checkout@v4
+        with:
+          repository: bruceseely/clopt
+          path: clopt
 
       - name: Install SBCL
         env:
@@ -80,6 +87,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: cgraph
+
+      - name: Checkout clopt
+        uses: actions/checkout@v4
+        with:
+          repository: bruceseely/clopt
+          path: clopt
 
       - name: Checkout parsifal
         uses: actions/checkout@v4
@@ -154,6 +167,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: cgraph
+
+      - name: Checkout clopt
+        uses: actions/checkout@v4
+        with:
+          repository: bruceseely/clopt
+          path: clopt
 
       - name: Install ECL
         run: |

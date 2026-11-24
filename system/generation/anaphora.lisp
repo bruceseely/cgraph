@@ -116,7 +116,9 @@
   (or (second (assoc (list gender number case) *pronoun-table* :test #'equal))
       (second (assoc (list t      number case) *pronoun-table* :test #'equal))))
 
-(defparameter *anaphora-cross-coref* nil
+(clopt:defoption *anaphora-cross-coref* nil
+  :type boolean
+  :doc
   "When true, the anaphora pass treats two concepts linked via the
    coreference slot as the same referent for pronoun selection — so a
    second mention of a coref'd concept becomes a pronoun ('he') instead

@@ -8,7 +8,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(defvar *always-show-individual-id* nil)
+(clopt:defoption *always-show-individual-id* nil
+  :type boolean
+  :doc "When true, a named individual prints with its marker too -- [PERSON:
+   Sue #2] rather than [PERSON: Sue]. The marker is shown anyway when it is
+   all there is ([DOG: #9]) or when the name alone is ambiguous.")
 
 
 (defun initialize-individuals ()

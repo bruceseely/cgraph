@@ -134,6 +134,9 @@
   ;; No SWANK dependency: what talks to Emacs finds SWANK at run time
   ;; (EMACS-CONNECTED-P, system/setup/basic-utilities.lisp) and does nothing
   ;; without a SLIME connection.
+  ;; CLOPT (github.com/bruceseely/clopt): the options a person may set are
+  ;; declared with CLOPT:DEFOPTION, so a settings front end can list them.
+  :depends-on ("clopt")
   :in-order-to ((test-op (test-op "cgraph/tests")))
   :components ((:module "default-types"
 	        ;; The shipped type set, read in place and never written. Static, not

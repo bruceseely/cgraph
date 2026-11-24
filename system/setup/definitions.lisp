@@ -84,17 +84,23 @@
 (defvar *copy-map* (list))
 
 
-(defvar *allow-dynamic-individual-creation* t
+(clopt:defoption *allow-dynamic-individual-creation* t
+  :type boolean
+  :doc
   "When true, a name or id in a graph string that matches no existing
    individual -- the Spot in '[DOG: Spot]' -- creates that individual. On by
    default: with it off, every name a graph mentions must be made in advance,
    and the parse fails otherwise. A host system that defines its individuals
    itself, and wants an unknown name to be an error, binds it to NIL.")
 
-(defvar *always-show-node-ref* nil
+(clopt:defoption *always-show-node-ref* nil
+  :type boolean
+  :doc
   "This is useful during debugging, so nodes that have the same printed representation can be distinguished.")
 
-(defvar *always-format-nodes* nil
+(clopt:defoption *always-format-nodes* nil
+  :type boolean
+  :doc
   "Causes nodes to be formatted as they look in graphs, rather than as Lisp objects.")
 
 (defvar *mass-type-p* nil
@@ -149,25 +155,35 @@
    :ROLE you deleted from your ontology would go on applying until the image
    was restarted -- the one kind of staleness a reload is supposed to cure.")
 
-(defvar *always-print-ascii-arrows* nil
+(clopt:defoption *always-print-ascii-arrows* nil
+  :type boolean
+  :doc
   "Use the string (eg. \"->\") instead of the single-character arrow (eg. →)")
 
-(defvar *indent-graph-referents* nil
+(clopt:defoption *indent-graph-referents* nil
+  :type boolean
+  :doc
   "When non-nil, format-cgraph places each nested graph referent on a new
    line, indented one *graph-referent-indent* step further than its parent.
    Useful for reading deeply-nested contexts (PROPOSITION, SITUATION, etc.).")
 
-(defvar *graph-referent-indent* 4
+(clopt:defoption *graph-referent-indent* 4
+  :type (integer 0)
+  :doc
   "Number of spaces added per nesting level when *indent-graph-referents* is set.")
 
 (defvar *print-without-variables* nil)
 
-(defvar *run-tests-on-startup* t
+(clopt:defoption *run-tests-on-startup* t
+  :type boolean
+  :doc
   "When non-NIL, start-cgraph runs the test suite at startup.
    Useful while making modifications; can be disabled during regular
    use to skip the test report.")
 
-(defvar *canonical-graph-format* :linear
+(clopt:defoption *canonical-graph-format* :linear
+  :type (member :linear :graph)
+  :doc
   "How the concept-type editor's Canonical Graphs pane renders an entry.
    Values:
      :LINEAR - CG linear notation, as the formatter produces it. The
@@ -179,7 +195,9 @@
    back to whichever form it has when the preferred one is
    unavailable.")
 
-(defvar *web-log-destination* :file
+(clopt:defoption *web-log-destination* :file
+  :type (member :file :repl nil)
+  :doc
   "Where the web server writes its access and message logs.
    Values:
      :FILE  - append to web-access.log / web-message.log in
@@ -194,7 +212,9 @@
    Takes effect at START-WEB-SERVER. To change it on a server that is
    already running, call APPLY-WEB-LOG-DESTINATIONS.")
 
-(defvar *run-lexicon-lint-on-startup* :all
+(clopt:defoption *run-lexicon-lint-on-startup* :all
+  :type (member nil :errors-only :errors-warnings :all t)
+  :doc
   "Controls whether and how report-lexicon-lint runs at startup.
    Values:
      NIL               - don't run.
