@@ -114,6 +114,56 @@
     }
 
     #load-error { color: #c0392b; }
+
+    /* ── saved sets ── */
+    #sets-panel {
+      background: #fff;
+      border: 1px solid #e2e2e2;
+      border-radius: 6px;
+      padding: 0.6rem 0.75rem 0.75rem;
+    }
+    #sets-panel h2 { margin-top: 0.25rem; }
+    .save-row { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+    #set-name {
+      font: inherit;
+      padding: 0.25rem 0.45rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 14rem;
+      max-width: 60vw;
+    }
+    .set-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      padding: 0.45rem 0;
+      border-top: 1px solid #eee;
+    }
+    .set-row:first-child { border-top: none; }
+    .set-name { font-weight: bold; }
+    .set-badge {
+      font-size: 11px;
+      background: #e8f1fb;
+      color: #2c6aa8;
+      border-radius: 999px;
+      padding: 0.05rem 0.5rem;
+    }
+    .set-summary { color: #666; font-size: 13px; }
+    .set-row .spacer { flex: 1; }
+    .set-changes {
+      flex-basis: 100%;
+      margin: 0.2rem 0 0 1rem;
+      padding: 0;
+      list-style: none;
+      font: 12px Menlo, Consolas, monospace;
+      color: #444;
+    }
+    .set-changes li { margin: 0.1rem 0; }
+    .msg { font-size: 12px; }
+    .msg.ok { color: #2e7d32; }
+    .msg.err { color: #c0392b; }
+    #sets-list:empty::before { content: "No saved sets yet."; color: #999; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -128,6 +178,19 @@
       effect in the running Lisp at once and lasts until it exits; some options
       are read only at a particular moment, which their description says.</p>
     <p id="load-error" hidden></p>
+
+    <section id="sets-panel">
+      <h2>Saved settings</h2>
+      <p class="note" id="sets-where"></p>
+      <div class="save-row" id="save-row">
+        <input id="set-name" type="text" placeholder="Name for the current settings" aria-label="Name for the current settings" spellcheck="false">
+        <button id="save-btn" type="button" title="Save every option that differs from its default under this name">Save current settings</button>
+        <button id="replace-btn" type="button" hidden title="Replace the saved set with the current settings">Replace it</button>
+        <span id="save-msg" class="msg"></span>
+      </div>
+      <div id="sets-list"></div>
+    </section>
+
     <div id="systems"></div>
   </main>
 
@@ -201,6 +264,7 @@
       if (reply.ok) {
         show(reply.option);
         errorEl.hidden = true;
+        loadSets();   // each set's "loading it changes N" is relative to this
         status.className = 'opt-status ok';
         status.textContent = 'set';
         setTimeout(() => { if (status.textContent === 'set') status.textContent = ''; }, 1500);
@@ -273,9 +337,11 @@
     });
   }
 
-  fetch('/api/settings', { cache: 'no-store' })
+  function loadOptions() {
+   return fetch('/api/settings', { cache: 'no-store' })
     .then(r => r.json())
     .then(data => {
+      systemsEl.textContent = '';
       data.systems.forEach(sys => {
         const section = el('section', {}, [el('h2', { text: sys.name })]);
         sys.options.forEach(o => section.appendChild(renderOption(o)));
@@ -291,7 +357,115 @@
       err.hidden = false;
       err.textContent = 'Could not load the settings: ' + e;
     });
+  }
 
+  // ── saved sets ──────────────────────────────────────────────────────────
+  const setsList   = document.getElementById('sets-list');
+  const setsWhere  = document.getElementById('sets-where');
+  const nameEl     = document.getElementById('set-name');
+  const saveBtn    = document.getElementById('save-btn');
+  const replaceBtn = document.getElementById('replace-btn');
+  const saveMsg    = document.getElementById('save-msg');
+
+  function message(elt, text, ok) {
+    elt.className = 'msg ' + (ok ? 'ok' : 'err');
+    elt.textContent = text;
+  }
+
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+  function renderSet(set) {
+    const row = el('div', { class: 'set-row' });
+    const msg = el('span', { class: 'msg' });
+    row.append(el('span', { class: 'set-name', text: set.name }));
+    if (set.startup) {
+      row.append(el('span', { class: 'set-badge', text: 'loads at startup' }));
+    }
+    if (set.error) {
+      row.append(el('span', { class: 'msg err', text: set.error }));
+      return row;
+    }
+    const n = set.changes.length;
+    const notes = [];
+    notes.push(n ? 'loading it changes ' + plural(n, 'setting')
+                 : 'matches the current settings');
+    if (set.unknown.length) notes.push(plural(set.unknown.length, 'setting') + ' for systems not loaded');
+    if (set.refused.length) notes.push(plural(set.refused.length, 'value') + ' no longer allowed');
+    row.append(el('span', { class: 'set-summary', text: notes.join('; ') }));
+
+    const list = el('ul', { class: 'set-changes', hidden: '' });
+    set.changes.forEach(c =>
+      list.append(el('li', { text: c.name + '  ' + c.current + ' \u2192 ' + c.saved })));
+
+    row.append(el('span', { class: 'spacer' }), msg);
+    if (n) {
+      const show = el('button', { type: 'button', text: 'Show changes',
+                                  title: 'What loading this set would change' });
+      show.addEventListener('click', () => {
+        list.hidden = !list.hidden;
+        show.textContent = list.hidden ? 'Show changes' : 'Hide changes';
+      });
+      row.append(show);
+    }
+    const loadBtn = el('button', { type: 'button', text: 'Load',
+      title: 'Set the options this set lists, and put every other option back to its default' });
+    loadBtn.disabled = (n === 0);
+    loadBtn.addEventListener('click', () =>
+      post('/api/settings/load', { name: set.name })
+        .then(reply => {
+          if (!reply.ok) { message(msg, reply.error, false); return; }
+          return refresh().then(() =>
+            message(saveMsg, 'Loaded \u201c' + set.name + '\u201d: ' +
+                    plural(reply.changed, 'setting') + ' changed', true));
+        })
+        .catch(e => message(msg, String(e), false)));
+    row.append(loadBtn, list);
+    return row;
+  }
+
+  function loadSets() {
+    return fetch('/api/settings/sets', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        setsList.textContent = '';
+        const saveRow = document.getElementById('save-row');
+        if (!data.directory) {
+          setsWhere.textContent = 'No settings directory: (cg:init) sets it to ~/.cgraph/settings/.';
+          saveRow.hidden = true;
+          return;
+        }
+        saveRow.hidden = false;
+        setsWhere.textContent = 'Saved in ' + data.directory + '. A set holds the options that differ ' +
+          'from their defaults; loading it puts every other option back to its default. ' +
+          'A set named \u201c' + data.startupName + '\u201d is loaded by (cg:init).';
+        data.sets.forEach(set => setsList.append(renderSet(set)));
+      })
+      .catch(e => { setsWhere.textContent = 'Could not list the saved sets: ' + e; });
+  }
+
+  function refresh() { return Promise.all([loadOptions(), loadSets()]); }
+
+  function save(replace) {
+    const name = nameEl.value.trim();
+    if (!name) { message(saveMsg, 'Give the set a name.', false); return; }
+    post('/api/settings/save', { name, replace: replace ? '1' : '' })
+      .then(reply => {
+        if (reply.ok) {
+          replaceBtn.hidden = true;
+          return loadSets().then(() => message(saveMsg, 'Saved \u201c' + name + '\u201d', true));
+        }
+        replaceBtn.hidden = !reply.exists;
+        message(saveMsg, reply.error, false);
+      })
+      .catch(e => message(saveMsg, String(e), false));
+  }
+
+  saveBtn.addEventListener('click', () => save(false));
+  replaceBtn.addEventListener('click', () => save(true));
+  nameEl.addEventListener('keydown', ev => { if (ev.key === 'Enter') save(false); });
+  nameEl.addEventListener('input', () => { replaceBtn.hidden = true; saveMsg.textContent = ''; });
+
+  refresh();
   filterEl.addEventListener('input', applyFilter);
 }());
 </script>

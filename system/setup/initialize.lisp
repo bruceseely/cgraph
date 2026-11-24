@@ -211,6 +211,7 @@
   (format t "~&generated plots   ~a~50t*cgraph-data-directory*~%"  *cgraph-data-directory*)
   (format t "~&web server logs:  ~a~50t*cgraph-log-directory*~%"   *cgraph-log-directory*)
   (format t "~&initializations:  ~ainitializations.lisp~%" *cgraph*)
+  (format t "~&saved settings:   ~a~50tclopt:*settings-directory*~%" clopt:*settings-directory*)
   (values))
 
 
@@ -223,6 +224,28 @@
 ;;; INITIALIZE-CGRAPH stay as the pieces it is made of, for callers that want
 ;;; only one of them (the tests, the web UI's reinitialize button).
 
+(defparameter *startup-settings-name* "startup"
+  "The settings set INIT loads, when it exists: a set saved under this name on
+   the settings page is how a session starts.")
+
+(defun load-startup-settings ()
+  "Load the settings set named *STARTUP-SETTINGS-NAME*, if there is one, on top
+   of what ~/.cgraph/initializations.lisp set (:RESET NIL: an option the set
+   does not list is left as it is). Reports what it did. A set that does not
+   load is reported and skipped: a bad settings file must not stop a session
+   starting."
+  (handler-case
+      (when (and clopt:*settings-directory*
+                 (clopt:settings-exist-p *startup-settings-name*))
+        (multiple-value-bind (changes unknown refused)
+            (clopt:load-settings *startup-settings-name* :reset nil)
+          (format t "~&settings: loaded ~s (~d changed~@[, ~d for systems not loaded~]~
+                     ~@[, ~d refused~])~%"
+                  *startup-settings-name* (length changes)
+                  (and unknown (length unknown)) (and refused (length refused)))))
+    (error (e)
+      (format t "~&settings: ~s was not loaded: ~a~%" *startup-settings-name* e))))
+
 (defparameter *default-web-port* 8060
   "The port INIT starts the web server on when given :WEB T.")
 
@@ -233,6 +256,9 @@
     (setf *cgraph*                    cgraph-base
           *cgraph-data-directory*     (format nil "~adata/" cgraph-base)
           *cgraph-log-directory*      (format nil "~alogs/" cgraph-base)
+          ;; Saved settings sets (the settings page, CLOPT:SAVE-SETTINGS). For
+          ;; every system in the image, not only cgraph: clopt has one directory.
+          clopt:*settings-directory*  (format nil "~asettings/" cgraph-base)
           *cgraph-examples-directory* (default-types-directory)
           *external-types-directory*  type-set
           *cgraph-types-directory*    (or type-set (default-types-directory)))))
@@ -325,8 +351,10 @@
    the shipped default types, read-only.
 
    INIT loads the types and their lexicon, then ~/.cgraph/initializations.lisp
-   if there is one, and makes a fresh, empty *CONTEXT*, forgetting every
-   individual, variable and coreference. It writes nothing.
+   if there is one, then the saved settings set \"startup\"
+   (~/.cgraph/settings/startup.settings) if there is one, and makes a fresh,
+   empty *CONTEXT*, forgetting every individual, variable and coreference. It
+   writes nothing.
 
    WEB, when T or a port number, also loads the web type browser and graph
    editor and starts their server (on port 8060 for T)."
@@ -338,6 +366,9 @@
         (*package* (find-package :conceptual-graphs)))
     (set-cgraph-directories type-set)
     (reset-cgraph)
+    ;; Here and not in RESET-CGRAPH, which the tests call: a person's saved
+    ;; settings must not reach a test run.
+    (load-startup-settings)
     (load-support-tools)
     (install-slime-integration)
     (when web

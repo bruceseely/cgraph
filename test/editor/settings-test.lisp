@@ -96,3 +96,123 @@
                    (hunchentoot:stop acceptor)))))
         (%settings-restore snapshot)))
     ok))
+
+
+;;; --- saved sets --------------------------------------------------------------
+;;;
+;;; In a settings directory of its own, under the temporary directory, removed
+;;; at the end: a person's ~/.cgraph/settings/ is never read or written.
+
+(defun %post-body (port path params)
+  "Body of a POST to PATH with PARAMS, an alist, form-encoded."
+  (let ((body (format nil "~{~a~^&~}"
+                      (mapcar (lambda (p) (format nil "~a=~a" (car p)
+                                                  (hunchentoot:url-encode (cdr p))))
+                              params)))
+        (socket (usocket:socket-connect "127.0.0.1" port :element-type 'character)))
+    (unwind-protect
+         (let ((stream (usocket:socket-stream socket)))
+           (format stream "POST ~a HTTP/1.0~c~cHost: 127.0.0.1~c~c~
+                           Content-Type: application/x-www-form-urlencoded~c~c~
+                           Content-Length: ~d~c~c~c~c~a"
+                   path #\Return #\Linefeed #\Return #\Linefeed #\Return #\Linefeed
+                   (length body) #\Return #\Linefeed #\Return #\Linefeed body)
+           (force-output stream)
+           (loop for line = (read-line stream nil)
+                 while (and line (plusp (length (string-trim '(#\Return) line)))))
+           (with-output-to-string (out)
+             (loop for line = (read-line stream nil)
+                   while line
+                   do (write-string (string-trim '(#\Return) line) out))))
+      (usocket:socket-close socket))))
+
+(defun settings-sets-test (&optional verbose)
+  (let ((ok t)
+        (snapshot (%settings-snapshot))
+        (saved-directory clopt:*settings-directory*)
+        (dir (merge-pathnames (format nil "cgraph-settings-test-~d-~d/"
+                                      (get-universal-time) (random 100000))
+                              (uiop:temporary-directory))))
+    (flet ((check (label pass)
+             (setf ok (and ok (and pass t)))
+             (when (or verbose (not pass))
+               (format t "~&  ~:[FAIL <<<~;pass~] ~a~%" pass label))))
+      (unwind-protect
+           (progn
+             (let ((clopt:*settings-directory* nil))
+               (check "no settings directory: the listing says so"
+                      (search "\"directory\":null" (settings-sets-json))))
+             ;; SETF, not LET: the handler threads below see only the GLOBAL
+             ;; value -- as the page does, where INIT sets it.
+             (setf clopt:*settings-directory* dir)
+             (progn
+               (mapc #'clopt:reset-option (clopt:list-options))
+               (setf (clopt:option-value '*alignment-strategy*) :individuals)
+               (save-settings-set "work" nil)
+               (check "a saved set is listed, with what it holds"
+                      (let ((json (settings-sets-json)))
+                        (and (search "\"name\":\"work\"" json)
+                             (search "\"entries\":1" json)
+                             (search "\"changes\":[]" json))))
+               (clopt:reset-option '*alignment-strategy*)
+               (setf (clopt:option-value '*graph-referent-indent*) 8)
+               (check "  and what loading it would change"
+                      (let ((json (settings-sets-json)))
+                        (and (search "\"name\":\"*alignment-strategy*\",\"current\":\":automatic\",\"saved\":\":individuals\"" json)
+                             (search "\"name\":\"*graph-referent-indent*\",\"current\":\"8\",\"saved\":\"4\"" json))))
+               (load-settings-set "work")
+               (check "loading it sets what it lists and resets the rest"
+                      (and (eq *alignment-strategy* :individuals)
+                           (eql *graph-referent-indent* 4)))
+
+               ;; the startup set: loaded on top, never stopping a session
+               (mapc #'clopt:reset-option (clopt:list-options))
+               (setf (clopt:option-value '*graph-referent-indent*) 2)
+               (save-settings-set *startup-settings-name* nil)
+               (mapc #'clopt:reset-option (clopt:list-options))
+               (setf (clopt:option-value '*always-print-ascii-arrows*) t)
+               (let ((*standard-output* (make-broadcast-stream)))
+                 (load-startup-settings))
+               (check "the startup set loads on top of what is already set"
+                      (and (eql *graph-referent-indent* 2)
+                           (eq *always-print-ascii-arrows* t)))
+               (with-open-file (out (clopt:settings-path *startup-settings-name*)
+                                    :direction :output :if-exists :supersede)
+                 (write-line "(not a settings file" out))
+               (check "a startup set that does not read is reported, not an error"
+                      (search "was not loaded"
+                              (with-output-to-string (*standard-output*)
+                                (load-startup-settings))))
+               (check "  and the listing shows the broken set with its error"
+                      (search "\"name\":\"startup\",\"startup\":true,\"error\":" (settings-sets-json)))
+
+               ;; over HTTP
+               (let ((acceptor (%start-test-acceptor *environment*)))
+                 (check "a test acceptor started" acceptor)
+                 (when acceptor
+                   (unwind-protect
+                        (let ((port (hunchentoot:acceptor-port acceptor)))
+                          (check "GET /api/settings/sets lists the sets"
+                                 (search "\"name\":\"work\"" (%http-get-body port "/api/settings/sets")))
+                          (check "POST save over an existing set: refused, and says it exists"
+                                 (search "\"exists\":true"
+                                         (%post-body port "/api/settings/save" '(("name" . "work")))))
+                          (check "  and with replace=1 it is replaced"
+                                 (search "\"ok\":true"
+                                         (%post-body port "/api/settings/save"
+                                                     '(("name" . "work") ("replace" . "1")))))
+                          (check "a name that could leave the directory is refused"
+                                 (and (search "\"ok\":false"
+                                              (%post-body port "/api/settings/save"
+                                                          '(("name" . "../escape"))))
+                                      (not (probe-file (merge-pathnames "../escape.settings" dir)))))
+                          (setf (clopt:option-value '*graph-referent-indent*) 9)
+                          (check "POST load loads it in the handler thread"
+                                 (and (search "\"ok\":true"
+                                              (%post-body port "/api/settings/load" '(("name" . "work"))))
+                                      (eql *graph-referent-indent* 2))))
+                     (hunchentoot:stop acceptor))))))
+        (%settings-restore snapshot)
+        (setf clopt:*settings-directory* saved-directory)
+        (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore)))
+    ok))

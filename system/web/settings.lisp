@@ -145,3 +145,100 @@ with status 400 when it signals."
 (hunchentoot:define-easy-handler (handle-api-settings-reset :uri "/api/settings/reset")
     (name)
   (%settings-reply (lambda () (reset-setting name))))
+
+
+;;; --- saved sets --------------------------------------------------------------
+;;;
+;;;   GET  /api/settings/sets     the directory, and each saved set with what
+;;;                               loading it would change
+;;;   POST /api/settings/save     name, replace -> the set saved
+;;;   POST /api/settings/load     name          -> what loading it changed
+;;;
+;;; The sets are clopt's (CLOPT:SAVE-SETTINGS and friends), in
+;;; CLOPT:*SETTINGS-DIRECTORY*, which INIT points at ~/.cgraph/settings/. A set
+;;; named *STARTUP-SETTINGS-NAME* is the one INIT loads. Loading from the page
+;;; resets every option the set does not list: a set is a whole configuration.
+
+(defun %setting-key-id (package-name symbol-name)
+  (format nil "~a::~a" package-name symbol-name))
+
+(defun settings-change-json (change)
+  "One (option current new) of a plan."
+  (destructuring-bind (option current new) change
+    (format nil "{\"id\":\"~a\",\"name\":\"~a\",\"current\":\"~a\",\"saved\":\"~a\"}"
+            (json-escape (setting-id option))
+            (json-escape (string-downcase (symbol-name (clopt:option-name option))))
+            (json-escape (print-setting-value current))
+            (json-escape (print-setting-value new)))))
+
+(defun settings-set-json (name)
+  "The saved set NAME: how many entries it holds and what loading it would do."
+  (handler-case
+      (multiple-value-bind (changes unknown refused) (clopt:settings-plan name)
+        (format nil "{\"name\":\"~a\",\"startup\":~:[false~;true~],\"entries\":~d,~
+                     \"changes\":[~{~a~^,~}],\"unknown\":~a,\"refused\":~a}"
+                (json-escape name)
+                (string= name *startup-settings-name*)
+                (length (clopt:read-settings name))
+                (mapcar #'settings-change-json changes)
+                (json-string-array
+                 (mapcar (lambda (e) (%setting-key-id (first e) (second e))) unknown))
+                (json-string-array
+                 (mapcar (lambda (r) (setting-id (first r))) refused))))
+    (error (e)
+      (format nil "{\"name\":\"~a\",\"startup\":~:[false~;true~],\"error\":\"~a\"}"
+              (json-escape name) (string= name *startup-settings-name*)
+              (json-escape (let ((*print-pretty* nil)) (princ-to-string e)))))))
+
+(defun settings-sets-json ()
+  (format nil "{\"directory\":~:[null~;\"~:*~a\"~],\"startupName\":\"~a\",\"sets\":[~{~a~^,~}]}"
+          (and clopt:*settings-directory*
+               (json-escape (namestring clopt:*settings-directory*)))
+          (json-escape *startup-settings-name*)
+          (mapcar #'settings-set-json (clopt:settings-names))))
+
+(defun %settings-result (thunk)
+  "Like %SETTINGS-REPLY, for a reply that is not one option: THUNK returns the
+JSON members after \"ok\":true."
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (handler-case (format nil "{\"ok\":true~@[,~a~]}" (funcall thunk))
+    (error (e)
+      (setf (hunchentoot:return-code*) hunchentoot:+http-bad-request+)
+      (format nil "{\"ok\":false,\"error\":\"~a\"}"
+              (json-escape (let ((*print-pretty* nil)) (princ-to-string e)))))))
+
+(defun save-settings-set (name replace)
+  "Save the current settings as the set NAME; refuse to replace an existing
+one unless REPLACE."
+  (clopt:save-settings name :replace replace)
+  (format nil "\"set\":~a" (settings-set-json name)))
+
+(defun load-settings-set (name)
+  "Load the set NAME, resetting what it does not list; what changed."
+  (multiple-value-bind (changes unknown refused) (clopt:load-settings name)
+    (format nil "\"changed\":~d,\"unknown\":~d,\"refused\":~d"
+            (length changes) (length unknown) (length refused))))
+
+(hunchentoot:define-easy-handler (handle-api-settings-sets :uri "/api/settings/sets") ()
+  (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+  (no-store)
+  (settings-sets-json))
+
+(hunchentoot:define-easy-handler (handle-api-settings-save :uri "/api/settings/save")
+    (name replace)
+  (let ((name (or name "")))
+    (if (and (not (equal replace "1"))
+             (clopt:settings-name-p name)
+             (ignore-errors (clopt:settings-exist-p name)))
+        ;; Not an error: the page offers to replace it.
+        (progn
+          (setf (hunchentoot:content-type*) "application/json; charset=utf-8")
+          (no-store)
+          (format nil "{\"ok\":false,\"exists\":true,\"error\":\"A set named ~a already exists.\"}"
+                  (json-escape name)))
+        (%settings-result (lambda () (save-settings-set name (equal replace "1")))))))
+
+(hunchentoot:define-easy-handler (handle-api-settings-load :uri "/api/settings/load")
+    (name)
+  (%settings-result (lambda () (load-settings-set (or name "")))))
