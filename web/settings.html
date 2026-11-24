@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CGraph Settings</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      background: #f5f5f5;
+      color: #222;
+    }
+
+    /* same top bar as the type browser */
+    #top-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: #fff;
+      border-top: 4px solid #333;
+      border-bottom: 1px solid #ddd;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    #top-bar h1 { font-size: 16px; margin: 0; font-weight: bold; }
+    #top-bar a { color: #4a90d9; text-decoration: none; }
+    #top-bar a:hover { text-decoration: underline; }
+    #filter {
+      margin-left: auto;
+      width: 16rem;
+      max-width: 50vw;
+      padding: 0.3rem 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font: inherit;
+    }
+
+    main { max-width: 60rem; margin: 0 auto; padding: 0.75rem 1rem 3rem; }
+
+    .note { color: #777; margin: 0.25rem 0 1rem; }
+
+    h2 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #666;
+      margin: 1.5rem 0 0.5rem;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 0.25rem;
+    }
+
+    .opt {
+      background: #fff;
+      border: 1px solid #e2e2e2;
+      border-radius: 6px;
+      padding: 0.6rem 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .opt.changed { border-left: 4px solid #4a90d9; }
+
+    .opt-head {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+    .opt-name { font-family: Menlo, Consolas, monospace; font-size: 13px; font-weight: bold; }
+    .opt-control { display: flex; align-items: center; gap: 0.4rem; }
+    .opt-control select, .opt-control input[type=text] {
+      font: 13px Menlo, Consolas, monospace;
+      padding: 0.2rem 0.35rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .opt-control input[type=text] { width: 14rem; max-width: 60vw; }
+    .opt-default { color: #888; font-size: 12px; }
+    .opt-default code { font-family: Menlo, Consolas, monospace; }
+    .opt-head .spacer { flex: 1; }
+
+    button {
+      font: inherit;
+      font-size: 12px;
+      padding: 0.2rem 0.6rem;
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      background: #f8f8f8;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: #eee; }
+    button:disabled { opacity: 0.45; cursor: default; }
+
+    .opt-doc {
+      margin: 0.45rem 0 0;
+      color: #555;
+      font-size: 13px;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+    .opt-doc.empty { font-style: italic; color: #999; }
+
+    .opt-status { font-size: 12px; min-height: 1em; }
+    .opt-status.ok { color: #2e7d32; }
+    .opt-error {
+      margin: 0.4rem 0 0;
+      color: #c0392b;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+
+    #load-error { color: #c0392b; }
+  </style>
+</head>
+<body>
+  <div id="top-bar">
+    <h1>Settings</h1>
+    <a href="/">Type browser</a>
+    <input id="filter" type="search" placeholder="Filter by name or description" aria-label="Filter settings">
+  </div>
+
+  <main>
+    <p class="note">The options each loaded system declares. A change takes
+      effect in the running Lisp at once and lasts until it exits; some options
+      are read only at a particular moment, which their description says.</p>
+    <p id="load-error" hidden></p>
+    <div id="systems"></div>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+
+  const systemsEl = document.getElementById('systems');
+  const filterEl  = document.getElementById('filter');
+
+  // A docstring's continuation lines carry the indentation of the source; strip
+  // the smallest one so tables of values stay aligned but start at the margin.
+  function dedent(doc) {
+    const lines = doc.split('\n');
+    const rest = lines.slice(1).filter(l => l.trim() !== '');
+    const indent = rest.length
+      ? Math.min(...rest.map(l => l.match(/^ */)[0].length))
+      : 0;
+    return [lines[0].trim()]
+      .concat(lines.slice(1).map(l => l.slice(indent)))
+      .join('\n').trim();
+  }
+
+  function el(tag, attrs, children) {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === 'class') e.className = v;
+      else if (k === 'text') e.textContent = v;
+      else e.setAttribute(k, v);
+    }
+    (children || []).forEach(c => c && e.appendChild(c));
+    return e;
+  }
+
+  async function post(path, params) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(params)
+    });
+    return res.json();
+  }
+
+  function renderOption(opt) {
+    const card = el('div', { class: 'opt' });
+    card.dataset.search = (opt.name + ' ' + opt.doc).toLowerCase();
+
+    const status = el('span', { class: 'opt-status' });
+    const errorEl = el('p', { class: 'opt-error', hidden: '' });
+    const control = el('span', { class: 'opt-control' });
+    const defaultEl = el('span', { class: 'opt-default' });
+    const resetBtn = el('button', { type: 'button', title: 'Set back to the default value', text: 'Reset' });
+
+    let current = opt;
+    let input;
+
+    function show(o) {
+      current = o;
+      card.classList.toggle('changed', !o.isDefault);
+      resetBtn.disabled = o.isDefault;
+      defaultEl.textContent = '';
+      if (!o.isDefault) {
+        defaultEl.append('default ', el('code', { text: o.default }));
+      }
+      if (o.kind === 'boolean') input.checked = (o.value !== 'nil');
+      else input.value = o.value;
+      if (applyBtn) applyBtn.disabled = true;
+    }
+
+    function report(reply) {
+      if (reply.ok) {
+        show(reply.option);
+        errorEl.hidden = true;
+        status.className = 'opt-status ok';
+        status.textContent = 'set';
+        setTimeout(() => { if (status.textContent === 'set') status.textContent = ''; }, 1500);
+      } else {
+        status.textContent = '';
+        errorEl.textContent = reply.error;
+        errorEl.hidden = false;
+      }
+    }
+
+    function set(value) {
+      return post('/api/settings/set', { name: opt.id, value }).then(report)
+        .catch(e => report({ ok: false, error: String(e) }));
+    }
+
+    let applyBtn = null;
+    if (opt.kind === 'boolean') {
+      input = el('input', { type: 'checkbox', 'aria-label': opt.name });
+      input.addEventListener('change', () => set(input.checked ? 't' : 'nil'));
+      control.appendChild(input);
+    } else if (opt.kind === 'choice') {
+      input = el('select', { 'aria-label': opt.name });
+      opt.choices.forEach(c => input.appendChild(el('option', { value: c, text: c })));
+      input.addEventListener('change', () => set(input.value));
+      control.appendChild(input);
+    } else {
+      input = el('input', { type: 'text', spellcheck: 'false', 'aria-label': opt.name });
+      applyBtn = el('button', { type: 'button', text: 'Apply', title: 'Set this value' });
+      input.addEventListener('input', () => {
+        applyBtn.disabled = (input.value === current.value);
+        status.textContent = '';
+        errorEl.hidden = true;
+      });
+      input.addEventListener('keydown', ev => { if (ev.key === 'Enter') set(input.value); });
+      applyBtn.addEventListener('click', () => set(input.value));
+      control.append(input, applyBtn);
+    }
+
+    resetBtn.addEventListener('click', () =>
+      post('/api/settings/reset', { name: opt.id }).then(report)
+        .catch(e => report({ ok: false, error: String(e) })));
+
+    const doc = opt.doc ? dedent(opt.doc) : 'No description.';
+    card.append(
+      el('div', { class: 'opt-head' }, [
+        el('span', { class: 'opt-name', text: opt.name, title: opt.id + '\ntype: ' + opt.type }),
+        control,
+        defaultEl,
+        el('span', { class: 'spacer' }),
+        status,
+        resetBtn
+      ]),
+      errorEl,
+      el('p', { class: 'opt-doc' + (opt.doc ? '' : ' empty'), text: doc })
+    );
+    show(opt);
+    return card;
+  }
+
+  function applyFilter() {
+    const q = filterEl.value.trim().toLowerCase();
+    systemsEl.querySelectorAll('section').forEach(section => {
+      let shown = 0;
+      section.querySelectorAll('.opt').forEach(card => {
+        const hit = !q || card.dataset.search.includes(q);
+        card.hidden = !hit;
+        if (hit) shown++;
+      });
+      section.hidden = (shown === 0);
+    });
+  }
+
+  fetch('/api/settings', { cache: 'no-store' })
+    .then(r => r.json())
+    .then(data => {
+      data.systems.forEach(sys => {
+        const section = el('section', {}, [el('h2', { text: sys.name })]);
+        sys.options.forEach(o => section.appendChild(renderOption(o)));
+        systemsEl.appendChild(section);
+      });
+      if (!data.systems.length) {
+        systemsEl.appendChild(el('p', { class: 'note', text: 'No loaded system declares any options.' }));
+      }
+      applyFilter();
+    })
+    .catch(e => {
+      const err = document.getElementById('load-error');
+      err.hidden = false;
+      err.textContent = 'Could not load the settings: ' + e;
+    });
+
+  filterEl.addEventListener('input', applyFilter);
+}());
+</script>
+</body>
+</html>

@@ -924,6 +924,10 @@ document.getElementById('cg-clear-btn').addEventListener('click', () => {
   );
 }());
 
+// Settings: the options page, in a tab of its own so this one keeps its state.
+document.getElementById('settings-btn').addEventListener('click', () =>
+  window.open('/settings', '_blank'));
+
 // ── CG pane resizer ───────────────────────────────────────────────────────────
 
 (function () {

@@ -9,4 +9,5 @@
   :components ((:module "system/web"
                 :serial t
                 :components ((:file "server")
-                             (:file "api")))))
+                             (:file "api")
+                             (:file "settings")))))

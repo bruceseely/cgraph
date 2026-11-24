@@ -279,7 +279,9 @@
                           (cons "type-save-validation-test"
                                 (type-save-validation-test verbose))
                           (cons "copy-type-lexicon-test"
-                                (copy-type-lexicon-test verbose))))))
+                                (copy-type-lexicon-test verbose))
+                          (cons "settings-test"
+                                (settings-test verbose))))))
     (dolist (r results)
       (format t "~&-=- ~a~34t~:[failed <<<~;passed~]~%" (car r) (cdr r)))
     (every #'cdr results)))
